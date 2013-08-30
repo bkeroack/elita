@@ -1,0 +1,22 @@
+Metadata-Version: 1.1
+Name: daft
+Version: 0.0
+Summary: daft
+Home-page: UNKNOWN
+Author: UNKNOWN
+Author-email: UNKNOWN
+License: UNKNOWN
+Description: daft README
+        
+        
+        0.0
+        ---
+        
+        -  Initial version
+        
+Keywords: web pylons pyramid
+Platform: UNKNOWN
+Classifier: Programming Language :: Python
+Classifier: Framework :: Pyramid
+Classifier: Topic :: Internet :: WWW/HTTP
+Classifier: Topic :: Internet :: WWW/HTTP :: WSGI :: Application

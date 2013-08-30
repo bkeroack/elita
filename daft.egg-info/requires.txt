@@ -1,0 +1,7 @@
+pyramid
+pyramid_zodbconn
+transaction
+pyramid_tm
+pyramid_debugtoolbar
+ZODB3
+waitress
