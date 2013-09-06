@@ -1,11 +1,13 @@
 CHANGES.txt
 MANIFEST.in
 README.txt
+daft.cfg
 development.ini
 production.ini
 setup.cfg
 setup.py
 daft/__init__.py
+daft/daft_config.py
 daft/models.py
 daft/tests.py
 daft/views.py

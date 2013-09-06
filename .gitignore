@@ -2,3 +2,4 @@
 *.pyo
 .idea
 Data.fs*
+build/

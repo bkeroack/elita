@@ -20,11 +20,16 @@ class Deployment:
 class Environment:
     app_name = None
 
-class EnvironmentContainer:
-    app_name = None
+class EnvironmentContainer(PersistentMapping):
+    def __init__(self, app_name):
+        PersistentMapping.__init__(self)
+        self.app_name = app_name
 
-class Build:
-    app_name = None
+class Build(PersistentMapping):
+    def __init__(self, app_name, build_name):
+        PersistentMapping.__init__(self)
+        self.app_name = app_name
+        self.build_name = build_name
 
 class BuildContainer(PersistentMapping):
     def __init__(self, app_name):
@@ -35,8 +40,6 @@ class Application(PersistentMapping):
     def __init__(self, app_name):
         PersistentMapping.__init__(self)
         self.app_name = app_name
-        self.environments = []
-        self.builds = []
 
 class ApplicationContainer(PersistentMapping):
     pass
