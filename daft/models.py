@@ -11,6 +11,12 @@ from persistent.mapping import PersistentMapping
 # root/app/{app_name}/environemnt/{env_name}/servers/{server_name}
 
 
+class SupportedFileType:
+    TarGz = 'tar.gz'
+    TarBz2 = 'tar.bz2'
+    Zip = 'zip'
+    types = [TarBz2, TarGz, Zip]
+
 class Server:
     env_name = None
 
@@ -30,6 +36,9 @@ class Build(PersistentMapping):
         PersistentMapping.__init__(self)
         self.app_name = app_name
         self.build_name = build_name
+        self.stored = False
+        self.files = dict()  # { filename: filetype }
+        self.master_file = None  # original uploaded file
 
 class BuildContainer(PersistentMapping):
     def __init__(self, app_name):

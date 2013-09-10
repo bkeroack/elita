@@ -5,6 +5,7 @@ import string
 
 import models
 import daft_config
+import builds
 
 
 
@@ -122,6 +123,11 @@ class BuildContainerView(GenericView):
         GenericView.__init__(self, context, request)
         self.app_name = self.context.app_name
 
+    def validate_build_name(self, build_name):
+        if build_name not in self.context.keys():
+            return False, self.Error("build name '{}' not found".format(build_name))
+        return True, None
+
     def GET(self):
         return {"application": self.app_name, "builds": self.context.keys()}
 
@@ -133,13 +139,44 @@ class BuildContainerView(GenericView):
 
     def POST(self):
         build_name = self.req.params["build_name"]
+        ok, err = self.validate_build_name(build_name)
+        if not ok:
+            return err
+        return BuildView(self.context[build_name], self.req).POST()
+
+    def DELETE(self):
+        build_name = self.req.params["build_name"]
+        ok, err = self.validate_build_name(build_name)
+        if not ok:
+            return err
+        self.context.pop(build_name, None)
+        return self.return_action_status({"delete_build": {"application": self.app_name, "build_name": build_name}})
+
+
+class BuildView(GenericView):
+    def __init__(self, context, request):
+        self.set_params({"GET": [], "PUT": [], "POST": ["file_type"], "DELETE": ["file_name"]})
+        GenericView.__init__(self, context, request)
+        self.app_name = self.context.app_name
+
+    def POST(self):
+        build_name = self.context.build_name
+        ftype = self.req.params["file_type"]
+        if ftype not in models.SupportedFileType.types:
+            return self.Error("file type not supported")
+
         fname = self.req.POST['build'].filename
         input_file = self.req.POST['build'].file
-        logging.debug("BuildContainer: PUT: fname: {}".format(fname))
+        logging.debug("BuildContainer: PUT: filename: {}".format(fname))
 
-        oname = "{}/mybuild-{}.dat".format(daft_config.cfg.get_build_dir(), Utility().random_string(8))
-        with open(oname, 'wb') as of:
-            of.write(input_file.read(-1))
+        bs_obj = builds.BuildStorage(self.app_name, build_name, file_type=ftype, fd=input_file)
+        if not bs_obj.validate():
+            return self.Error("Invalid file type or corrupted file")
+
+        bs_obj.store()
+        self.context.master_file = bs_obj.filename
+        self.context.files[bs_obj.filename] = bs_obj.file_type
+        self.context.stored = True
 
         return self.return_action_status({"build_stored": {"application": self.app_name, "build_name": build_name}})
 
@@ -171,6 +208,8 @@ def Action(context, request):
         return EnvironmentView(context, request).__call__()
     elif cname == 'BuildContainer':
         return BuildContainerView(context, request).__call__()
+    elif cname == 'Build':
+        return BuildView(context, request).__call__()
     elif cname == "Server":
         return ServerView(context, request).__call__()
     elif cname == "Deployment":
