@@ -24,6 +24,9 @@ class GenericView:
         logging.debug("{}: {} ; {}".format(self.__class__.__name__, type(context), request.subpath))
         self.req = request
         self.context = context
+        if 'pretty' in self.req.params:
+            if self.req.params['pretty'] == "True":
+                self.req.override_renderer = "prettyjson"
 
     def __call__(self):
         g, p = self.check_params()
