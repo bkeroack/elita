@@ -33,7 +33,7 @@ class BuildStorage:
 
     def create_storage_dir(self):
         storage_dir = daft_config.cfg.get_build_dir()
-        build_dir = "{}/{}".format(storage_dir, self.application)
+        build_dir = "{}/{}/{}".format(storage_dir, self.application, self.name)
         if not os.path.exists(build_dir):
             os.makedirs(build_dir)
         return build_dir
@@ -63,7 +63,7 @@ class BuildStorage:
 
     def validate_tar(self, compression):
         try:
-            with tarfile.open(mode='r|{}'.format(compression), fileobj=self.temp_file) as tf:
+            with tarfile.open(mode='r:{}'.format(compression), fileobj=self.temp_file) as tf:
                 logging.debug("tar.{}: {}, {}, {} members".format(compression, self.application, self.name, len(tf.getnames())))
         except tarfile.ReadError:
             logging.debug("tar.{}: invalid tar file!".format(compression))
