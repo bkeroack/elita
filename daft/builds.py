@@ -8,7 +8,28 @@ import zipfile
 import tarfile
 
 import daft_config
+import packages
 from models import SupportedFileType
+
+class BuildError(Exception):
+    pass
+
+class BuildPackager:
+    def __init__(self, storage_dir, application, filename, file_type, build_name):
+        self.storage_dir = storage_dir
+        self.application = application
+        self.filename = filename
+        self.file_type = file_type
+        self.build_name = build_name
+
+    def run(self):
+        for k in packages.PackageApplicationMap:
+            if k == self.application:
+                po = packages.PackageApplicationMap[k](self.storage_dir, self.filename, self.file_type, self.build_name)
+                pkg = po.process()
+                po.cleanup()
+                return pkg
+
 
 class BuildStorage:
     def __init__(self, application=None, name=None, file_type=None, fd=None):
@@ -36,16 +57,22 @@ class BuildStorage:
         build_dir = "{}/{}/{}".format(storage_dir, self.application, self.name)
         if not os.path.exists(build_dir):
             os.makedirs(build_dir)
-        return build_dir
+        self.storage_dir = build_dir
 
-    def store(self):
-        bdir = self.create_storage_dir()
-        fname = "{}/{}.{}".format(bdir, self.name, self.file_type)
+    def store(self, packages=True):
+        self.create_storage_dir()
+        fname = "{}/{}.{}".format(self.storage_dir, self.name, self.file_type)
         with open(self.temp_file_name, 'rb') as tf:
             with open(fname, 'wb') as bf:
                 bf.write(tf.read(-1))
         os.remove(self.temp_file_name)
         self.filename = fname
+        if packages:
+            bp = BuildPackager(self.storage_dir, self.application, self.filename, self.file_type, self.name)
+            pdict = bp.run()
+        else:
+            pdict = {}
+        return self.filename, pdict
 
     def validate(self):
         if self.file_type == SupportedFileType.TarGz:

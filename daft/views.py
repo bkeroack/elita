@@ -1,4 +1,5 @@
 from pyramid.view import view_config
+import pyramid.response
 import logging
 import random
 import string
@@ -21,6 +22,7 @@ class Utility:
 
 class GenericView:
     def __init__(self, context, request):
+        self.required_params = {"GET": [], "PUT": [], "POST": [], "DELETE": []}  # { reqverb: [ params ] }
         logging.debug("{}: {} ; {}".format(self.__class__.__name__, type(context), request.subpath))
         self.req = request
         self.context = context
@@ -53,7 +55,6 @@ class GenericView:
         return True, None
 
     def set_params(self, params):
-        self.required_params = dict()  # { reqverb: [ params ] }
         for t in params:
             self.required_params[t] = params[t]
 
@@ -92,9 +93,10 @@ def root_view(request):
 
 class ApplicationContainerView(GenericView):
     def __init__(self, context, request):
+        GenericView.__init__(self, context, request)
         param = ["app_name"]
         self.set_params({"GET": [], "PUT": param, "POST": param, "DELETE": param})
-        GenericView.__init__(self, context, request)
+
 
     def PUT(self):
         app_name = self.req.params["app_name"]
@@ -110,8 +112,8 @@ class ApplicationContainerView(GenericView):
 
 class ApplicationView(GenericView):
     def __init__(self, context, request):
-        self.set_params({"GET": [], "PUT": [], "POST": ["app_name"], "DELETE": []})
         GenericView.__init__(self, context, request)
+        self.set_params({"GET": [], "PUT": [], "POST": ["app_name"], "DELETE": []})
 
     def GET(self):
         return {"application": self.context.app_name, "data": self.context.keys()}
@@ -122,8 +124,8 @@ class EnvironmentView(GenericView):
 
 class BuildContainerView(GenericView):
     def __init__(self, context, request):
-        self.set_params({"GET": [], "PUT": ["build_name"], "POST": ["build_name"], "DELETE": ["build_name"]})
         GenericView.__init__(self, context, request)
+        self.set_params({"GET": [], "PUT": ["build_name"], "POST": ["build_name"], "DELETE": ["build_name"]})
         self.app_name = self.context.app_name
 
     def validate_build_name(self, build_name):
@@ -156,10 +158,17 @@ class BuildContainerView(GenericView):
         return self.return_action_status({"delete_build": {"application": self.app_name, "build_name": build_name}})
 
 
+class BuildDetailView(GenericView):
+    def GET(self):
+        return {'application': self.context.buildobj.app_name, 'build': self.context.buildobj.build_name,
+                'stored': self.context.buildobj.stored, 'packages': self.context.buildobj.packages,
+                'files': self.context.buildobj.files}
+
+
 class BuildView(GenericView):
     def __init__(self, context, request):
-        self.set_params({"GET": [], "PUT": [], "POST": ["file_type"], "DELETE": ["file_name"]})
         GenericView.__init__(self, context, request)
+        self.set_params({"GET": ["package"], "PUT": [], "POST": ["file_type"], "DELETE": ["file_name"]})
         self.app_name = self.context.app_name
 
     def POST(self):
@@ -176,13 +185,30 @@ class BuildView(GenericView):
         if not bs_obj.validate():
             return self.Error("Invalid file type or corrupted file")
 
-        bs_obj.store()
-        self.context.master_file = bs_obj.filename
-        self.context.files[bs_obj.filename] = bs_obj.file_type
+        #try:
+        bs_results = bs_obj.store(packages=True)
+        #except:
+        #    return self.Error("error storing build or creating packages (see log)")
+        logging.debug("BuildView: bs_results: {}".format(bs_results))
+        self.context.master_file = bs_results[0]
+        for k in bs_results[1]:
+            self.context.packages[k] = bs_results[1][k]
+        self.context.packages['master'] = {'filename': bs_results[0], 'file_type': ftype}
+        logging.debug("BuildView: context.packages: {}".format(self.context.packages))
+        for k in self.context.packages:
+            fname = self.context.packages[k]['filename']
+            ftype = self.context.packages[k]['file_type']
+            self.context.files[fname] = ftype
         self.context.stored = True
+        self.context["info"] = models.BuildDetail(self.context)
 
         return self.return_action_status({"build_stored": {"application": self.app_name, "build_name": build_name}})
 
+    def GET(self):
+        pkg = self.req.params['package']
+        if pkg not in self.context.packages:
+            return self.Error("package type '{}' not found".format(pkg))
+        return pyramid.response.FileResponse(self.context.packages[pkg]['filename'], request=self.req, cache_max_age=0)
 
 
 class ServerView(GenericView):
@@ -213,6 +239,8 @@ def Action(context, request):
         return BuildContainerView(context, request).__call__()
     elif cname == 'Build':
         return BuildView(context, request).__call__()
+    elif cname == 'BuildDetail':
+        return BuildDetailView(context, request).__call__()
     elif cname == "Server":
         return ServerView(context, request).__call__()
     elif cname == "Deployment":

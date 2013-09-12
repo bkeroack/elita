@@ -39,6 +39,12 @@ class Build(PersistentMapping):
         self.stored = False
         self.files = dict()  # { filename: filetype }
         self.master_file = None  # original uploaded file
+        self.packages = dict()  # { package_type: {'filename': filename, 'file_type': file_type}}
+
+class BuildDetail(PersistentMapping):
+    def __init__(self, buildobj):
+        PersistentMapping.__init__(self)
+        self.buildobj = buildobj
 
 class BuildContainer(PersistentMapping):
     def __init__(self, app_name):
