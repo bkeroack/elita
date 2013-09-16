@@ -32,10 +32,11 @@ class EnvironmentContainer(PersistentMapping):
         self.app_name = app_name
 
 class Build(PersistentMapping):
-    def __init__(self, app_name, build_name):
+    def __init__(self, app_name, build_name, subsys=[]):
         PersistentMapping.__init__(self)
         self.app_name = app_name
         self.build_name = build_name
+        self.subsys = subsys
         self.stored = False
         self.files = dict()  # { filename: filetype }
         self.master_file = None  # original uploaded file
@@ -47,6 +48,16 @@ class BuildDetail(PersistentMapping):
         self.buildobj = buildobj
 
 class BuildContainer(PersistentMapping):
+    def __init__(self, app_name):
+        PersistentMapping.__init__(self)
+        self.app_name = app_name
+
+class SubsystemContainer(PersistentMapping):
+    def __init__(self, app_name):
+        PersistentMapping.__init__(self)
+        self.app_name = app_name
+
+class SubsystemContainer(PersistentMapping):
     def __init__(self, app_name):
         PersistentMapping.__init__(self)
         self.app_name = app_name

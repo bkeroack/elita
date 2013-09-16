@@ -91,20 +91,31 @@ class GenericView:
 def root_view(request):
     return {'project': 'daft'}
 
+
 class ApplicationContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request)
         param = ["app_name"]
         self.set_params({"GET": [], "PUT": param, "POST": param, "DELETE": param})
 
+    def validate_app_name(self, name):
+        return name in self.context.keys()
 
     def PUT(self):
         app_name = self.req.params["app_name"]
         app = models.Application(app_name)
         app['environments'] = models.EnvironmentContainer(app_name)
         app['builds'] = models.BuildContainer(app_name)
+        app['subsys'] = models.SubsystemContainer(app_name)
         self.context[app_name] = app
         return self.return_action_status({"new_application": {"name": app_name}})
+
+    def DELETE(self):
+        app_name = self.req.params["app_name"]
+        if not self.validate_app_name(app_name):
+            return self.Error("app name '{}' not found".format(app_name))
+        self.context.pop(app_name, None)
+        return self.return_action_status({"delete_application": app_name})
 
     def GET(self):
         return {"applications": self.context.keys()}
@@ -118,6 +129,7 @@ class ApplicationView(GenericView):
     def GET(self):
         return {"application": self.context.app_name, "data": self.context.keys()}
 
+
 class EnvironmentView(GenericView):
     pass
 
@@ -129,16 +141,15 @@ class BuildContainerView(GenericView):
         self.app_name = self.context.app_name
 
     def validate_build_name(self, build_name):
-        if build_name not in self.context.keys():
-            return False, self.Error("build name '{}' not found".format(build_name))
-        return True, None
+        return build_name in self.context.keys()
 
     def GET(self):
         return {"application": self.app_name, "builds": self.context.keys()}
 
     def PUT(self):
         build_name = self.req.params["build_name"]
-        build = models.Build(self.app_name, build_name)
+        subsys = self.req.params["subsys"] if "sybsys" in self.req.params else []
+        build = models.Build(self.app_name, build_name, subsys)
         self.context[build_name] = build
         return self.return_action_status({"new_build": {"application": self.app_name, "build_name": build_name}})
 
@@ -151,9 +162,8 @@ class BuildContainerView(GenericView):
 
     def DELETE(self):
         build_name = self.req.params["build_name"]
-        ok, err = self.validate_build_name(build_name)
-        if not ok:
-            return err
+        if not self.validate_build_name(build_name):
+            return self.Error("build name '{}' not found".format(build_name))
         self.context.pop(build_name, None)
         return self.return_action_status({"delete_build": {"application": self.app_name, "build_name": build_name}})
 
@@ -224,27 +234,10 @@ def Action(context, request):
 
     cname = context.__class__.__name__
     logging.debug(cname)
-    if cname == 'ApplicationContainer':
-        logging.debug("...ApplicationContainer")
-        return ApplicationContainerView(context, request).__call__()
-    elif cname == 'Application':
-        logging.debug("...Application")
-        return ApplicationView(context, request).__call__()
-    elif cname == 'EnvironmentContainer':
-        logging.debug("...EnvironmentContainer")
-        return EnvironmentContainerView(context, request).__call__()
-    elif cname == 'Environment':
-        return EnvironmentView(context, request).__call__()
-    elif cname == 'BuildContainer':
-        return BuildContainerView(context, request).__call__()
-    elif cname == 'Build':
-        return BuildView(context, request).__call__()
-    elif cname == 'BuildDetail':
-        return BuildDetailView(context, request).__call__()
-    elif cname == "Server":
-        return ServerView(context, request).__call__()
-    elif cname == "Deployment":
-        return DeploymentView(context, request).__call__()
+    view_class = globals()[cname + "View"]
+
+    return view_class(context, request).__call__()
+
 
 
 
