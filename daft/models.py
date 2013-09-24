@@ -52,12 +52,22 @@ class BuildContainer(PersistentMapping):
         PersistentMapping.__init__(self)
         self.app_name = app_name
 
-class SubsystemContainer(PersistentMapping):
+class Subsystem(PersistentMapping):
     def __init__(self, app_name):
         PersistentMapping.__init__(self)
         self.app_name = app_name
 
 class SubsystemContainer(PersistentMapping):
+    def __init__(self, app_name):
+        PersistentMapping.__init__(self)
+        self.app_name = app_name
+
+class Action(PersistentMapping):
+    def __init__(self, app_name):
+        PersistentMapping.__init__(self)
+        self.app_name = app_name
+
+class ActionContainer(PersistentMapping):
     def __init__(self, app_name):
         PersistentMapping.__init__(self)
         self.app_name = app_name

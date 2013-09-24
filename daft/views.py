@@ -107,6 +107,7 @@ class ApplicationContainerView(GenericView):
         app['environments'] = models.EnvironmentContainer(app_name)
         app['builds'] = models.BuildContainer(app_name)
         app['subsys'] = models.SubsystemContainer(app_name)
+        app['action'] = models.ActionContainer(app_name)
         self.context[app_name] = app
         return self.return_action_status({"new_application": {"name": app_name}})
 
@@ -128,6 +129,19 @@ class ApplicationView(GenericView):
 
     def GET(self):
         return {"application": self.context.app_name, "data": self.context.keys()}
+
+class ActionContainerView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request)
+
+    def GET(self):
+        return {"application": self.context.app_name, "data": self.context.keys()}
+
+class ActionView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request)
+        self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
+
 
 
 class EnvironmentView(GenericView):
