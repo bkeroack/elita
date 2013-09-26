@@ -6,14 +6,18 @@ import salt.client
 class QualType:
     Corp = 0
     EC2 = 1
+    CorpMaster = 'laxqualmaster'
+    EC2Master = 'qualmaster001'
 
 class QualTypeUnknown(Exception):
     pass
 
 
 class ProvisionQual:
-    def __init__(self, qual_type):
+    def __init__(self, qual_type, build):
         self.qual_type = qual_type
+        self.build = build
+        assert self.build.__class__.__name__ == 'Build'
 
     def start(self):
         self.verify_master_server()
@@ -43,22 +47,15 @@ class ProvisionQual:
     #   - create DNS A record
 
 
-class QualMasterServer:
-    def __init__(self, qual_type):
-        if qual_type == QualType.Corp:
-            self.name = "laxqualmaster"
-        elif qual_type == QualType.EC2:
-            self.name = "qualmaster001"
-        else:
-            raise QualTypeUnknown
-
-    def verify(self):
-        pass
-
-
 class SaltClient:
     def __init__(self):
         self.client = salt.client.LocalClient()
 
-    def powershell(self, target, cmd):
-        self.client.cmd()
+    def powershell(self, target, cmd, target_type='glob', timeout=120):
+        return self.client.cmd(target, 'cmd.run', cmd, timeout=timeout, expr_form=target_type, shell='powershell')
+
+    def cmd(self, target, cmd, args, target_type='glob', timeout=60):
+        return self.client.cmd(target, cmd, args, timeout=timeout, expr_form=target_type)
+
+    def ping(self, target):
+        return
