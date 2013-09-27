@@ -3,6 +3,7 @@ import pyramid.response
 import logging
 import random
 import string
+import requests
 
 import models
 import daft_config
@@ -194,18 +195,10 @@ class BuildView(GenericView):
         GenericView.__init__(self, context, request)
         self.set_params({"GET": ["package"], "PUT": [], "POST": ["file_type"], "DELETE": ["file_name"]})
         self.app_name = self.context.app_name
+        self.build_name = None
 
-    def POST(self):
-        build_name = self.context.build_name
-        ftype = self.req.params["file_type"]
-        if ftype not in models.SupportedFileType.types:
-            return self.Error("file type not supported")
-
-        fname = self.req.POST['build'].filename
-        input_file = self.req.POST['build'].file
-        logging.debug("BuildContainer: PUT: filename: {}".format(fname))
-
-        bs_obj = builds.BuildStorage(self.app_name, build_name, file_type=ftype, fd=input_file)
+    def store_build(self, input_file, ftype):
+        bs_obj = builds.BuildStorage(self.app_name, self.build_name, file_type=ftype, fd=input_file)
         if not bs_obj.validate():
             return self.Error("Invalid file type or corrupted file")
 
@@ -226,7 +219,28 @@ class BuildView(GenericView):
         self.context.stored = True
         self.context["info"] = models.BuildDetail(self.context)
 
-        return self.return_action_status({"build_stored": {"application": self.app_name, "build_name": build_name}})
+        return self.return_action_status({"build_stored": {"application": self.app_name, "build_name": self.build_name}})
+
+    def direct_upload(self):
+        logging.debug("BuildView: direct_upload")
+        fname = self.req.POST['build'].filename
+        logging.debug("BuildContainer: PUT: filename: {}".format(fname))
+        return self.store_build(self.req.POST['build'].file, self.req.params["file_type"])
+
+    def indirect_upload(self):
+        logging.debug("BuildView: indirect_upload: downloading from {}".format(self.req.params['indirect_url']))
+        r = requests.get(self.req.params['indirect_url'], stream=True)
+        return self.store_build(r.raw, self.req.params["file_type"])
+
+    def POST(self):
+        self.build_name = self.context.build_name
+        if self.req.params["file_type"] not in models.SupportedFileType.types:
+            return self.Error("file type not supported")
+
+        if "indirect_url" in self.req.params:
+            return self.indirect_upload()
+        else:
+            return self.direct_upload()
 
     def GET(self):
         pkg = self.req.params['package']
