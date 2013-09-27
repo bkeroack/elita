@@ -48,8 +48,10 @@ class BuildStorage:
 
     def write_to_temp(self):
         self.get_temp()
+        logging.debug("BuildStorage: write_to_temp: beginning temp file write")
         self.temp_file.write(self.fd.read(-1))
         self.temp_file.close()
+        logging.debug("BuildStorage: write_to_temp: finished")
         self.temp_file = open(self.temp_file_name, 'rb')
 
     def create_storage_dir(self):
