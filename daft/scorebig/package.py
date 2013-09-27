@@ -4,6 +4,7 @@ import zipfile
 import tempfile
 import os
 import shutil
+import multiprocessing
 
 __author__ = 'bkeroack'
 
@@ -63,8 +64,9 @@ class ScoreBig_Package_SkynetQA:
 
     def create(self):
         for f in self.subpackages:
-            new_file = self.storage_dir + os.path.basename(f)
-            pname = os.path.basename(f).split('-')[1]
+            base_filename = os.path.basename(f)
+            new_file = "{}/skynetqa_{}".format(self.storage_dir, base_filename)
+            pname = os.path.basename(f).split('-')[1 if "package" in base_filename else 0]
             logging.debug("ScoreBig_Package_SkynetQA: got pname {}".format(pname))
             logging.debug("ScoreBig_Package_SkynetQA: copying {} to {}".format(f, self.storage_dir))
             shutil.copyfile(f, new_file)
@@ -89,30 +91,35 @@ class ScoreBig_Package_TeamCity:
         shutil.rmtree(self.temp_dir)
 
     def create_subpackages(self):
-        self.config_subpackages()
-        self.web_subpackage()
-        self.functionaltests_subpackage()
-        self.scheduledjobs_subpackage()
-        self.servicebus_subpackage()
-        self.artifacts_subpackage()
-        self.assets_subpackage()
-        self.migration_subpackage()
+        threads = list()
+        threads.append(multiprocessing.Process(name='config', target=self.config_subpackages))
+        threads.append(multiprocessing.Process(name='web', target=self.web_subpackage))
+        threads.append(multiprocessing.Process(name='ftests', target=self.functionaltests_subpackage))
+        threads.append(multiprocessing.Process(name='sj', target=self.scheduledjobs_subpackage))
+        threads.append(multiprocessing.Process(name='sb', target=self.servicebus_subpackage))
+        threads.append(multiprocessing.Process(name='ar', target=self.artifacts_subpackage))
+        threads.append(multiprocessing.Process(name='as', target=self.assets_subpackage))
+        threads.append(multiprocessing.Process(name='m', target=self.migration_subpackage))
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(60)
 
     def create_monolithic_zip(self):
-        fname = "{}/{}-teamcity.zip".format(self.storage_dir, self.build_name)
+        fname = "{}/teamcity-{}.zip".format(self.storage_dir, self.build_name)
         logging.debug("create_monolithic_zip: {}".format(self.subpackages))
         with zipfile.ZipFile(fname, 'a') as zf:
             for f in self.subpackages:
                 zf.write(f, os.path.basename(f))
         return fname
 
-    def zipfolder(self, path, zipname, subpath = None):
+    def zipfolder(self, path, zipname, subpath=None):
         with zipfile.ZipFile(zipname, 'w', zipfile.ZIP_DEFLATED) as zf:
             for dirpath, dirs, files in os.walk(path):
                 for f in files:
                     bp = str(dirpath).replace(path, "")
                     bp += "" if subpath is None else subpath
-                    bp += "/" if bp != "" else ""
+                    bp += bp if bp == "" else "/"
                     zf.write(os.path.join(dirpath, f), bp + f)
 
     def create_subpackage(self, dirname, shortname, subpath):
@@ -148,13 +155,13 @@ class ScoreBig_Package_TeamCity:
 
     def artifacts_subpackage(self):
         path = "{}/Artifacts".format(self.dir)
-        fname = "package-artifacts-{}.zip".format(self.build_name)
+        fname = "{}/package-artifacts-{}.zip".format(self.temp_dir, self.build_name)
         self.zipfolder(path, fname)
         self.subpackages.append(fname)
 
     def assets_subpackage(self):
         path = "{}/Assets".format(self.dir)
-        fname = "package-assets-{}.zip".format(self.build_name)
+        fname = "{}/package-assets-{}.zip".format(self.temp_dir, self.build_name)
         self.zipfolder(path, fname)
         self.subpackages.append(fname)
 

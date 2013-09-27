@@ -27,7 +27,7 @@ class GenericView:
         self.req = request
         self.context = context
         if 'pretty' in self.req.params:
-            if self.req.params['pretty'] == "True":
+            if self.req.params['pretty'] == "True" or self.req.params['pretty'] == "true":
                 self.req.override_renderer = "prettyjson"
 
     def __call__(self):
