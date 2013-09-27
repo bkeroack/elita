@@ -92,24 +92,21 @@ class ScoreBig_Package_TeamCity:
 
     def create_subpackages(self):
         threads = list()
-        q = multiprocessing.Queue()
-        threads.append(multiprocessing.Process(target=self.config_subpackages, args=(q,)))
-        threads.append(multiprocessing.Process(target=self.web_subpackage, args=(q,)))
-        threads.append(multiprocessing.Process(target=self.functionaltests_subpackage, args=(q,)))
-        threads.append(multiprocessing.Process(target=self.scheduledjobs_subpackage, args=(q,)))
-        threads.append(multiprocessing.Process(target=self.servicebus_subpackage, args=(q,)))
-        threads.append(multiprocessing.Process(target=self.artifacts_subpackage, args=(q,)))
-        threads.append(multiprocessing.Process(target=self.assets_subpackage, args=(q,)))
-        threads.append(multiprocessing.Process(target=self.migration_subpackage, args=(q,)))
+        m = multiprocessing.Manager()
+        sp_list = m.list()
+        threads.append(multiprocessing.Process(target=self.config_subpackages, args=(sp_list,)))
+        threads.append(multiprocessing.Process(target=self.web_subpackage, args=(sp_list,)))
+        threads.append(multiprocessing.Process(target=self.functionaltests_subpackage, args=(sp_list,)))
+        threads.append(multiprocessing.Process(target=self.scheduledjobs_subpackage, args=(sp_list,)))
+        threads.append(multiprocessing.Process(target=self.servicebus_subpackage, args=(sp_list,)))
+        threads.append(multiprocessing.Process(target=self.artifacts_subpackage, args=(sp_list,)))
+        threads.append(multiprocessing.Process(target=self.assets_subpackage, args=(sp_list,)))
+        threads.append(multiprocessing.Process(target=self.migration_subpackage, args=(sp_list,)))
         for t in threads:
             t.start()
         for t in threads:
             t.join(60)
-        while True:
-            try:
-                self.subpackages.append(q.get())
-            except Queue.Empty:
-                break
+        self.subpackages = sp_list
 
     def create_monolithic_zip(self):
         fname = "{}/teamcity-{}.zip".format(self.storage_dir, self.build_name)
@@ -128,14 +125,14 @@ class ScoreBig_Package_TeamCity:
                     bp += bp if bp == "" else "/"
                     zf.write(os.path.join(dirpath, f), bp + f)
 
-    def create_subpackage(self, dirname, shortname, subpath, q):
+    def create_subpackage(self, dirname, shortname, subpath, sp_list):
         path = "{}/{}".format(self.dir, dirname)
         logging.debug("{}_subpackage: {}".format(shortname, path))
         fname = "{}/package-{}-{}.zip".format(self.temp_dir, shortname, self.build_name)
         self.zipfolder(path, fname, subpath=subpath)
-        q.put(fname)
+        sp_list.append(fname)
 
-    def config_subpackages(self, q):
+    def config_subpackages(self, sp_list):
         path = "{}/Configs".format(self.dir)
         logging.debug("config_subpackages: {}".format(path))
         for d in os.listdir(path):
@@ -148,35 +145,35 @@ class ScoreBig_Package_TeamCity:
                         if os.path.isfile(subsubpath):
                             zf.write(subsubpath, f)
                             logging.debug("...added file: {}".format(f))
-                q.put(fname)
+                sp_list.append(fname)
 
-    def web_subpackage(self, q):
-        self.create_subpackage("Web-Apps", "web", None, q)
+    def web_subpackage(self, sp_list):
+        self.create_subpackage("Web-Apps", "web", None, sp_list)
 
-    def scheduledjobs_subpackage(self, q):
-        self.create_subpackage("Svc-Apps/ScheduledJobs", "scheduledjobs", "scheduledjobsservice", q)
+    def scheduledjobs_subpackage(self, sp_list):
+        self.create_subpackage("Svc-Apps/ScheduledJobs", "scheduledjobs", "scheduledjobsservice", sp_list)
 
-    def servicebus_subpackage(self, q):
-        self.create_subpackage("Svc-Apps/ServiceBus", "servicebus", "servicebusservice", q)
+    def servicebus_subpackage(self, sp_list):
+        self.create_subpackage("Svc-Apps/ServiceBus", "servicebus", "servicebusservice", sp_list)
 
-    def artifacts_subpackage(self, q):
+    def artifacts_subpackage(self, sp_list):
         path = "{}/Artifacts".format(self.dir)
         fname = "{}/package-artifacts-{}.zip".format(self.temp_dir, self.build_name)
         self.zipfolder(path, fname)
-        q.put(fname)
+        sp_list.append(fname)
 
-    def assets_subpackage(self, q):
+    def assets_subpackage(self, sp_list):
         path = "{}/Assets".format(self.dir)
         fname = "{}/package-assets-{}.zip".format(self.temp_dir, self.build_name)
         self.zipfolder(path, fname)
-        q.put(fname)
+        sp_list.append(fname)
 
-    def functionaltests_subpackage(self, q):
+    def functionaltests_subpackage(self, sp_list):
         #stub - unused package
         fname = "{}/package-functionaltests-{}.zip".format(self.temp_dir, self.build_name)
         open(fname, 'a').close()
 
-    def migration_subpackage(self, q):
+    def migration_subpackage(self, sp_list):
         #stub - unused package
         fname = "{}/package-migration-{}.zip".format(self.temp_dir, self.build_name)
         open(fname, 'a').close()
