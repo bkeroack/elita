@@ -4,6 +4,7 @@ import logging
 import random
 import string
 import requests
+import urllib2
 
 import models
 import daft_config
@@ -229,8 +230,9 @@ class BuildView(GenericView):
 
     def indirect_upload(self):
         logging.debug("BuildView: indirect_upload: downloading from {}".format(self.req.params['indirect_url']))
-        r = requests.get(self.req.params['indirect_url'], stream=True)
-        return self.store_build(r.raw, self.req.params["file_type"])
+        #r = requests.get(self.req.params['indirect_url'], stream=True)
+        r = urllib2.urlopen(self.req.params['indirect_url'])
+        return self.store_build(r, self.req.params["file_type"])
 
     def POST(self):
         self.build_name = self.context.build_name
