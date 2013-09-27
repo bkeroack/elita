@@ -26,9 +26,9 @@ class BuildPackager:
         for k in packages.PackageApplicationMap:
             if k == self.application:
                 po = packages.PackageApplicationMap[k](self.storage_dir, self.filename, self.file_type, self.build_name)
-                pkg = po.process()
+                pkglist = po.process()
                 po.cleanup()
-                return pkg
+                return pkglist
 
 
 class BuildStorage:
@@ -54,7 +54,7 @@ class BuildStorage:
 
     def create_storage_dir(self):
         storage_dir = daft_config.cfg.get_build_dir()
-        build_dir = "{}/{}/{}".format(storage_dir, self.application, self.name)
+        build_dir = "{}{}/{}".format(storage_dir, self.application, self.name)
         if not os.path.exists(build_dir):
             os.makedirs(build_dir)
         self.storage_dir = build_dir

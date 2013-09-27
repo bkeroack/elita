@@ -16,15 +16,15 @@ from ..generic_package import GenericPackage, PackageProcessingError
 class ScoreBig_Packages(GenericPackage):
     def __init__(self, storage_dir, filename, file_type, build_name):
         GenericPackage.__init__(self, storage_dir, filename, file_type, build_name)
+        self.sbtc = ScoreBig_Package_TeamCity(self.storage_dir, self.temp_dir, self.build_name)
 
     def process(self):
-        package, file_type = self.create_teamcity_package()
-        return {'teamcity': {'filename': package, 'file_type': file_type}}
+        tcpkg = self.create_teamcity_package()
+        return dict(ScoreBig_Package_SkynetQA(self.sbtc).create().items() + tcpkg.items())
 
     def create_teamcity_package(self):
         self.extract_file()
-        self.sbtc = ScoreBig_Package_TeamCity(self.storage_dir, self.temp_dir, self.build_name)
-        return self.sbtc.create(), "zip"
+        return {'teamcity': {'filename': self.sbtc.create(), 'file_type': 'zip'}}
 
     def cleanup(self):
         self.sbtc.cleanup()
@@ -52,6 +52,25 @@ class ScoreBig_Packages(GenericPackage):
                 zf.extractall(self.temp_dir)
         except:
             raise PackageProcessingError("Error decompressing zipfile!")
+
+
+class ScoreBig_Package_SkynetQA:
+    def __init__(self, sbtc):
+        assert sbtc.__class__.__name__ == "ScoreBig_Package_TeamCity"
+        self.subpackages = sbtc.subpackages
+        self.storage_dir = sbtc.storage_dir
+        self.packages = dict()
+
+    def create(self):
+        for f in self.subpackages:
+            new_file = self.storage_dir + os.path.basename(f)
+            pname = os.path.basename(f).split('-')[1]
+            logging.debug("ScoreBig_Package_SkynetQA: got pname {}".format(pname))
+            logging.debug("ScoreBig_Package_SkynetQA: copying {} to {}".format(f, self.storage_dir))
+            shutil.copyfile(f, new_file)
+            self.packages['skynetqa_{}'.format(pname)] = {'filename': new_file, 'file_type': 'zip'}
+        return self.packages
+
 
 class ScoreBig_Package_TeamCity:
     def __init__(self, storage_dir, directory, build_name):
