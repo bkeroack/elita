@@ -39,7 +39,12 @@ class RegisterBuild:
     def register(self):
         url = self.url.format(self.build_name)
         logging.debug("ScoreBig: Action: {}: url: {}".format(self.__class__.__name__, url))
-        r = requests.post(url)
+        try:
+            r = requests.post(url, timeout=45)
+        except requests.ConnectionError:
+            return False
+        except requests.Timeout:
+            return False
         resp = str(r.text).encode('ascii', 'ignore')
         logging.debug("ScoreBig: Action: {}: response: {}".format(self.__class__.__name__, resp))
         logging.debug("ScoreBIg: Action: {}: encoding: {}".format(self.__class__.__name__, r.encoding))
@@ -54,8 +59,8 @@ class RegisterBuildSkynet(RegisterBuild):
 
 class RegisterBuildSkynetQA(RegisterBuild):
     def __init__(self, build_name):
-        #url = "http://skynetqa.scorebiginc.com/DevQaTools/RegisterBuild?buildNumber={}"
-        url = "http://laxsky001/DevQaTools/RegisterBuild?buildNumber={}"
+        url = "http://skynetqa.scorebiginc.com/DevQaTools/RegisterBuild?buildNumber={}"
+        #url = "http://laxsky001/DevQaTools/RegisterBuild?buildNumber={}"
         RegisterBuild.__init__(self, url, build_name)
 
 
