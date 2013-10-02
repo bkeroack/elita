@@ -18,5 +18,7 @@ def main(global_config, **settings):
     config.scan()
 
     daft_config.cfg = daft_config.DaftConfiguration()
+    #just to make sure that the config file is found and valid
+    daft_config.cfg.get_build_dir()
 
     return config.make_wsgi_app()
