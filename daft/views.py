@@ -8,6 +8,7 @@ import urllib2
 import models
 import daft_config
 import builds
+import action
 
 
 
@@ -197,6 +198,11 @@ class BuildView(GenericView):
         self.app_name = self.context.app_name
         self.build_name = None
 
+    def upload_success_action(self):
+        ra = action.RegisterActions()
+        ra.register()
+        return ra.run_action(self.app_name, 'BUILD_UPLOAD_SUCCESS', build_name=self.build_name)
+
     def store_build(self, input_file, ftype):
         bs_obj = builds.BuildStorage(self.app_name, self.build_name, file_type=ftype, fd=input_file)
         if not bs_obj.validate():
@@ -219,7 +225,14 @@ class BuildView(GenericView):
         self.context.stored = True
         self.context["info"] = models.BuildDetail(self.context)
 
-        return self.return_action_status({"build_stored": {"application": self.app_name, "build_name": self.build_name}})
+        action_res = "ok" if self.upload_success_action() else "error"
+
+        return self.return_action_status({
+            "build_stored": {
+                "application": self.app_name,
+                "build_name": self.build_name,
+                "actions_result": action_res}
+        })
 
     def direct_upload(self):
         logging.debug("BuildView: direct_upload")

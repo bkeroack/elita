@@ -1,7 +1,10 @@
 __author__ = 'bkeroack'
 
+import logging
 import ec2
 import salt.client
+import requests
+import re
 
 class QualType:
     Corp = 0
@@ -9,8 +12,51 @@ class QualType:
     CorpMaster = 'laxqualmaster'
     EC2Master = 'qualmaster001'
 
+
 class QualTypeUnknown(Exception):
     pass
+
+
+class UploadBuildAction:
+    def __init__(self, **kwargs):
+        #pattern match for prod Skynet registration
+        self.rx = re.compile("^[0-9]{1,8}-(master|develop|sprint).*")
+        self.build_name = kwargs['build_name']
+
+    def go(self):
+        ret = True
+        if self.rx.match(self.build_name):
+            logging.debug("UploadBuildAction: regexp matches: {}".format(self.build_name))
+            ret = RegisterBuildSkynet(self.build_name).register()
+        return ret and RegisterBuildSkynetQA(self.build_name).register()
+
+
+class RegisterBuild:
+    def __init__(self, url, build_name):
+        self.url = url
+        self.build_name = build_name
+
+    def register(self):
+        url = self.url.format(self.build_name)
+        logging.debug("ScoreBig: Action: {}: url: {}".format(self.__class__.__name__, url))
+        r = requests.post(url)
+        resp = str(r.text).encode('ascii', 'ignore')
+        logging.debug("ScoreBig: Action: {}: response: {}".format(self.__class__.__name__, resp))
+        logging.debug("ScoreBIg: Action: {}: encoding: {}".format(self.__class__.__name__, r.encoding))
+        return "ok" in resp
+
+
+class RegisterBuildSkynet(RegisterBuild):
+    def __init__(self, build_name):
+        url = "http://skynet.scorebiginc.com/Hacks/RegisterBuild?buildNumber={}"
+        RegisterBuild.__init__(self, url, build_name)
+
+
+class RegisterBuildSkynetQA(RegisterBuild):
+    def __init__(self, build_name):
+        #url = "http://skynetqa.scorebiginc.com/DevQaTools/RegisterBuild?buildNumber={}"
+        url = "http://laxsky001/DevQaTools/RegisterBuild?buildNumber={}"
+        RegisterBuild.__init__(self, url, build_name)
 
 
 class ProvisionQual:

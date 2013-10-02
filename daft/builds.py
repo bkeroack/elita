@@ -11,8 +11,10 @@ import daft_config
 import packages
 from models import SupportedFileType
 
+
 class BuildError(Exception):
     pass
+
 
 class BuildPackager:
     def __init__(self, storage_dir, application, filename, file_type, build_name):
@@ -23,9 +25,11 @@ class BuildPackager:
         self.build_name = build_name
 
     def run(self):
+        pkgs = packages.RegisterPackages()
+        pkgs.register()
         for k in packages.PackageApplicationMap:
             if k == self.application:
-                po = packages.PackageApplicationMap[k](self.storage_dir, self.filename, self.file_type, self.build_name)
+                po = packages.PackageApplicationMap[k]['PACKAGE'](self.storage_dir, self.filename, self.file_type, self.build_name)
                 pkglist = po.process()
                 po.cleanup()
                 return pkglist
