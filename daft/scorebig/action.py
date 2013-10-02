@@ -6,6 +6,11 @@ import salt.client
 import requests
 import re
 
+
+def debugLog(self, msg):
+    logging.debug("ScoreBig: Action: {}: {}".format(self.__class__.__name__, msg))
+
+
 class QualType:
     Corp = 0
     EC2 = 1
@@ -26,9 +31,10 @@ class UploadBuildAction:
     def go(self):
         ret = True
         if self.rx.match(self.build_name):
-            logging.debug("UploadBuildAction: regexp matches: {}".format(self.build_name))
+            debugLog(self, "regexp matches: {}".format(self.build_name))
             ret = RegisterBuildSkynet(self.build_name).register()
-        return ret and RegisterBuildSkynetQA(self.build_name).register()
+        ret2 = RegisterBuildSkynetQA(self.build_name).register()
+        return ret and ret2  # awkward but we want both to run always
 
 
 class RegisterBuild:
@@ -38,16 +44,18 @@ class RegisterBuild:
 
     def register(self):
         url = self.url.format(self.build_name)
-        logging.debug("ScoreBig: Action: {}: url: {}".format(self.__class__.__name__, url))
+        debugLog(self, "url: {}".format(url))
         try:
             r = requests.post(url, timeout=45)
         except requests.ConnectionError:
+            debugLog(self, "ConnectionError")
             return False
         except requests.Timeout:
+            debugLog(self, "Timeout")
             return False
         resp = str(r.text).encode('ascii', 'ignore')
-        logging.debug("ScoreBig: Action: {}: response: {}".format(self.__class__.__name__, resp))
-        logging.debug("ScoreBIg: Action: {}: encoding: {}".format(self.__class__.__name__, r.encoding))
+        debugLog(self, "response: {}".format(resp))
+        debugLog(self, "encoding: {}".format(r.encoding))
         return "ok" in resp
 
 
@@ -60,7 +68,7 @@ class RegisterBuildSkynet(RegisterBuild):
 class RegisterBuildSkynetQA(RegisterBuild):
     def __init__(self, build_name):
         url = "http://skynetqa.scorebiginc.com/DevQaTools/RegisterBuild?buildNumber={}"
-        #url = "http://laxsky001/DevQaTools/RegisterBuild?buildNumber={}"
+        #url = "http://laxsky001/DevQaTools/RegisterBuild?buildNumber={}"  # for local testing
         RegisterBuild.__init__(self, url, build_name)
 
 
