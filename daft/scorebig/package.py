@@ -11,6 +11,10 @@ __author__ = 'bkeroack'
 from ..generic_package import GenericPackage, PackageProcessingError
 
 
+def debugLog(self, msg):
+    logging.debug("ScoreBig: Package: {}: {}".format(self.__class__.__name__, msg))
+
+
 #read file, create packages as temp files.
 #return dict { 'config_type': {'filename': fname, 'file_type': file_type}}
 #provide cleanup method to delete temp files
@@ -164,6 +168,29 @@ class ScoreBig_Package_TeamCity:
 
     def assets_subpackage(self, sp_list):
         path = "{}/Assets".format(self.dir)
+        # assets is the only package requiring a deeper dir structure
+        # create a new Assets2 subdir, make the dir hierarchy
+        # copy everything else over
+        # delete Assets, rename Assets2 to Assets
+        path2 = path + "2"
+        os.mkdir(path2)
+        tmp_path = path2
+        for p in (self.build_name, "www", "assets"):
+            tmp_path += "/{}".format(p)
+            debugLog(self, "assets: path2: subdir: {}".format(tmp_path))
+            os.mkdir(tmp_path)
+        path2 = tmp_path
+        for o in os.listdir(path):
+            fpo = "{}/{}".format(path, o)
+            if os.path.isdir(fpo):
+                dst = "{}/{}".format(path2, o)
+                debugLog(self, "assets: copying dir {} to {}".format(fpo, dst))
+                shutil.copytree(fpo, dst)
+            else:
+                debugLog(self, "assets: copying file {} to {}".format(fpo, path2))
+                shutil.copy(fpo, path2)
+        shutil.rmtree(path)
+        os.rename(path + "2", path)  # want orig base dir, path2 now is innermost dir
         fname = "{}/package-assets-{}.zip".format(self.temp_dir, self.build_name)
         self.zipfolder(path, fname)
         sp_list.append(fname)
