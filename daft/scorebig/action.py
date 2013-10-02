@@ -46,7 +46,7 @@ class RegisterBuild:
         url = self.url.format(self.build_name)
         debugLog(self, "url: {}".format(url))
         try:
-            r = requests.post(url, timeout=45)
+            r = requests.post(url, timeout=90)  # skynetqa can be super slow
         except requests.ConnectionError:
             debugLog(self, "ConnectionError")
             return False
