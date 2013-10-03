@@ -32,6 +32,9 @@ class GenericView:
             if self.req.params['pretty'] == "True" or self.req.params['pretty'] == "true":
                 self.req.override_renderer = "prettyjson"
 
+    def get_created_datetime_text(self):
+        return self.context.created_datetime.isoformat(' ') if hasattr(self.context, 'created_datetime') else None
+
     def __call__(self):
         g, p = self.check_params()
         if not g:
@@ -137,7 +140,9 @@ class ActionContainerView(GenericView):
         GenericView.__init__(self, context, request)
 
     def GET(self):
-        return {"application": self.context.app_name, "data": self.context.keys()}
+        return {"application": self.context.app_name,
+                "created_datetime": self.get_created_datetime_text(),
+                "data": self.context.keys()}
 
 class ActionView(GenericView):
     def __init__(self, context, request):
@@ -160,12 +165,14 @@ class BuildContainerView(GenericView):
         return build_name in self.context.keys()
 
     def GET(self):
-        return {"application": self.app_name, "builds": self.context.keys()}
+        return {"application": self.app_name,
+                "builds": self.context.keys()}
 
     def PUT(self):
         build_name = self.req.params["build_name"]
         subsys = self.req.params["subsys"] if "sybsys" in self.req.params else []
         build = models.Build(self.app_name, build_name, subsys)
+        build["info"] = models.BuildDetail(build)
         self.context[build_name] = build
         return self.return_action_status({"new_build": {"application": self.app_name, "build_name": build_name}})
 
@@ -188,7 +195,8 @@ class BuildDetailView(GenericView):
     def GET(self):
         return {'application': self.context.buildobj.app_name, 'build': self.context.buildobj.build_name,
                 'stored': self.context.buildobj.stored, 'packages': self.context.buildobj.packages,
-                'files': self.context.buildobj.files}
+                'files': self.context.buildobj.files,
+                'created_datetime': self.get_created_datetime_text()}
 
 
 class BuildView(GenericView):
@@ -223,7 +231,6 @@ class BuildView(GenericView):
             ftype = self.context.packages[k]['file_type']
             self.context.files[fname] = ftype
         self.context.stored = True
-        self.context["info"] = models.BuildDetail(self.context)
 
         action_res = "ok" if self.upload_success_action() else "error"
 
@@ -268,6 +275,7 @@ class ServerView(GenericView):
 
 class DeploymentView(GenericView):
     pass
+
 
 @view_config(name="", renderer='json')
 def Action(context, request):

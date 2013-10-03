@@ -1,4 +1,5 @@
 from persistent.mapping import PersistentMapping
+import datetime
 
 # URL model:
 # root/app/
@@ -16,6 +17,13 @@ class SupportedFileType:
     TarBz2 = 'tar.bz2'
     Zip = 'zip'
     types = [TarBz2, TarGz, Zip]
+    
+
+class BaseModelObject(PersistentMapping):
+    def __init__(self):
+        PersistentMapping.__init__(self)
+        self.created_datetime = datetime.datetime.now()
+
 
 class Server:
     env_name = None
@@ -26,14 +34,14 @@ class Deployment:
 class Environment:
     app_name = None
 
-class EnvironmentContainer(PersistentMapping):
+class EnvironmentContainer(BaseModelObject):
     def __init__(self, app_name):
-        PersistentMapping.__init__(self)
+        BaseModelObject.__init__(self)
         self.app_name = app_name
 
-class Build(PersistentMapping):
+class Build(BaseModelObject):
     def __init__(self, app_name, build_name, subsys=[]):
-        PersistentMapping.__init__(self)
+        BaseModelObject.__init__(self)
         self.app_name = app_name
         self.build_name = build_name
         self.subsys = subsys
@@ -42,45 +50,45 @@ class Build(PersistentMapping):
         self.master_file = None  # original uploaded file
         self.packages = dict()  # { package_type: {'filename': filename, 'file_type': file_type}}
 
-class BuildDetail(PersistentMapping):
+class BuildDetail(BaseModelObject):
     def __init__(self, buildobj):
-        PersistentMapping.__init__(self)
+        BaseModelObject.__init__(self)
         self.buildobj = buildobj
 
-class BuildContainer(PersistentMapping):
+class BuildContainer(BaseModelObject):
     def __init__(self, app_name):
-        PersistentMapping.__init__(self)
+        BaseModelObject.__init__(self)
         self.app_name = app_name
 
-class Subsystem(PersistentMapping):
+class Subsystem(BaseModelObject):
     def __init__(self, app_name):
-        PersistentMapping.__init__(self)
+        BaseModelObject.__init__(self)
         self.app_name = app_name
 
-class SubsystemContainer(PersistentMapping):
+class SubsystemContainer(BaseModelObject):
     def __init__(self, app_name):
-        PersistentMapping.__init__(self)
+        BaseModelObject.__init__(self)
         self.app_name = app_name
 
-class Action(PersistentMapping):
+class Action(BaseModelObject):
     def __init__(self, app_name):
-        PersistentMapping.__init__(self)
+        BaseModelObject.__init__(self)
         self.app_name = app_name
 
-class ActionContainer(PersistentMapping):
+class ActionContainer(BaseModelObject):
     def __init__(self, app_name):
-        PersistentMapping.__init__(self)
+        BaseModelObject.__init__(self)
         self.app_name = app_name
 
-class Application(PersistentMapping):
+class Application(BaseModelObject):
     def __init__(self, app_name):
-        PersistentMapping.__init__(self)
+        BaseModelObject.__init__(self)
         self.app_name = app_name
 
-class ApplicationContainer(PersistentMapping):
+class ApplicationContainer(BaseModelObject):
     pass
 
-class RootApplication(PersistentMapping):
+class RootApplication(BaseModelObject):
     pass
 
 
