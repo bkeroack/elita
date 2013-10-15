@@ -169,19 +169,19 @@ class BuildContainerView(GenericView):
                 "builds": self.context.keys()}
 
     def PUT(self):
-        msg = ""
+        msg = list()
         build_name = self.req.params["build_name"]
         if '/' in build_name:
             build_name = str(build_name).replace('/', '-')
-            msg += " warning: forward slash in build name replaced by hyphen;"
+            msg.append("warning: forward slash in build name replaced by hyphen")
         if build_name in self.context:
-            msg += " build exists;"
+            msg.append("build exists")
         subsys = self.req.params["subsys"] if "sybsys" in self.req.params else []
         build = models.Build(self.app_name, build_name, subsys)
         build["info"] = models.BuildDetail(build)
         self.context[build_name] = build
         return self.return_action_status({"new_build": {"application": self.app_name, "build_name": build_name,
-                                                        "message": msg}})
+                                                        "messages": msg}})
 
     def POST(self):
         build_name = self.req.params["build_name"]

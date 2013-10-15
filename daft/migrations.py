@@ -35,5 +35,6 @@ class GitflowFix_1000:
                     new_b += '_' if i == 0 else ''
                     new_b += "{}".format(random.choice(range(0, 10)))
                     i += 1
+                bobj.build_name = new_b
                 self.root['app_root']['app']['scorebig']['builds'][new_b] = bobj
         return self.root
