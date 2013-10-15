@@ -1,5 +1,6 @@
 from persistent.mapping import PersistentMapping
 import datetime
+import migrations
 
 # URL model:
 # root/app/
