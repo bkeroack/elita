@@ -28,7 +28,7 @@ class GitflowFix_1000:
             if '/' in b:
                 debugLog(self, "migrating {}".format(b))
                 bobj = self.root['app_root']['app']['scorebig']['builds'][b]
-                del [b]
+                del self.root['app_root']['app']['scorebig']['builds'][b]
                 new_b = str(b).replace('/', '-')
                 i = 0
                 while new_b in self.root['app_root']['app']['scorebig']['builds']:
