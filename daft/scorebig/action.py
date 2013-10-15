@@ -25,7 +25,7 @@ class QualTypeUnknown(Exception):
 class UploadBuildAction:
     def __init__(self, **kwargs):
         #pattern match for prod Skynet registration
-        self.rx = re.compile("^[0-9]{1,8}-(master|develop|sprint).*")
+        self.rx = re.compile("^[0-9]{1,8}-(master|sprint|regression).*")
         self.build_name = kwargs['build_name']
 
     def go(self):
