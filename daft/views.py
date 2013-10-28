@@ -1,15 +1,15 @@
 from pyramid.view import view_config
+import pyramid.exceptions
 import pyramid.response
 import logging
-import random
-import string
 import urllib2
 
 import models
 import daft_config
 import builds
 import action
-
+import auth
+import util
 
 
 logging.basicConfig(level=logging.DEBUG)
@@ -17,13 +17,9 @@ logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 
-class Utility:
-    def random_string(self, length, char_set=string.ascii_letters+string.digits):
-        return ''.join(random.choice(char_set) for x in range(0, length))
-
 
 class GenericView:
-    def __init__(self, context, request):
+    def __init__(self, context, request, app_name="_global", permissionless=False):
         self.required_params = {"GET": [], "PUT": [], "POST": [], "DELETE": []}  # { reqverb: [ params ] }
         logging.debug("{}: {} ; {}".format(self.__class__.__name__, type(context), request.subpath))
         self.req = request
@@ -31,33 +27,56 @@ class GenericView:
         if 'pretty' in self.req.params:
             if self.req.params['pretty'] == "True" or self.req.params['pretty'] == "true":
                 self.req.override_renderer = "prettyjson"
+        self.permissionless = permissionless
+        self.setup_permissions(app_name)
 
     def get_created_datetime_text(self):
         return self.context.created_datetime.isoformat(' ') if hasattr(self.context, 'created_datetime') else None
 
     def __call__(self):
         g, p = self.check_params()
+        r = False
+        util.debugLog(self, "found permissions: {}".format(self.permissions))
         if not g:
             return self.Error("Required parameter is missing: {}".format(p))
         if self.req.method == 'GET':
-            r = self.GET()
+            if 'read' in self.permissions:
+                r = self.GET()
         elif self.req.method == 'POST':
-            r = self.POST()
+            if 'write' in self.permissions:
+                r = self.POST()
         elif self.req.method == 'PUT':
-            r = self.PUT()
+            if 'write' in self.permissions:
+                r = self.PUT()
         elif self.req.method == 'DELETE':
-            r = self.DELETE()
+            if 'write' in self.permissions:
+                r = self.DELETE()
         else:
-            r = None
+            r = self.UNKNOWN_VERB()
+        if not r:
+            r = self.Error('permissions error')
 
         self.persist()
         return r
 
     def check_params(self):
-        for p in self.required_params[self.req.method]:
-            if p not in self.req.params:
-                return False, p
+        if not self.permissionless:
+            for p in self.required_params:
+                self.required_params[p].append("auth_token")
+        try:
+            for p in self.required_params[self.req.method]:
+                if p not in self.req.params:
+                    return False, p
+        except KeyError:  # invalid HTTP verb
+            pass
         return True, None
+
+    def setup_permissions(self, app_name):
+        if self.permissionless:
+            self.permissions = "read;write"
+        else:
+            token = self.req.params['auth_token']
+            self.permissions = auth.UserPermissions(token).get_permissions(app_name)
 
     def set_params(self, params):
         for t in params:
@@ -91,15 +110,37 @@ class GenericView:
     def DELETE(self):
         return self.Error("not implemented")
 
+    def UNKNOWN_VERB(self):
+        return self.Error("unknown or unimplemented HTTP verb")
+
 
 @view_config(context=models.RootApplication, renderer='templates/mytemplate.pt')
 def root_view(request):
     return {'project': 'daft'}
 
 
+@view_config(context=pyramid.exceptions.HTTPNotFound, renderer='json')
+class NotFoundView(GenericView):
+    def notfound(self):
+        return self.Error("404 not found")
+    def GET(self):
+        return self.notfound()
+    def POST(self):
+        return self.notfound()
+    def PUT(self):
+        return self.notfound()
+    def DELETE(self):
+        return self.notfound()
+
+
+#@view_config(context=Exception, renderer='json')
+#def ExceptionView(exc, request):
+#    return {"unhandled exception": exc}
+
+
 class ApplicationContainerView(GenericView):
     def __init__(self, context, request):
-        GenericView.__init__(self, context, request)
+        GenericView.__init__(self, context, request, permissionless=True)
         param = ["app_name"]
         self.set_params({"GET": [], "PUT": param, "POST": param, "DELETE": param})
 
@@ -129,7 +170,7 @@ class ApplicationContainerView(GenericView):
 
 class ApplicationView(GenericView):
     def __init__(self, context, request):
-        GenericView.__init__(self, context, request)
+        GenericView.__init__(self, context, request, app_name=self.context.app_name)
         self.set_params({"GET": [], "PUT": [], "POST": ["app_name"], "DELETE": []})
 
     def GET(self):
@@ -157,9 +198,10 @@ class EnvironmentView(GenericView):
 
 class BuildContainerView(GenericView):
     def __init__(self, context, request):
-        GenericView.__init__(self, context, request)
-        self.set_params({"GET": [], "PUT": ["build_name"], "POST": ["build_name"], "DELETE": ["build_name"]})
         self.app_name = self.context.app_name
+        GenericView.__init__(self, context, request, app_name=self.app_name)
+        self.set_params({"GET": [], "PUT": ["build_name"], "POST": ["build_name"], "DELETE": ["build_name"]})
+
 
     def validate_build_name(self, build_name):
         return build_name in self.context.keys()
@@ -199,6 +241,10 @@ class BuildContainerView(GenericView):
 
 
 class BuildDetailView(GenericView):
+    def __init__(self, context, request):
+        self.app_name = self.context.buildobj.app_name
+        GenericView.__init__(self, context, request, app_name=self.app_name)
+
     def GET(self):
         return {'application': self.context.buildobj.app_name, 'build': self.context.buildobj.build_name,
                 'stored': self.context.buildobj.stored, 'packages': self.context.buildobj.packages,
@@ -208,9 +254,9 @@ class BuildDetailView(GenericView):
 
 class BuildView(GenericView):
     def __init__(self, context, request):
-        GenericView.__init__(self, context, request)
-        self.set_params({"GET": ["package"], "PUT": [], "POST": ["file_type"], "DELETE": ["file_name"]})
         self.app_name = self.context.app_name
+        GenericView.__init__(self, context, request, app_name=self.app_name)
+        self.set_params({"GET": ["package"], "PUT": [], "POST": ["file_type"], "DELETE": ["file_name"]})
         self.build_name = None
 
     def upload_success_action(self):
@@ -282,6 +328,75 @@ class ServerView(GenericView):
 
 class DeploymentView(GenericView):
     pass
+
+
+class GlobalContainerView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request, permissionless=True)
+
+    def GET(self):
+        return {"global": self.context.keys()}
+
+
+class UserContainerView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request)
+        self.set_params({"GET": [], "PUT": ["username", "password", "permissions"],
+                         "POST": ["username", "password", "permissions"], "DELETE": ["username"]})
+
+    def PUT(self):
+        name = self.req.params['username']
+        pw = self.req.params['password']
+        perms = self.req.params['permissions']
+        if auth.ValidatePermissionsObject(perms):
+            self.context[name] = models.User(name, pw, perms, self.context.salt)
+            return self.status_ok({"user_created": {"username": name, "password": "(hidden)"}})
+        else:
+            return self.Error("invalid permissions object")
+
+    def GET(self):
+        return {"users": self.context.keys()}
+
+    def POST(self):
+        return self.PUT()
+
+    def DELETE(self):
+        name = self.req.params['username']
+        if name in self.context:
+            del self.context[name]
+            return self.status_ok({"user_deleted": {"username": name}})
+        else:
+            return self.Error("unknown user")
+
+
+class UserView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request, permissionless=True)  # pw always req'd
+        self.set_params({"GET": ["password"], "PUT": [], "POST": ["password"], "DELETE": ["password"]})
+
+    def create_new_token(self, username):
+        if auth.TokenUtils.new_token(username) is None:
+            return self.Error('error creating token')
+
+    def get_token_string(self, username):
+        return auth.TokenUtils.get_token_by_username(username)
+
+    def status_ok_with_token(self, username):
+        return self.status_ok({"username": username, "auth_token": self.get_token_string(username)})
+
+    def GET(self):  # return active
+        if self.context.validate_password(self.req.params['password']):
+            name = self.context.name
+            if name not in models.root['app_root']['global']['tokens']:
+                self.create_new_token(name)
+            return self.status_ok_with_token(name)
+        return self.Error("incorrect password")
+
+    def POST(self):
+        if self.context.validate_password(self.req.params['password']):
+            self.create_new_token(self.context.name)
+            return self.status_ok_with_token(self.context.name)
+        return self.Error("incorrect password")
 
 
 @view_config(name="", renderer='json')

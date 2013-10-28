@@ -1,7 +1,7 @@
 from pyramid.config import Configurator
 from pyramid_zodbconn import get_connection
 from pyramid.renderers import JSON
-from .models import appmaker
+from . import models
 import daft_config
 
 from ZODB.FileStorage import FileStorage
@@ -10,7 +10,8 @@ import migrations
 
 def root_factory(request):
     conn = get_connection(request)
-    return appmaker(conn.root())
+    root = conn.root()
+    return models.appmaker(root)
 
 
 def main(global_config, **settings):

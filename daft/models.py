@@ -1,6 +1,10 @@
 from persistent.mapping import PersistentMapping
 import datetime
-import migrations
+import hashlib
+import uuid
+import base64
+
+from . import util
 
 # URL model:
 # root/app/
@@ -12,6 +16,9 @@ import migrations
 # root/app/{app_name}/environments/{env_name}/servers
 # root/app/{app_name}/environemnt/{env_name}/servers/{server_name}
 
+
+#global handle for the root object, so all views have access
+root = None
 
 class SupportedFileType:
     TarGz = 'tar.gz'
@@ -86,7 +93,42 @@ class Application(BaseModelObject):
         BaseModelObject.__init__(self)
         self.app_name = app_name
 
+class User(BaseModelObject):
+    def __init__(self, name, pw, permissions, salt):
+        BaseModelObject.__init__(self)
+        util.debugLog(self, "user: {}, pw: {}".format(name, pw))
+        self.salt = salt
+        util.debugLog(self, "got salt: {}".format(self.salt))
+        self.name = name
+        self.hashed_pw = self.hash_pw(pw)
+        util.debugLog(self, "hashed pw: {}".format(self.hashed_pw))
+        self.permissions = permissions
+
+    def hash_pw(self, pw):
+        return base64.urlsafe_b64encode(hashlib.sha512(pw + self.salt).hexdigest())
+
+    def validate_password(self, pw):
+        return self.hashed_pw == self.hash_pw(pw)
+
+class UserContainer(BaseModelObject):
+    def __init__(self):
+        BaseModelObject.__init__(self)
+        self.salt = base64.urlsafe_b64encode((uuid.uuid4().bytes))
+
+class TokenContainer(BaseModelObject):
+    def __init__(self):
+        BaseModelObject.__init__(self)
+
+class Token(BaseModelObject):
+    def __init__(self, username):
+        BaseModelObject.__init__(self)
+        self.username = username
+        self.token = base64.urlsafe_b64encode(hashlib.sha256(uuid.uuid4().bytes).hexdigest())[:-2]  # strip '=='
+
 class ApplicationContainer(BaseModelObject):
+    pass
+
+class GlobalContainer(BaseModelObject):
     pass
 
 class RootApplication(BaseModelObject):
@@ -94,10 +136,19 @@ class RootApplication(BaseModelObject):
 
 
 def appmaker(zodb_root):
+    global root
     if not 'app_root' in zodb_root:
         app_root = RootApplication()
         zodb_root['app_root'] = app_root
         zodb_root['app_root']['app'] = ApplicationContainer()
+        zodb_root['app_root']['global'] = GlobalContainer()
+        uc = UserContainer()
+        zodb_root['app_root']['global']['users'] = uc
+        zodb_root['app_root']['global']['users']['admin'] = User("admin", "daft", {"_global": "read;write"}, uc.salt)
+        zodb_root['app_root']['global']['tokens'] = TokenContainer()
+        tk = Token('admin')
+        zodb_root['app_root']['global']['tokens'][tk.token] = tk
         import transaction
         transaction.commit()
+    root = zodb_root
     return zodb_root['app_root']
