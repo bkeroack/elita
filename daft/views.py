@@ -36,7 +36,6 @@ class GenericView:
     def __call__(self):
         g, p = self.check_params()
         r = False
-        util.debugLog(self, "found permissions: {}".format(self.permissions))
         if not g:
             return self.Error("Required parameter is missing: {}".format(p))
         if self.req.method == 'GET':
@@ -75,8 +74,11 @@ class GenericView:
         if self.permissionless:
             self.permissions = "read;write"
         else:
-            token = self.req.params['auth_token']
-            self.permissions = auth.UserPermissions(token).get_permissions(app_name)
+            if 'auth_token' in self.req.params:
+                token = self.req.params['auth_token']
+                self.permissions = auth.UserPermissions(token).get_permissions(app_name)
+            else:
+                self.permissions = None
 
     def set_params(self, params):
         for t in params:
@@ -198,7 +200,7 @@ class EnvironmentView(GenericView):
 
 class BuildContainerView(GenericView):
     def __init__(self, context, request):
-        self.app_name = self.context.app_name
+        self.app_name = context.app_name
         GenericView.__init__(self, context, request, app_name=self.app_name)
         self.set_params({"GET": [], "PUT": ["build_name"], "POST": ["build_name"], "DELETE": ["build_name"]})
 
@@ -242,7 +244,7 @@ class BuildContainerView(GenericView):
 
 class BuildDetailView(GenericView):
     def __init__(self, context, request):
-        self.app_name = self.context.buildobj.app_name
+        self.app_name = context.buildobj.app_name
         GenericView.__init__(self, context, request, app_name=self.app_name)
 
     def GET(self):
@@ -254,7 +256,7 @@ class BuildDetailView(GenericView):
 
 class BuildView(GenericView):
     def __init__(self, context, request):
-        self.app_name = self.context.app_name
+        self.app_name = context.app_name
         GenericView.__init__(self, context, request, app_name=self.app_name)
         self.set_params({"GET": ["package"], "PUT": [], "POST": ["file_type"], "DELETE": ["file_name"]})
         self.build_name = None
@@ -341,16 +343,19 @@ class GlobalContainerView(GenericView):
 class UserContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request)
-        self.set_params({"GET": [], "PUT": ["username", "password", "permissions"],
-                         "POST": ["username", "password", "permissions"], "DELETE": ["username"]})
+        self.set_params({"GET": [], "PUT": ["username", "password"],
+                         "POST": ["username", "password"], "DELETE": ["username"]})
 
     def PUT(self):
         name = self.req.params['username']
         pw = self.req.params['password']
-        perms = self.req.params['permissions']
+        try:
+            perms = self.req.json_body
+        except:
+            return self.Error("invalid permissions object (problem deserializing)")
         if auth.ValidatePermissionsObject(perms):
             self.context[name] = models.User(name, pw, perms, self.context.salt)
-            return self.status_ok({"user_created": {"username": name, "password": "(hidden)"}})
+            return self.status_ok({"user_created": {"username": name, "password": "(hidden)", "permissions": perms}})
         else:
             return self.Error("invalid permissions object")
 
