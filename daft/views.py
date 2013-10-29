@@ -54,7 +54,7 @@ class GenericView:
         else:
             r = self.UNKNOWN_VERB()
         if not r:
-            r = self.Error('permissions error')
+            r = self.Error('insufficient permissions')
 
         self.persist()
         return r
@@ -170,7 +170,7 @@ class ApplicationContainerView(GenericView):
 
 class ApplicationView(GenericView):
     def __init__(self, context, request):
-        GenericView.__init__(self, context, request, app_name=self.context.app_name)
+        GenericView.__init__(self, context, request, app_name=context.app_name)
         self.set_params({"GET": [], "PUT": [], "POST": ["app_name"], "DELETE": []})
 
     def GET(self):

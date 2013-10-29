@@ -56,22 +56,22 @@ class Security_1001:
     '''
     def __init__(self, root):
         assert 'app_root' in root
-        #assert 'global' not in root['app_root']
-        #assert 'users' not in root['app_root']['global']
+        assert 'global' not in root['app_root']
+        assert 'users' not in root['app_root']['global']
         self.root = root
 
     def run(self):
         util.debugLog(self, "running")
         if 'global' not in self.root['app_root']:
             self.root['app_root']['global'] = models.GlobalContainer()
-        del self.root['app_root']['global']['users']
+        #del self.root['app_root']['global']['users']
         if 'users' not in self.root['app_root']['global']:
             uc = models.UserContainer()
             self.root['app_root']['global']['users'] = uc
         if 'admin' not in self.root['app_root']['global']['users']:
             uc = self.root['app_root']['global']['users']
             self.root['app_root']['global']['users']['admin'] = models.User('admin', "daft", {"_global": "read;write"}, uc.salt)
-        del self.root['app_root']['global']['tokens']
+        #del self.root['app_root']['global']['tokens']
         if 'tokens' not in self.root['app_root']['global']:
             self.root['app_root']['global']['tokens'] = models.TokenContainer()
             tk = models.Token('admin')

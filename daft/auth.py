@@ -19,20 +19,25 @@ class UserPermissions:
     def __init__(self, token):
         self.token = token
         self.userobj = False
+        self.valid_token = False
         if self.validate_token():
+            self.valid_token = True
             util.debugLog(self, "valid token")
-            self.userobj = models.root['app_root']['global']['tokens'][self.token]
-        util.debugLog(self, "userobj: {}".format(self.userobj))
+            self.username = models.root['app_root']['global']['tokens'][self.token].username
+            util.debugLog(self, "username: {}".format(self.username))
 
     def validate_token(self):
         return self.token in models.root['app_root']['global']['tokens']
 
     def get_permissions(self, app):
-        if self.userobj:
-            if self.userobj.name == 'admin':
+        util.debugLog(self, "get_permissions: app: {}".format(app))
+        if self.valid_token and self.username in models.root['app_root']['global']['users']:
+            util.debugLog(self, "get_permissions: username in users")
+            userobj = models.root['app_root']['global']['users'][self.username]
+            if userobj.name == 'admin':
                 return "read;write"
-            elif app in self.userobj.permissions:
-                return self.userobj.permissions[app]
+            elif app in userobj.permissions:
+                return userobj.permissions[app]
         return ""
 
 
@@ -50,6 +55,6 @@ class TokenUtils:
     def new_token(username):
         if username in models.root['app_root']['global']['users']:
             tokenobj = models.Token(username)
-            models.root['app_root']['global']['tokens'][username] = tokenobj
+            models.root['app_root']['global']['tokens'][tokenobj.token] = tokenobj
             return tokenobj.token
         return None
