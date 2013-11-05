@@ -36,6 +36,8 @@ class UserPermissions:
             userobj = models.root['app_root']['global']['users'][self.username]
             if userobj.name == 'admin':
                 return "read;write"
+            elif "*" in userobj.permissions:
+                return userobj.permissions['*']
             elif app in userobj.permissions:
                 return userobj.permissions[app]
         return ""
@@ -44,12 +46,13 @@ class UserPermissions:
 class TokenUtils:
 
     @staticmethod
-    def get_token_by_username(username):
+    def get_tokens_by_username(username):
+        tokens = list()
         tc = models.root['app_root']['global']['tokens']
         for t in tc:
             if tc[t].username == username:
-                return tc[t].token
-        return None
+                tokens.append(tc[t].token)
+        return tokens
 
     @staticmethod
     def new_token(username):

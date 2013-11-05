@@ -142,7 +142,7 @@ class NotFoundView(GenericView):
 
 class ApplicationContainerView(GenericView):
     def __init__(self, context, request):
-        GenericView.__init__(self, context, request, permissionless=True)
+        GenericView.__init__(self, context, request)
         param = ["app_name"]
         self.set_params({"GET": [], "PUT": param, "POST": param, "DELETE": param})
 
@@ -383,14 +383,16 @@ class UserView(GenericView):
         if auth.TokenUtils.new_token(username) is None:
             return self.Error('error creating token')
 
-    def get_token_string(self, username):
-        return auth.TokenUtils.get_token_by_username(username)
+    def get_token_strings(self, username):
+        return auth.TokenUtils.get_tokens_by_username(username)
 
     def status_ok_with_token(self, username):
-        return self.status_ok({"username": username, "auth_token": self.get_token_string(username)})
+        return self.status_ok({"username": username, "permissions": self.context.permissions,
+                               "auth_token": self.get_token_strings(username)})
 
     def GET(self):  # return active
         if self.context.validate_password(self.req.params['password']):
+
             name = self.context.name
             if name not in models.root['app_root']['global']['tokens']:
                 self.create_new_token(name)
@@ -403,6 +405,19 @@ class UserView(GenericView):
             return self.status_ok_with_token(self.context.name)
         return self.Error("incorrect password")
 
+
+class TokenContainerView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request)
+        self.set_params({"GET": ["username"], "PUT": ["username"], "POST": ["username"], "DELETE": ["username"]})
+
+class TokenView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request)
+
+    def GET(self):
+        return {"token": self.context.token, "created": self.get_created_datetime_text(),
+                "username": self.context.username}
 
 @view_config(name="", renderer='json')
 def Action(context, request):
