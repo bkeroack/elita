@@ -118,6 +118,11 @@ class UserContainer(BaseModelObject):
 class TokenContainer(BaseModelObject):
     def __init__(self):
         BaseModelObject.__init__(self)
+        self.usermap = dict()  # for quick token lookup by user
+
+    def __setitem__(self, key, value):
+        BaseModelObject.__setitem__(self, key, value)
+        self.usermap[value.username] = value
 
 class Token(BaseModelObject):
     def __init__(self, username):

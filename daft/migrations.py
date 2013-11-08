@@ -9,7 +9,7 @@ __author__ = 'bkeroack'
 def run_migrations(root):
     # TODO: iterate through class names rather than hard coding in migrations
     util.debugLog(object, "Running object migrations...")
-    migrations = [GitflowFix_1000, Security_1001]
+    migrations = [GitflowFix_1000, Security_1001, Token_usermap_1002]
     for m in migrations:
         try:
             mo = m(root)
@@ -77,3 +77,19 @@ class Security_1001:
             tk = models.Token('admin')
             self.root['app_root']['global']['tokens'][tk.token] = tk
         return self.root
+
+class Token_usermap_1002:
+    '''Addition of usermap to TokenContainer
+    '''
+    def __init__(self, root):
+        assert 'usermap' not in root['app_root']['global']['tokens']
+        self.root = root
+
+    def run(self):
+        util.debugLog(self, "running")
+        self.root['app_root']['global']['tokens'].usermap = dict()
+        for i, t in enumerate(self.root['app_root']['global']['tokens']):
+            to = self.root['app_root']['global']['tokens'][t]
+            self.root['app_root']['global']['tokens'].usermap[to.username] = to
+        util.debugLog(self, "{} tokens added to usermap".format(i))
+

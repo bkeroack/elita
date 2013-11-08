@@ -409,7 +409,23 @@ class UserView(GenericView):
 class TokenContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request)
-        self.set_params({"GET": ["username"], "PUT": ["username"], "POST": ["username"], "DELETE": ["username"]})
+        self.set_params({"GET": ["username"], "PUT": [], "POST": [], "DELETE": ["token"]})
+
+    def GET(self):
+        username = self.req.params['username']
+        if username in self.context.usermap:
+            return self.status_ok({"username": username, "token": self.context.usermap[username].token})
+        else:
+            return self.Error("token not found for '{}'".format(username))
+
+    def DELETE(self):
+        token = self.req.params['token']
+        if token in self.context:
+            username = self.context[token].username
+            del self.context[token]
+            return self.status_ok({"token_deleted": {"username": username, "token": token}})
+        else:
+            return self.Error("unknown token")
 
 class TokenView(GenericView):
     def __init__(self, context, request):
@@ -418,6 +434,7 @@ class TokenView(GenericView):
     def GET(self):
         return {"token": self.context.token, "created": self.get_created_datetime_text(),
                 "username": self.context.username}
+
 
 @view_config(name="", renderer='json')
 def Action(context, request):
