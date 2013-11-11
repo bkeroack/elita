@@ -82,7 +82,8 @@ class Token_usermap_1002:
     '''Addition of usermap to TokenContainer
     '''
     def __init__(self, root):
-        assert 'usermap' not in root['app_root']['global']['tokens']
+        #assert not hasattr(root['app_root']['global']['tokens'], "usermap")
+        assert True
         self.root = root
 
     def run(self):
@@ -90,6 +91,9 @@ class Token_usermap_1002:
         self.root['app_root']['global']['tokens'].usermap = dict()
         for i, t in enumerate(self.root['app_root']['global']['tokens']):
             to = self.root['app_root']['global']['tokens'][t]
-            self.root['app_root']['global']['tokens'].usermap[to.username] = to
+            if to.username not in self.root['app_root']['global']['tokens'].usermap:
+                self.root['app_root']['global']['tokens'].usermap[to.username] = list()
+            else:
+                self.root['app_root']['global']['tokens'].usermap[to.username].append(to)
         util.debugLog(self, "{} tokens added to usermap".format(i))
 

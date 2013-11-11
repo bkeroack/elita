@@ -122,7 +122,25 @@ class TokenContainer(BaseModelObject):
 
     def __setitem__(self, key, value):
         BaseModelObject.__setitem__(self, key, value)
-        self.usermap[value.username] = value
+        if value.username in self.usermap:
+            self.usermap[value.username].append(value)
+        else:
+            self.usermap[value.username] = [value]
+
+    def get_tokens_by_username(self, username):
+        return self.usermap[username] if username in self.usermap else []
+
+    def remove_token(self, token):
+        username = self[token].username
+        for t in self.usermap[username]:
+            if t.token == token:
+                self.usermap[username].remove(t)
+        del self[token]
+
+    def new_token(self, username):
+        tokenobj = Token(username)
+        self[tokenobj.token] = tokenobj
+        return tokenobj.token
 
 class Token(BaseModelObject):
     def __init__(self, username):

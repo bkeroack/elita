@@ -42,22 +42,8 @@ class UserPermissions:
                 return userobj.permissions[app]
         return ""
 
+    def validate_pw(self, username, password):
+        userobj = models.root['app_root']['global']['users'][username]
+        return userobj.validate_password(password)
 
-class TokenUtils:
 
-    @staticmethod
-    def get_tokens_by_username(username):
-        tokens = list()
-        tc = models.root['app_root']['global']['tokens']
-        for t in tc:
-            if tc[t].username == username:
-                tokens.append(tc[t].token)
-        return tokens
-
-    @staticmethod
-    def new_token(username):
-        if username in models.root['app_root']['global']['users']:
-            tokenobj = models.Token(username)
-            models.root['app_root']['global']['tokens'][tokenobj.token] = tokenobj
-            return tokenobj.token
-        return None

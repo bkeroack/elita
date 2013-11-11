@@ -380,11 +380,11 @@ class UserView(GenericView):
         self.set_params({"GET": ["password"], "PUT": [], "POST": ["password"], "DELETE": ["password"]})
 
     def create_new_token(self, username):
-        if auth.TokenUtils.new_token(username) is None:
+        if models.root['app_root']['global']['tokens'].new_token(username) is None:
             return self.Error('error creating token')
 
     def get_token_strings(self, username):
-        return auth.TokenUtils.get_tokens_by_username(username)
+        return [t.token for t in models.root['app_root']['global']['tokens'].get_tokens_by_username(username)]
 
     def status_ok_with_token(self, username):
         return self.status_ok({"username": username, "permissions": self.context.permissions,
@@ -392,9 +392,8 @@ class UserView(GenericView):
 
     def GET(self):  # return active
         if self.context.validate_password(self.req.params['password']):
-
             name = self.context.name
-            if name not in models.root['app_root']['global']['tokens']:
+            if name not in models.root['app_root']['global']['tokens'].usermap:
                 self.create_new_token(name)
             return self.status_ok_with_token(name)
         return self.Error("incorrect password")
@@ -408,21 +407,26 @@ class UserView(GenericView):
 
 class TokenContainerView(GenericView):
     def __init__(self, context, request):
-        GenericView.__init__(self, context, request)
-        self.set_params({"GET": ["username"], "PUT": [], "POST": [], "DELETE": ["token"]})
+        #permissionless b/c the token is the secret. no need to supply token in URL and auth_token param
+        GenericView.__init__(self, context, request, permissionless=True)
+        self.set_params({"GET": ["username", "password"], "PUT": [], "POST": [], "DELETE": ["token"]})
 
     def GET(self):
         username = self.req.params['username']
-        if username in self.context.usermap:
-            return self.status_ok({"username": username, "token": self.context.usermap[username].token})
+        pw = self.req.params['password']
+        if auth.UserPermissions(None).validate_pw(username, pw):
+            if username in self.context.usermap:
+                return self.status_ok({"username": username, "token": self.context.usermap[username].token})
+            else:
+                return self.Error("no token found for '{}'".format(username))
         else:
-            return self.Error("token not found for '{}'".format(username))
+            return self.Error("incorrect password")
 
     def DELETE(self):
         token = self.req.params['token']
         if token in self.context:
             username = self.context[token].username
-            del self.context[token]
+            self.context.remove_token(token)
             return self.status_ok({"token_deleted": {"username": username, "token": token}})
         else:
             return self.Error("unknown token")
