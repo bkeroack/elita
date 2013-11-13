@@ -77,7 +77,7 @@ class RegisterBuildSkynetQA(RegisterBuild):
 class CleanupOldBuilds:
     def __init__(self, datasvc):
         self.now = datetime.datetime.now()
-        self.cutoff = self.now - datetime.timedelta(days=360)
+        self.cutoff = self.now - datetime.timedelta(days=90)
         self.datasvc = datasvc
 
     def start(self, params, verb):
