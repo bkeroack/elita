@@ -7,7 +7,7 @@ import urllib2
 import models
 import daft_config
 import builds
-import action
+import action as daft_action
 import auth
 import util
 
@@ -29,6 +29,7 @@ class GenericView:
                 self.req.override_renderer = "prettyjson"
         self.permissionless = permissionless
         self.setup_permissions(app_name)
+        self.datasvc = models.DataService()
 
     def get_created_datetime_text(self):
         return self.context.created_datetime.isoformat(' ') if hasattr(self.context, 'created_datetime') else None
@@ -151,19 +152,14 @@ class ApplicationContainerView(GenericView):
 
     def PUT(self):
         app_name = self.req.params["app_name"]
-        app = models.Application(app_name)
-        app['environments'] = models.EnvironmentContainer(app_name)
-        app['builds'] = models.BuildContainer(app_name)
-        app['subsys'] = models.SubsystemContainer(app_name)
-        app['action'] = models.ActionContainer(app_name)
-        self.context[app_name] = app
+        self.datasvc.NewApplication(app_name)
         return self.return_action_status({"new_application": {"name": app_name}})
 
     def DELETE(self):
         app_name = self.req.params["app_name"]
         if not self.validate_app_name(app_name):
             return self.Error("app name '{}' not found".format(app_name))
-        self.context.pop(app_name, None)
+        self.datasvc.DeleteApplication(app_name)
         return self.return_action_status({"delete_application": app_name})
 
     def GET(self):
@@ -190,8 +186,24 @@ class ActionContainerView(GenericView):
 class ActionView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request)
-        self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
+        params = {"GET": [], "PUT": [], "POST": [], "DELETE": []}
+        for p in self.context.params:
+            params[p] = self.context.params[p]
+        self.set_params(params)
 
+    def execute(self):
+        if self.req.method not in self.context.params:
+            return self.Error("not implemented")
+        return self.status_ok(self.context.execute(self.req.params, self.req.method))
+
+    def GET(self):
+        return self.execute()
+    def POST(self):
+        return self.execute()
+    def PUT(self):
+        return self.execute()
+    def DELETE(self):
+        return self.execute()
 
 
 class EnvironmentView(GenericView):
@@ -221,9 +233,7 @@ class BuildContainerView(GenericView):
         if build_name in self.context:
             msg.append("build exists")
         subsys = self.req.params["subsys"] if "sybsys" in self.req.params else []
-        build = models.Build(self.app_name, build_name, subsys)
-        build["info"] = models.BuildDetail(build)
-        self.context[build_name] = build
+        self.datasvc.NewBuild(self.app_name, build_name, subsys)
         return self.return_action_status({"new_build": {"application": self.app_name, "build_name": build_name,
                                                         "messages": msg}})
 
@@ -238,7 +248,7 @@ class BuildContainerView(GenericView):
         build_name = self.req.params["build_name"]
         if not self.validate_build_name(build_name):
             return self.Error("build name '{}' not found".format(build_name))
-        self.context.pop(build_name, None)
+        self.datasvc.DeleteBuild(self.app_name, build_name)
         return self.return_action_status({"delete_build": {"application": self.app_name, "build_name": build_name}})
 
 
@@ -262,9 +272,7 @@ class BuildView(GenericView):
         self.build_name = None
 
     def upload_success_action(self):
-        ra = action.RegisterActions()
-        ra.register()
-        return ra.run_action(self.app_name, 'BUILD_UPLOAD_SUCCESS', build_name=self.build_name)
+        return daft_action.actionsvc.hooks.run_hook(self.app_name, 'BUILD_UPLOAD_SUCCESS', build_name=self.build_name)
 
     def store_build(self, input_file, ftype):
         bs_obj = builds.BuildStorage(self.app_name, self.build_name, file_type=ftype, fd=input_file)

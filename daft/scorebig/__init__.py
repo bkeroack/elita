@@ -9,8 +9,11 @@ def register_apps():
 
 
 def register_package():
-    return {'PACKAGE': package.ScoreBig_Packages}
+    return {'scorebig': {'PACKAGE': package.ScoreBig_Packages}}
 
+
+def register_hooks():
+    return {'scorebig': {'BUILD_UPLOAD_SUCCESS': action.UploadBuildHook}}
 
 def register_actions():
-    return {'BUILD_UPLOAD_SUCCESS': action.UploadBuildAction}
+    return {'scorebig': [action.CleanupOldBuilds]}

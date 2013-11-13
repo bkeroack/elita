@@ -1,10 +1,11 @@
 __author__ = 'bkeroack'
 
 import logging
-import ec2
+import boto
 import salt.client
 import requests
 import re
+import datetime
 
 
 def debugLog(self, msg):
@@ -22,11 +23,12 @@ class QualTypeUnknown(Exception):
     pass
 
 
-class UploadBuildAction:
-    def __init__(self, **kwargs):
+class UploadBuildHook:
+    def __init__(self, datasvc, **kwargs):
         #pattern match for prod Skynet registration
         self.rx = re.compile("^[0-9]{1,8}-(master|sprint|regression).*")
         self.build_name = kwargs['build_name']
+        self.datasvc = datasvc
 
     def go(self):
         ret = True
@@ -71,6 +73,32 @@ class RegisterBuildSkynetQA(RegisterBuild):
         #url = "http://laxsky001/DevQaTools/RegisterBuild?buildNumber={}"  # for local testing
         RegisterBuild.__init__(self, url, build_name)
 
+
+class CleanupOldBuilds:
+    def __init__(self, datasvc):
+        self.now = datetime.datetime.now()
+        self.cutoff = self.now - datetime.timedelta(days=-3000)
+        self.datasvc = datasvc
+
+    def start(self, params, verb):
+        debugLog(self, "running")
+        builds = self.datasvc.Builds("scorebig")
+        d = 0
+        i = 0
+        for i, b in enumerate(builds):
+            buildobj = builds[b]
+            #if it doesn't have timestamp it's super old
+            if (not hasattr(buildobj, "created_datetime")) or buildobj.created_datetime < self.cutoff:
+                debugLog(self, "...removing build: {}".format(buildobj.build_name))
+                if params["delete"] == "true":
+                    self.datasvc.DeleteBuild("scorebig", buildobj.build_name)
+                    d += 1
+        debugLog(self, "{} out of {} builds deleted".format(d, i))
+        return {"CleanupOldBuilds": {"status": "ok"}}
+
+    @staticmethod
+    def params():
+        return {"POST": ["delete"]}
 
 class ProvisionQual:
     def __init__(self, qual_type, build):

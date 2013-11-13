@@ -3,8 +3,12 @@ import datetime
 import hashlib
 import uuid
 import base64
+import os.path
+import shutil
 
-from . import util
+import util
+import daft_config
+import action as daft_action
 
 # URL model:
 # root/app/
@@ -19,6 +23,59 @@ from . import util
 
 #global handle for the root object, so all views have access
 root = None
+
+class RootService:
+    def __init__(self):
+        self.root = root
+
+    def Application(self, app):
+        return self.root['app_root']['app'][app]
+
+    def ApplicationContainer(self):
+        return self.root['app_root']['app']
+
+    def BuildContainer(self, app):
+        return self.root['app_root']['app'][app]['builds']
+
+    def ActionContainer(self, app):
+        return self.root['app_root']['app'][app]['action']
+
+
+class DataService:
+    def __init__(self):
+        self.rs = RootService()
+
+    def Builds(self, app_name):
+        return self.rs.BuildContainer(app_name)
+
+    def Applications(self):
+        return self.rs.ApplicationContainer()
+
+    def NewAction(self, app_name, action_name, params, callable):
+        util.debugLog(self, "NewAction: app_name: {}".format(app_name))
+        util.debugLog(self, "NewAction: action_name: {}".format(action_name))
+        action = Action(app_name, action_name, params, callable)
+        self.rs.ActionContainer(app_name)[action_name] = action
+
+    def NewBuild(self, app_name, build_name, subsys):
+        build = Build(app_name, build_name, subsys)
+        build["info"] = BuildDetail(build)
+        self.rs.BuildContainer(app_name)[build_name] = build
+
+    def DeleteBuild(self, app_name, build_name):
+        self.rs.BuildContainer(app_name).remove_build(build_name)
+
+    def NewApplication(self, app_name):
+        app = Application(app_name)
+        app['environments'] = EnvironmentContainer(app_name)
+        app['builds'] = BuildContainer(app_name)
+        app['subsys'] = SubsystemContainer(app_name)
+        app['action'] = ActionContainer(app_name)
+        self.rs.ApplicationContainer()[app_name] = app
+
+    def DeleteApplication(self, app_name):
+        self.rs.ApplicationContainer().pop(app_name, None)
+
 
 class SupportedFileType:
     TarGz = 'tar.gz'
@@ -68,6 +125,15 @@ class BuildContainer(BaseModelObject):
         BaseModelObject.__init__(self)
         self.app_name = app_name
 
+    def remove_build(self, buildname):
+        dir = daft_config.DaftConfiguration().get_build_dir()
+        path = "{root_dir}/{app}/{build}".format(root_dir=dir, app=self.app_name, build=buildname)
+        util.debugLog(self, "remove_build: path: {}".format(path))
+        if os.path.isdir(path):
+            util.debugLog(self, "remove_build: deleting")
+            shutil.rmtree(path)
+        del self[buildname]
+
 class Subsystem(BaseModelObject):
     def __init__(self, app_name):
         BaseModelObject.__init__(self)
@@ -79,9 +145,15 @@ class SubsystemContainer(BaseModelObject):
         self.app_name = app_name
 
 class Action(BaseModelObject):
-    def __init__(self, app_name):
+    def __init__(self, app_name, action_name, params, callable):
         BaseModelObject.__init__(self)
         self.app_name = app_name
+        self.action_name = action_name
+        self.params = params
+        self.callable = callable
+
+    def execute(self, params, verb):
+        return self.callable(DataService()).start(params, verb)
 
 class ActionContainer(BaseModelObject):
     def __init__(self, app_name):
@@ -174,4 +246,5 @@ def appmaker(zodb_root):
         import transaction
         transaction.commit()
     root = zodb_root
+    daft_action.actionsvc = daft_action.ActionService()
     return zodb_root['app_root']

@@ -1,34 +1,60 @@
 import scorebig
+import models
 
 __author__ = 'bkeroack'
 
+MODULES = [scorebig]
 
-class ActionStub:
+actionsvc = None
+
+class ActionService:
+    def __init__(self):
+        self.hooks = RegisterHooks()
+        self.actions = RegisterActions()
+        self.actions.register()
+
+
+class HookStub:
     def __init__(self):
         pass
 
     def go(self):
         return True
 
-ActionMap = dict()
+HookMap = dict()
 
-DefaultActionMap = {
-    'BUILD_UPLOAD_SUCCESS': ActionStub
+DefaultHookMap = {
+    'BUILD_UPLOAD_SUCCESS': HookStub
 }
+
+class RegisterHooks:
+    def __init__(self):
+        global HookMap
+        self.modules = MODULES
+
+    def register(self):
+        global HookMap
+        for m in self.modules:
+            for app in m.register_apps():
+                hooks = m.register_hooks()
+                for a in hooks[app]:
+                    HookMap[app] = DefaultHookMap
+                    HookMap[app][a] = hooks[a]
+
+    def run_hook(self, app, name, **kwargs):
+        return HookMap[app][name](models.DataService(), **kwargs).go()
+
 
 class RegisterActions:
     def __init__(self):
-        global ActionMap
-        self.modules = [scorebig]
+        self.modules = MODULES
+        self.datasvc = models.DataService()
 
     def register(self):
-        global ActionMap
         for m in self.modules:
-            for app in m.register_apps():
-                actions = m.register_actions()
-                for a in actions:
-                    ActionMap[app] = DefaultActionMap
-                    ActionMap[app][a] = actions[a]
-
-    def run_action(self, app, name, **kwargs):
-        return ActionMap[app][name](**kwargs).go()
+            actions = m.register_actions()
+            for app in actions:
+                for a in actions[app]:
+                    action_name = a.__name__
+                    params = a.params()
+                    self.datasvc.NewAction(app, action_name, params, a)
