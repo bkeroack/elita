@@ -13,4 +13,4 @@ class RegisterPackages:
         for m in self.modules:
             apps = m.register_apps()
             for a in apps:
-                PackageApplicationMap[a] = m.register_package()
+                PackageApplicationMap[a] = m.register_package()[a]

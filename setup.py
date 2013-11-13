@@ -1,6 +1,7 @@
 import os
 
 from setuptools import setup, find_packages
+from daft import daft_config
 
 here = os.path.abspath(os.path.dirname(__file__))
 README = open(os.path.join(here, 'README.txt')).read()
@@ -17,7 +18,7 @@ requires = [
     ]
 
 setup(name='daft',
-      version='0.0',
+      version=daft_config.VERSION,
       description='daft',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[

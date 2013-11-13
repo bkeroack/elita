@@ -124,6 +124,8 @@ def root_view(request):
 
 @view_config(context=pyramid.exceptions.HTTPNotFound, renderer='json')
 class NotFoundView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request, permissionless=True)
     def notfound(self):
         return self.Error("404 not found")
     def GET(self):
@@ -277,7 +279,7 @@ class BuildView(GenericView):
     def store_build(self, input_file, ftype):
         bs_obj = builds.BuildStorage(self.app_name, self.build_name, file_type=ftype, fd=input_file)
         if not bs_obj.validate():
-            return self.Error("Invalid file type or corrupted file")
+            return self.Error("Invalid file type or corrupted file--check log")
 
         #try:
         bs_results = bs_obj.store(packages=True)
@@ -306,9 +308,12 @@ class BuildView(GenericView):
 
     def direct_upload(self):
         logging.debug("BuildView: direct_upload")
-        fname = self.req.POST['build'].filename
-        logging.debug("BuildContainer: PUT: filename: {}".format(fname))
-        return self.store_build(self.req.POST['build'].file, self.req.params["file_type"])
+        if 'build' in self.req.POST:
+            fname = self.req.POST['build'].filename
+            logging.debug("BuildContainer: PUT: filename: {}".format(fname))
+            return self.store_build(self.req.POST['build'].file, self.req.params["file_type"])
+        else:
+            return self.Error("build data not found in POST body")
 
     def indirect_upload(self):
         logging.debug("BuildView: indirect_upload: downloading from {}".format(self.req.params['indirect_url']))
@@ -457,6 +462,10 @@ def Action(context, request):
     view_class = globals()[cname + "View"]
 
     return view_class(context, request).__call__()
+
+@view_config(name="about", renderer='json')
+def About(request):
+    return {'about': {'name': 'daft', 'version': daft_config.VERSION}}
 
 
 

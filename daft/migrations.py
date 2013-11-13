@@ -82,8 +82,8 @@ class Token_usermap_1002:
     '''Addition of usermap to TokenContainer
     '''
     def __init__(self, root):
-        #assert not hasattr(root['app_root']['global']['tokens'], "usermap")
-        assert True
+        assert not hasattr(root['app_root']['global']['tokens'], "usermap")
+        #assert True
         self.root = root
 
     def run(self):

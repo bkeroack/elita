@@ -36,12 +36,13 @@ class BuildPackager:
 
 
 class BuildStorage:
-    def __init__(self, application=None, name=None, file_type=None, fd=None):
+    def __init__(self, application=None, name=None, file_type=None, fd=None, size_cutoff=10000000):
         self.name = name
         self.application = application
         self.file_type = file_type
         self.fd = fd
         self.filename = None
+        self.size_cutoff = size_cutoff
 
         self.write_to_temp()
 
@@ -80,7 +81,12 @@ class BuildStorage:
             pdict = {}
         return self.filename, pdict
 
+    def validate_file_size(self):
+        return os.path.getsize(self.temp_file_name) >= self.size_cutoff
+
     def validate(self):
+        if not self.validate_file_size():
+            return False
         if self.file_type == SupportedFileType.TarGz:
             return self.validate_tgz()
         elif self.file_type == SupportedFileType.TarBz2:

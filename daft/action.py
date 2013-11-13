@@ -1,5 +1,6 @@
 import scorebig
 import models
+import util
 
 __author__ = 'bkeroack'
 
@@ -10,6 +11,7 @@ actionsvc = None
 class ActionService:
     def __init__(self):
         self.hooks = RegisterHooks()
+        self.hooks.register()
         self.actions = RegisterActions()
         self.actions.register()
 
@@ -39,9 +41,11 @@ class RegisterHooks:
                 hooks = m.register_hooks()
                 for a in hooks[app]:
                     HookMap[app] = DefaultHookMap
-                    HookMap[app][a] = hooks[a]
+                    HookMap[app][a] = hooks[app][a]
+        util.debugLog(self, "HookMap: {}".format(HookMap))
 
     def run_hook(self, app, name, **kwargs):
+        util.debugLog(self, "run_hook: app: {}; name: {}; kwargs: {}".format(app, name, kwargs))
         return HookMap[app][name](models.DataService(), **kwargs).go()
 
 

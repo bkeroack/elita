@@ -69,15 +69,15 @@ class RegisterBuildSkynet(RegisterBuild):
 
 class RegisterBuildSkynetQA(RegisterBuild):
     def __init__(self, build_name):
-        url = "http://skynetqa.scorebiginc.com/DevQaTools/RegisterBuild?buildNumber={}"
-        #url = "http://laxsky001/DevQaTools/RegisterBuild?buildNumber={}"  # for local testing
+        #url = "http://skynetqa.scorebiginc.com/DevQaTools/RegisterBuild?buildNumber={}"
+        url = "http://laxsky001/DevQaTools/RegisterBuild?buildNumber={}"  # for local testing
         RegisterBuild.__init__(self, url, build_name)
 
 
 class CleanupOldBuilds:
     def __init__(self, datasvc):
         self.now = datetime.datetime.now()
-        self.cutoff = self.now - datetime.timedelta(days=-3000)
+        self.cutoff = self.now - datetime.timedelta(days=360)
         self.datasvc = datasvc
 
     def start(self, params, verb):
@@ -94,7 +94,7 @@ class CleanupOldBuilds:
                     self.datasvc.DeleteBuild("scorebig", buildobj.build_name)
                     d += 1
         debugLog(self, "{} out of {} builds deleted".format(d, i))
-        return {"CleanupOldBuilds": {"status": "ok"}}
+        return {"CleanupOldBuilds": {"status": "ok", "result": {"deleted": d, "total": i}}}
 
     @staticmethod
     def params():

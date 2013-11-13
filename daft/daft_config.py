@@ -5,6 +5,8 @@ import ConfigParser
 
 cfg = None
 
+VERSION = "0.36"
+
 
 class DaftConfiguration:
     def __init__(self):
