@@ -57,7 +57,7 @@ class Security_1001:
     def __init__(self, root):
         assert 'app_root' in root
         assert 'global' not in root['app_root']
-        assert 'users' not in root['app_root']['global']
+        #assert 'users' not in root['app_root']['global']
         self.root = root
 
     def run(self):
