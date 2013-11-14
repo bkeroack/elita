@@ -26,7 +26,7 @@ class QualTypeUnknown(Exception):
 class UploadBuildHook:
     def __init__(self, datasvc, **kwargs):
         #pattern match for prod Skynet registration
-        self.rx = re.compile("^[0-9]{1,8}-(master|sprint|regression).*")
+        self.rx = re.compile("^[0-9]{1,8}-(master|develop|regression).*")
         self.build_name = kwargs['build_name']
         self.datasvc = datasvc
 
