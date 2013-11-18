@@ -95,7 +95,7 @@ class CleanupOldBuilds:
             if params["delete"] == "true":
                 self.datasvc.DeleteBuild("scorebig", b)
         debugLog(self, "{} out of {} builds deleted".format(len(dlist), i))
-        return {"CleanupOldBuilds": {"status": "ok", "result": {"deleted": d, "total": i}}}
+        return {"CleanupOldBuilds": {"status": "ok", "result": {"deleted": len(dlist), "total": i}}}
 
     @staticmethod
     def params():
