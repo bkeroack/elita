@@ -55,10 +55,14 @@ class RegisterActions:
         self.datasvc = models.DataService()
 
     def register(self):
+        util.debugLog(self, "register")
         for m in self.modules:
+            util.debugLog(self, "module: {}".format(m))
             actions = m.register_actions()
+            util.debugLog(self, "actions: {}".format(actions))
             for app in actions:
                 for a in actions[app]:
                     action_name = a.__name__
                     params = a.params()
+                    util.debugLog(self, "NewAction: app: {}; action_name: {}; params: {}".format(app, action_name, params))
                     self.datasvc.NewAction(app, action_name, params, a)

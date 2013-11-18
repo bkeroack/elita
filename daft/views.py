@@ -19,7 +19,7 @@ logger.setLevel(logging.DEBUG)
 
 
 class GenericView:
-    def __init__(self, context, request, app_name="_global", permissionless=False):
+    def __init__(self, context, request, app_name="_global", permissionless=False, is_action=False):
         self.required_params = {"GET": [], "PUT": [], "POST": [], "DELETE": []}  # { reqverb: [ params ] }
         logging.debug("{}: {} ; {}".format(self.__class__.__name__, type(context), request.subpath))
         self.req = request
@@ -28,14 +28,29 @@ class GenericView:
             if self.req.params['pretty'] == "True" or self.req.params['pretty'] == "true":
                 self.req.override_renderer = "prettyjson"
         self.permissionless = permissionless
+        self.is_action = is_action
         self.setup_permissions(app_name)
         self.datasvc = models.DataService()
 
     def get_created_datetime_text(self):
         return self.context.created_datetime.isoformat(' ') if hasattr(self.context, 'created_datetime') else None
 
+    def call_action(self):
+        g, p = self.check_params()
+        if not g:
+            return self.Error("Required parameter is missing: {}".format(p))
+        if self.req.method == 'POST':
+            if 'execute' in self.permissions:
+                return self.POST()
+            else:
+                return self.Error('insufficient permissions')
+        else:
+            return self.UNKNOWN_VERB()
+
     def __call__(self):
         g, p = self.check_params()
+        if self.is_action:
+            return self.call_action()
         r = False
         if not g:
             return self.Error("Required parameter is missing: {}".format(p))
@@ -77,7 +92,11 @@ class GenericView:
         else:
             if 'auth_token' in self.req.params:
                 token = self.req.params['auth_token']
-                self.permissions = auth.UserPermissions(token).get_permissions(app_name)
+                if self.is_action:
+                    self.permissions = auth.UserPermissions(token).get_action_permissions(app_name,
+                                                                                          self.context.action_name)
+                else:
+                    self.permissions = auth.UserPermissions(token).get_app_permissions(app_name)
             else:
                 self.permissions = None
 
@@ -187,7 +206,8 @@ class ActionContainerView(GenericView):
 
 class ActionView(GenericView):
     def __init__(self, context, request):
-        GenericView.__init__(self, context, request)
+        self.app_name = context.app_name
+        GenericView.__init__(self, context, request, app_name=self.app_name, is_action=True)
         params = {"GET": [], "PUT": [], "POST": [], "DELETE": []}
         for p in self.context.params:
             params[p] = self.context.params[p]
@@ -363,14 +383,20 @@ class UserContainerView(GenericView):
         name = self.req.params['username']
         pw = self.req.params['password']
         try:
-            perms = self.req.json_body
+            perms_attribs = self.req.json_body
         except:
-            return self.Error("invalid permissions object (problem deserializing)")
-        if auth.ValidatePermissionsObject(perms):
-            self.context[name] = models.User(name, pw, perms, self.context.salt)
-            return self.status_ok({"user_created": {"username": name, "password": "(hidden)", "permissions": perms}})
+            return self.Error("invalid user attributes object (problem deserializing)")
+        if "permissions" in perms_attribs:
+            perms = perms_attribs['permissions']
+            attribs = perms_attribs['attributes'] if 'attributes' in perms_attribs else dict()
+            if auth.ValidatePermissionsObject(perms).run():
+                self.context[name] = models.User(name, pw, perms, self.context.salt, attribs)
+                return self.status_ok({"user_created": {"username": name, "password": "(hidden)",
+                                                        "permissions": perms, "attributes": attribs}})
+            else:
+                return self.Error("invalid permissions object")
         else:
-            return self.Error("invalid permissions object")
+            return self.Error("invalid user attributes object (missing permissions)")
 
     def GET(self):
         return {"users": self.context.keys()}
@@ -401,7 +427,11 @@ class UserView(GenericView):
 
     def status_ok_with_token(self, username):
         return self.status_ok({"username": username, "permissions": self.context.permissions,
+                               "attributes": self.context.attributes,
                                "auth_token": self.get_token_strings(username)})
+
+    def change_password(self, new_pw):
+        self.context.change_password(new_pw)
 
     def GET(self):  # return active
         if self.context.validate_password(self.req.params['password']):
@@ -413,8 +443,25 @@ class UserView(GenericView):
 
     def POST(self):
         if self.context.validate_password(self.req.params['password']):
-            self.create_new_token(self.context.name)
-            return self.status_ok_with_token(self.context.name)
+            request = self.req.params['request'] if 'request' in self.req.params else 'token'
+            if request == "token":
+                self.create_new_token(self.context.name)
+                return self.status_ok_with_token(self.context.name)
+            elif request == "password":
+                if "new_password" in self.req.params:
+                    self.change_password(self.req.params['new_password'])
+                    return self.status_ok("password changed")
+                else:
+                    return self.Error("parameter new_password required")
+            elif request == "attributes":
+                try:
+                    attribs = self.req.json_body
+                except:
+                    return self.Error("problem deserializing attributes object")
+                self.context.attributes = attribs
+                return self.status_ok({"new_attributes": attribs})
+            else:
+                return self.Error("incorrect request type '{}'".format(self.req.params['request']))
         return self.Error("incorrect password")
 
 

@@ -77,29 +77,45 @@ class RegisterBuildSkynetQA(RegisterBuild):
 class CleanupOldBuilds:
     def __init__(self, datasvc):
         self.now = datetime.datetime.now()
-        self.cutoff = self.now - datetime.timedelta(days=60)
         self.datasvc = datasvc
 
     def start(self, params, verb):
         debugLog(self, "running")
+        try:
+            days = int(params['days'])
+        except:
+            return {"CleanupOldBuilds": {"status": "error", "result": "incorrect days parameter (must be integer)"}}
+        cutoff = self.now - datetime.timedelta(days=days)
+        debugLog(self, "days: {}".format(params['days']))
         builds = self.datasvc.Builds("scorebig")
         i = len(builds)
         dlist = list()
         for b in builds:
             buildobj = builds[b]
             #if it doesn't have timestamp it's super old
-            if (not hasattr(buildobj, "created_datetime")) or buildobj.created_datetime < self.cutoff:
+            if (not hasattr(buildobj, "created_datetime")) or buildobj.created_datetime < cutoff:
                 debugLog(self, "...removing build: {}".format(buildobj.build_name))
                 dlist.append(buildobj.build_name)
+        d = 0
         for b in dlist:
             if params["delete"] == "true":
                 self.datasvc.DeleteBuild("scorebig", b)
-        debugLog(self, "{} out of {} builds deleted".format(len(dlist), i))
-        return {"CleanupOldBuilds": {"status": "ok", "result": {"deleted": len(dlist), "total": i}}}
+                d += 1
+        debugLog(self, "{} deleted; {} eligible; {} total builds".format(d, len(dlist), i))
+        return {"CleanupOldBuilds": {"status": "ok",
+                                     "parameters": {
+                                         "days": params['days'],
+                                         "delete": params['delete']
+                                     },
+                                     "result": {
+                                         "deleted": d,
+                                         "eligible": len(dlist),
+                                         "total": i
+                                     }}}
 
     @staticmethod
     def params():
-        return {"POST": ["delete"]}
+        return {"POST": ["delete", "days"]}
 
 class ProvisionQual:
     def __init__(self, qual_type, build):

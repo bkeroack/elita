@@ -9,7 +9,7 @@ __author__ = 'bkeroack'
 def run_migrations(root):
     # TODO: iterate through class names rather than hard coding in migrations
     util.debugLog(object, "Running object migrations...")
-    migrations = [GitflowFix_1000, Security_1001, Token_usermap_1002]
+    migrations = [GitflowFix_1000, Security_1001, Token_usermap_1002, User_attributes_1003, User_permissions_1004]
     for m in migrations:
         try:
             mo = m(root)
@@ -97,3 +97,55 @@ class Token_usermap_1002:
                 self.root['app_root']['global']['tokens'].usermap[to.username].append(to)
         util.debugLog(self, "{} tokens added to usermap".format(i))
 
+
+class User_attributes_1003:
+    '''Addition of attributes field to User
+    '''
+    def __init__(self, root):
+        for u in root['app_root']['global']['users']:
+            uobj = root['app_root']['global']['users'][u]
+            assert not hasattr(uobj, "attributes")
+        self.root = root
+
+    def run(self):
+        util.debugLog(self, "running")
+        for u in self.root['app_root']['global']['users']:
+            uobj = self.root['app_root']['global']['users'][u]
+            if not hasattr(uobj, "attributes"):
+                util.debugLog(self, "...adding attributes to user '{}'".format(u))
+                self.root['app_root']['global']['users'][u].attributes = dict()
+
+
+class User_permissions_1004:
+    '''Top-level apps and actions containers in permissions object
+    '''
+    def __init__(self, root):
+        run = False
+        for u in root['app_root']['global']['users']:
+            util.debugLog(self, "...checking user {}".format(u))
+            uobj = root['app_root']['global']['users'][u]
+            for p in uobj.permissions:
+                if p not in ('actions', 'apps'):
+                    util.debugLog(self, "...{} is not apps or actions".format(p))
+                    run = True
+        assert run
+        self.root = root
+
+    def run(self):
+        util.debugLog(self, "running")
+        for u in self.root['app_root']['global']['users']:
+            uobj = self.root['app_root']['global']['users'][u]
+            dkeys = list()
+            app_perms = dict()
+            for k in uobj.permissions:
+                if k not in ('actions', 'apps'):
+                    util.debugLog(self, "...user: '{}': migrating perm block '{}'".format(u, k))
+                    dkeys.append(k)
+                    app_perms[k] = uobj.permissions[k]
+            if len(app_perms) > 0:
+                util.debugLog(self, "...setting app_perms")
+                uobj.permissions['apps'] = app_perms
+            util.debugLog(self, "...dkeys: {}".format(dkeys))
+            for k in dkeys:
+                del uobj.permissions[k]
+            self.root['app_root']['global']['users'][u].permissions = uobj.permissions

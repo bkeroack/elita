@@ -40,6 +40,9 @@ class RootService:
     def ActionContainer(self, app):
         return self.root['app_root']['app'][app]['action']
 
+    def UserContainer(self):
+        return self.root['app_root']['global']['users']
+
 
 class DataService:
     def __init__(self):
@@ -76,6 +79,11 @@ class DataService:
     def DeleteApplication(self, app_name):
         self.rs.ApplicationContainer().pop(app_name, None)
 
+    def GetUsers(self):
+        return self.rs.UserContainer()
+
+    def GetUser(self, username):
+        return self.rs.UserContainer()[username]
 
 class SupportedFileType:
     TarGz = 'tar.gz'
@@ -166,7 +174,7 @@ class Application(BaseModelObject):
         self.app_name = app_name
 
 class User(BaseModelObject):
-    def __init__(self, name, pw, permissions, salt):
+    def __init__(self, name, pw, permissions, salt, attributes={}):
         BaseModelObject.__init__(self)
         util.debugLog(self, "user: {}, pw: {}".format(name, pw))
         self.salt = salt
@@ -175,12 +183,16 @@ class User(BaseModelObject):
         self.hashed_pw = self.hash_pw(pw)
         util.debugLog(self, "hashed pw: {}".format(self.hashed_pw))
         self.permissions = permissions
+        self.attributes = attributes
 
     def hash_pw(self, pw):
         return base64.urlsafe_b64encode(hashlib.sha512(pw + self.salt).hexdigest())
 
     def validate_password(self, pw):
         return self.hashed_pw == self.hash_pw(pw)
+
+    def change_password(self, new_pw):
+        self.hashed_pw = self.hash_pw(new_pw)
 
 class UserContainer(BaseModelObject):
     def __init__(self):
