@@ -84,8 +84,8 @@ class CleanupOldBuilds:
         debugLog(self, "running")
         builds = self.datasvc.Builds("scorebig")
         d = 0
-        i = 0
-        for i, b in enumerate(builds):
+        i = len(builds)
+        for b in builds:
             buildobj = builds[b]
             #if it doesn't have timestamp it's super old
             if (not hasattr(buildobj, "created_datetime")) or buildobj.created_datetime < self.cutoff:
