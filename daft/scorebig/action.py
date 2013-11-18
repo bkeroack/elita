@@ -83,17 +83,18 @@ class CleanupOldBuilds:
     def start(self, params, verb):
         debugLog(self, "running")
         builds = self.datasvc.Builds("scorebig")
-        d = 0
         i = len(builds)
+        dlist = list()
         for b in builds:
             buildobj = builds[b]
             #if it doesn't have timestamp it's super old
             if (not hasattr(buildobj, "created_datetime")) or buildobj.created_datetime < self.cutoff:
                 debugLog(self, "...removing build: {}".format(buildobj.build_name))
-                if params["delete"] == "true":
-                    self.datasvc.DeleteBuild("scorebig", buildobj.build_name)
-                    d += 1
-        debugLog(self, "{} out of {} builds deleted".format(d, i))
+                dlist.append(buildobj.build_name)
+        for b in dlist:
+            if params["delete"] == "true":
+                self.datasvc.DeleteBuild("scorebig", b)
+        debugLog(self, "{} out of {} builds deleted".format(len(dlist), i))
         return {"CleanupOldBuilds": {"status": "ok", "result": {"deleted": d, "total": i}}}
 
     @staticmethod
