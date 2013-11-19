@@ -96,12 +96,14 @@ class Token_usermap_1002:
             else:
                 self.root['app_root']['global']['tokens'].usermap[to.username].append(to)
         util.debugLog(self, "{} tokens added to usermap".format(i))
+        return self.root
 
 
 class User_attributes_1003:
     '''Addition of attributes field to User
     '''
     def __init__(self, root):
+        util.debugLog(self, root['app_root']['global']['users'])
         for u in root['app_root']['global']['users']:
             uobj = root['app_root']['global']['users'][u]
             assert not hasattr(uobj, "attributes")
@@ -114,6 +116,7 @@ class User_attributes_1003:
             if not hasattr(uobj, "attributes"):
                 util.debugLog(self, "...adding attributes to user '{}'".format(u))
                 self.root['app_root']['global']['users'][u].attributes = dict()
+        return self.root
 
 
 class User_permissions_1004:
@@ -149,3 +152,4 @@ class User_permissions_1004:
             for k in dkeys:
                 del uobj.permissions[k]
             self.root['app_root']['global']['users'][u].permissions = uobj.permissions
+        return self.root
