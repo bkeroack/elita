@@ -86,10 +86,10 @@ class UserPermissions:
                 util.debugLog(self, "returning admin permissions")
                 return "read;write"
             elif "*" in userobj.permissions['apps']:
-                return userobj.permissions['*']
+                return userobj.permissions['apps']['*']
             elif app in userobj.permissions['apps']:
                 util.debugLog(self, "returning perms: {}".format(userobj.permissions[app]))
-                return userobj.permissions[app]
+                return userobj.permissions['apps'][app]
         return ""
 
     def validate_pw(self, username, password):

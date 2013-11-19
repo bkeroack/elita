@@ -19,16 +19,17 @@ logger.setLevel(logging.DEBUG)
 
 
 class GenericView:
-    def __init__(self, context, request, app_name="_global", permissionless=False, is_action=False):
+    def __init__(self, context, request, app_name="_global", permissionless=False, allow_pw_auth=False, is_action=False):
         self.required_params = {"GET": [], "PUT": [], "POST": [], "DELETE": []}  # { reqverb: [ params ] }
         logging.debug("{}: {} ; {}".format(self.__class__.__name__, type(context), request.subpath))
         self.req = request
         self.context = context
         if 'pretty' in self.req.params:
-            if self.req.params['pretty'] == "True" or self.req.params['pretty'] == "true":
+            if self.req.params['pretty'] in ("true", "True", "yes", "si"):
                 self.req.override_renderer = "prettyjson"
         self.permissionless = permissionless
         self.is_action = is_action
+        self.allow_pw_auth = allow_pw_auth
         self.setup_permissions(app_name)
         self.datasvc = models.DataService()
 
@@ -75,7 +76,7 @@ class GenericView:
         return r
 
     def check_params(self):
-        if not self.permissionless:
+        if not self.permissionless and not self.allow_pw_auth:
             for p in self.required_params:
                 self.required_params[p].append("auth_token")
         try:
@@ -89,16 +90,19 @@ class GenericView:
     def setup_permissions(self, app_name):
         if self.permissionless:
             self.permissions = "read;write"
-        else:
-            if 'auth_token' in self.req.params:
-                token = self.req.params['auth_token']
-                if self.is_action:
-                    self.permissions = auth.UserPermissions(token).get_action_permissions(app_name,
-                                                                                          self.context.action_name)
-                else:
-                    self.permissions = auth.UserPermissions(token).get_app_permissions(app_name)
+            return
+        if self.allow_pw_auth and 'auth_token' not in self.req.params:  # view sub-class responsible for verifying pw
+            self.permissions = "read;write"
+            return
+        if 'auth_token' in self.req.params:
+            token = self.req.params['auth_token']
+            if self.is_action:
+                self.permissions = auth.UserPermissions(token).get_action_permissions(app_name,
+                                                                                      self.context.action_name)
             else:
-                self.permissions = None
+                self.permissions = auth.UserPermissions(token).get_app_permissions(app_name)
+        else:
+            self.permissions = None
 
     def set_params(self, params):
         for t in params:
@@ -415,8 +419,8 @@ class UserContainerView(GenericView):
 
 class UserView(GenericView):
     def __init__(self, context, request):
-        GenericView.__init__(self, context, request, permissionless=True)  # pw always req'd
-        self.set_params({"GET": ["password"], "PUT": [], "POST": ["password"], "DELETE": ["password"]})
+        GenericView.__init__(self, context, request, allow_pw_auth=True)  # allow both pw and auth_token auth
+        self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
 
     def create_new_token(self, username):
         if models.root['app_root']['global']['tokens'].new_token(username) is None:
@@ -434,36 +438,39 @@ class UserView(GenericView):
         self.context.change_password(new_pw)
 
     def GET(self):  # return active
-        if self.context.validate_password(self.req.params['password']):
-            name = self.context.name
-            if name not in models.root['app_root']['global']['tokens'].usermap:
-                self.create_new_token(name)
-            return self.status_ok_with_token(name)
-        return self.Error("incorrect password")
+        if 'password' in self.req.params:
+            if not self.context.validate_password(self.req.params['password']):
+                return self.Error("incorrect password")
+        elif 'auth_token' not in self.req.params:
+            return self.Error("password or auth token required")
+        name = self.context.name
+        if name not in models.root['app_root']['global']['tokens'].usermap:
+            self.create_new_token(name)
+        return self.status_ok_with_token(name)
 
     def POST(self):
-        if self.context.validate_password(self.req.params['password']):
-            request = self.req.params['request'] if 'request' in self.req.params else 'token'
-            if request == "token":
-                self.create_new_token(self.context.name)
-                return self.status_ok_with_token(self.context.name)
-            elif request == "password":
-                if "new_password" in self.req.params:
-                    self.change_password(self.req.params['new_password'])
-                    return self.status_ok("password changed")
-                else:
-                    return self.Error("parameter new_password required")
-            elif request == "attributes":
-                try:
-                    attribs = self.req.json_body
-                except:
-                    return self.Error("problem deserializing attributes object")
-                self.context.attributes = attribs
-                return self.status_ok({"new_attributes": attribs})
+        if 'password' in self.req.params:
+            if not self.context.validate_password(self.req.params['password']):
+                return self.Error("incorrect password")
+        request = self.req.params['request'] if 'request' in self.req.params else 'token'
+        if request == "token":
+            self.create_new_token(self.context.name)
+            return self.status_ok_with_token(self.context.name)
+        elif request == "password":
+            if "new_password" in self.req.params:
+                self.change_password(self.req.params['new_password'])
+                return self.status_ok("password changed")
             else:
-                return self.Error("incorrect request type '{}'".format(self.req.params['request']))
-        return self.Error("incorrect password")
-
+                return self.Error("parameter new_password required")
+        elif request == "attributes":
+            try:
+                attribs = self.req.json_body
+            except:
+                return self.Error("problem deserializing attributes object")
+            self.context.attributes = attribs
+            return self.status_ok({"new_attributes": attribs})
+        else:
+            return self.Error("incorrect request type '{}'".format(self.req.params['request']))
 
 class TokenContainerView(GenericView):
     def __init__(self, context, request):
