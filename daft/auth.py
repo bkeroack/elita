@@ -88,7 +88,7 @@ class UserPermissions:
             elif "*" in userobj.permissions['apps']:
                 return userobj.permissions['apps']['*']
             elif app in userobj.permissions['apps']:
-                util.debugLog(self, "returning perms: {}".format(userobj.permissions[app]))
+                util.debugLog(self, "returning perms: {}".format(userobj.permissions['apps'][app]))
                 return userobj.permissions['apps'][app]
         return ""
 
