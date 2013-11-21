@@ -166,13 +166,13 @@ class Build_keys_and_objects_1005:
         util.debugLog(self, "running")
         i = 0
         for app in self.root['app_root']['app']:
-            for b in self.root['app_root']['app'][app]:
-                bobj = self.root['app_root']['app'][app][b]
+            for b in self.root['app_root']['app'][app]['builds']:
+                bobj = self.root['app_root']['app'][app]['builds'][b]
                 if b != bobj.build_name:
                     util.debugLog(self, "{} does not match {}".format(b, bobj.build_name))
                     #assume the key is correct
                     bobj.build_name = b
-                    self.root['app_root']['app'][app][b] = bobj
+                    self.root['app_root']['app'][app]['builds'][b] = bobj
                     i += 1
         util.debugLog(self, "{} total objects fixed".format(i))
         return self.root
