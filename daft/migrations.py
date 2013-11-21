@@ -9,7 +9,8 @@ __author__ = 'bkeroack'
 def run_migrations(root):
     # TODO: iterate through class names rather than hard coding in migrations
     util.debugLog(object, "Running object migrations...")
-    migrations = [GitflowFix_1000, Security_1001, Token_usermap_1002, User_attributes_1003, User_permissions_1004]
+    migrations = [GitflowFix_1000, Security_1001, Token_usermap_1002, User_attributes_1003, User_permissions_1004,
+                  Build_keys_and_objects_1005]
     for m in migrations:
         try:
             mo = m(root)
@@ -152,4 +153,26 @@ class User_permissions_1004:
             for k in dkeys:
                 del uobj.permissions[k]
             self.root['app_root']['global']['users'][u].permissions = uobj.permissions
+        return self.root
+
+class Build_keys_and_objects_1005:
+    '''Make sure BuildContainer key matches resulting object.build_name attribute
+    '''
+    def __init__(self, root):
+        assert True
+        self.root = root
+
+    def run(self):
+        util.debugLog(self, "running")
+        i = 0
+        for app in self.root['app_root']['app']:
+            for b in self.root['app_root']['app'][app]:
+                bobj = self.root['app_root']['app'][app][b]
+                if b != bobj.build_name:
+                    util.debugLog(self, "{} does not match {}".format(b, bobj.build_name))
+                    #assume the key is correct
+                    bobj.build_name = b
+                    self.root['app_root']['app'][app][b] = bobj
+                    i += 1
+        util.debugLog(self, "{} total objects fixed".format(i))
         return self.root
