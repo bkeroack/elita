@@ -260,9 +260,9 @@ class BuildContainerView(GenericView):
             msg.append("build exists")
         subsys = self.req.params["subsys"] if "sybsys" in self.req.params else []
         try:
-            attribs = self.req.json_body if 'attributes' in self.req.params else dict()
+            attribs = self.req.json_body
         except:
-            return self.Error("error de-serializing attributes (invalid JSON?)")
+            attribs = dict()
         self.datasvc.NewBuild(self.app_name, build_name, attribs, subsys)
         return self.return_action_status({"new_build": {"application": self.app_name, "build_name": build_name,
                                                         "attributes": attribs, "messages": msg}})
