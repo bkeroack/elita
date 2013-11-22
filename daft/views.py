@@ -292,7 +292,7 @@ class BuildDetailView(GenericView):
                 'stored': self.context.buildobj.stored, 'packages': self.context.buildobj.packages,
                 'files': self.context.buildobj.files,
                 'created_datetime': self.get_created_datetime_text(),
-                'attributes': self.context.attributes}
+                'attributes': self.context.buildobj.attributes}
 
 
 class BuildView(GenericView):
