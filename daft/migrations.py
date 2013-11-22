@@ -10,7 +10,7 @@ def run_migrations(root):
     # TODO: iterate through class names rather than hard coding in migrations
     util.debugLog(object, "Running object migrations...")
     migrations = [GitflowFix_1000, Security_1001, Token_usermap_1002, User_attributes_1003, User_permissions_1004,
-                  Build_keys_and_objects_1005]
+                  Build_keys_and_objects_1005, Build_attributes_1006]
     for m in migrations:
         try:
             mo = m(root)
@@ -104,7 +104,6 @@ class User_attributes_1003:
     '''Addition of attributes field to User
     '''
     def __init__(self, root):
-        util.debugLog(self, root['app_root']['global']['users'])
         for u in root['app_root']['global']['users']:
             uobj = root['app_root']['global']['users'][u]
             assert not hasattr(uobj, "attributes")
@@ -126,7 +125,6 @@ class User_permissions_1004:
     def __init__(self, root):
         run = False
         for u in root['app_root']['global']['users']:
-            util.debugLog(self, "...checking user {}".format(u))
             uobj = root['app_root']['global']['users'][u]
             for p in uobj.permissions:
                 if p not in ('actions', 'apps'):
@@ -159,7 +157,7 @@ class Build_keys_and_objects_1005:
     '''Make sure BuildContainer key matches resulting object.build_name attribute
     '''
     def __init__(self, root):
-        assert True
+        assert False
         self.root = root
 
     def run(self):
@@ -176,3 +174,22 @@ class Build_keys_and_objects_1005:
                     i += 1
         util.debugLog(self, "{} total objects fixed".format(i))
         return self.root
+
+class Build_attributes_1006:
+    '''Add attributes field to Build objects
+    '''
+    def __init__(self, root):
+        assert True
+        self.root = root
+
+    def run(self):
+        util.debugLog(self, "running")
+        i = 0
+        for app in self.root['app_root']['app']:
+            for b in self.root['app_root']['app'][app]['builds']:
+                bobj = self.root['app_root']['app'][app]['builds'][b]
+                if not hasattr(bobj, "attributes"):
+                    bobj.attributes = dict()
+                    self.root['app_root']['app'][app]['builds'][b] = bobj
+                    i += 1
+        util.debugLog(self, "{} builds processed".format(i))

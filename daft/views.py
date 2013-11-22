@@ -259,9 +259,13 @@ class BuildContainerView(GenericView):
         if build_name in self.context:
             msg.append("build exists")
         subsys = self.req.params["subsys"] if "sybsys" in self.req.params else []
-        self.datasvc.NewBuild(self.app_name, build_name, subsys)
+        try:
+            attribs = self.req.json_body if 'attributes' in self.req.params else dict()
+        except:
+            return self.Error("error de-serializing attributes (invalid JSON?)")
+        self.datasvc.NewBuild(self.app_name, build_name, attribs, subsys)
         return self.return_action_status({"new_build": {"application": self.app_name, "build_name": build_name,
-                                                        "messages": msg}})
+                                                        "attributes": attribs, "messages": msg}})
 
     def POST(self):
         build_name = self.req.params["build_name"]
@@ -287,7 +291,8 @@ class BuildDetailView(GenericView):
         return {'application': self.context.buildobj.app_name, 'build': self.context.buildobj.build_name,
                 'stored': self.context.buildobj.stored, 'packages': self.context.buildobj.packages,
                 'files': self.context.buildobj.files,
-                'created_datetime': self.get_created_datetime_text()}
+                'created_datetime': self.get_created_datetime_text(),
+                'attributes': self.context.attributes}
 
 
 class BuildView(GenericView):

@@ -60,8 +60,8 @@ class DataService:
         action = Action(app_name, action_name, params, callable)
         self.rs.ActionContainer(app_name)[action_name] = action
 
-    def NewBuild(self, app_name, build_name, subsys):
-        build = Build(app_name, build_name, subsys)
+    def NewBuild(self, app_name, build_name, attribs, subsys):
+        build = Build(app_name, build_name, attributes=attribs, subsys=subsys)
         build["info"] = BuildDetail(build)
         self.rs.BuildContainer(app_name)[build_name] = build
 
@@ -113,10 +113,11 @@ class EnvironmentContainer(BaseModelObject):
         self.app_name = app_name
 
 class Build(BaseModelObject):
-    def __init__(self, app_name, build_name, subsys=[]):
+    def __init__(self, app_name, build_name, attributes={}, subsys=[]):
         BaseModelObject.__init__(self)
         self.app_name = app_name
         self.build_name = build_name
+        self.attributes = attributes
         self.subsys = subsys
         self.stored = False
         self.files = dict()  # { filename: filetype }
