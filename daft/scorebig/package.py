@@ -93,32 +93,43 @@ class ScoreBig_Package_TeamCity:
         shutil.rmtree(self.temp_dir)
 
     def create_subpackages(self):
-        threads = list()
-        m = multiprocessing.Manager()
-        sp_list = m.list()
-        threads.append(multiprocessing.Process(target=self.config_subpackages, args=(sp_list,)))
-        threads.append(multiprocessing.Process(target=self.web_subpackage, args=(sp_list,)))
-        threads.append(multiprocessing.Process(target=self.functionaltests_subpackage, args=(sp_list,)))
-        threads.append(multiprocessing.Process(target=self.scheduledjobs_subpackage, args=(sp_list,)))
-        threads.append(multiprocessing.Process(target=self.servicebus_subpackage, args=(sp_list,)))
-        threads.append(multiprocessing.Process(target=self.artifacts_subpackage, args=(sp_list,)))
-        threads.append(multiprocessing.Process(target=self.assets_subpackage, args=(sp_list,)))
-        threads.append(multiprocessing.Process(target=self.migration_subpackage, args=(sp_list,)))
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join(60)
-        self.subpackages = sp_list
+        #threads = list()
+        #m = multiprocessing.Manager()
+        #sp_list = m.list()
+        #threads.append(multiprocessing.Process(target=self.config_subpackages, args=(sp_list,)))
+        #threads.append(multiprocessing.Process(target=self.web_subpackage, args=(sp_list,)))
+        #threads.append(multiprocessing.Process(target=self.functionaltests_subpackage, args=(sp_list,)))
+        #threads.append(multiprocessing.Process(target=self.scheduledjobs_subpackage, args=(sp_list,)))
+        #threads.append(multiprocessing.Process(target=self.servicebus_subpackage, args=(sp_list,)))
+        #threads.append(multiprocessing.Process(target=self.artifacts_subpackage, args=(sp_list,)))
+        #threads.append(multiprocessing.Process(target=self.assets_subpackage, args=(sp_list,)))
+        #threads.append(multiprocessing.Process(target=self.migration_subpackage, args=(sp_list,)))
+        #for t in threads:
+        #    t.start()
+        #for t in threads:
+        #    t.join(60)
+        #self.subpackages = sp_list
+        self.config_subpackages(self.subpackages)
+        self.web_subpackage(self.subpackages)
+        self.functionaltests_subpackage(self.subpackages)
+        self.scheduledjobs_subpackage(self.subpackages)
+        self.servicebus_subpackage(self.subpackages)
+        self.artifacts_subpackage(self.subpackages)
+        self.assets_subpackage(self.subpackages)
+        self.migration_subpackage(self.subpackages)
 
     def create_monolithic_zip(self):
         fname = "{}/teamcity-{}.zip".format(self.storage_dir, self.build_name)
         logging.debug("create_monolithic_zip: {}".format(self.subpackages))
-        with zipfile.ZipFile(fname, 'a') as zf:
+        with zipfile.ZipFile(fname, 'w') as zf:
             for f in self.subpackages:
                 zf.write(f, os.path.basename(f))
         return fname
 
     def zipfolder(self, path, zipname, subpath=None):
+        if os.path.exists(zipname):  # delete if exists
+            logging.debug("zipfolder: warning: zipfile exists, deleting")
+            os.remove(zipname)
         with zipfile.ZipFile(zipname, 'w', zipfile.ZIP_DEFLATED) as zf:
             for dirpath, dirs, files in os.walk(path):
                 for f in files:
@@ -141,6 +152,9 @@ class ScoreBig_Package_TeamCity:
             subpath = path + '/' + d
             if os.path.isdir(subpath):
                 fname = "{}/{}-{}.zip".format(self.temp_dir, d, self.build_name)
+                if os.path.exists(fname):
+                    logging.debug("config_subpackages: zipfile exists, deleting: {}".format(fname))
+                    os.remove(fname)
                 with zipfile.ZipFile(fname, 'w', zipfile.ZIP_DEFLATED) as zf:
                     for f in os.listdir(subpath):
                         subsubpath = subpath + '/' + f

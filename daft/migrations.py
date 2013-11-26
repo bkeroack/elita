@@ -179,7 +179,7 @@ class Build_attributes_1006:
     '''Add attributes field to Build objects
     '''
     def __init__(self, root):
-        assert True
+        assert False
         self.root = root
 
     def run(self):

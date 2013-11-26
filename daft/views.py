@@ -514,7 +514,10 @@ class TokenView(GenericView):
 
 @view_config(name="", renderer='json')
 def Action(context, request):
-    logging.debug("Action")
+    logging.debug("REQUEST: url: {}".format(request.url))
+    logging.debug("REQUEST: context: {}".format(context.__class__.__name__))
+    logging.debug("REQUEST: method: {}".format(request.method))
+    logging.debug("REQUEST: params: {}".format(request.params))
 
     cname = context.__class__.__name__
     logging.debug(cname)
