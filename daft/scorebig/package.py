@@ -71,8 +71,6 @@ class ScoreBig_Package_SkynetQA:
             base_filename = os.path.basename(f)
             new_file = "{}/skynetqa_{}".format(self.storage_dir, base_filename)
             pname = os.path.basename(f).split('-')[1 if "package" in base_filename else 0]
-            logging.debug("ScoreBig_Package_SkynetQA: got pname {}".format(pname))
-            logging.debug("ScoreBig_Package_SkynetQA: copying {} to {}".format(f, self.storage_dir))
             shutil.copyfile(f, new_file)
             self.packages['skynetqa_{}'.format(pname)] = {'filename': new_file, 'file_type': 'zip'}
         return self.packages
@@ -148,7 +146,6 @@ class ScoreBig_Package_TeamCity:
                         subsubpath = subpath + '/' + f
                         if os.path.isfile(subsubpath):
                             zf.write(subsubpath, f)
-                            logging.debug("...added file: {}".format(f))
                 sp_list.append(fname)
 
     def web_subpackage(self, sp_list):
