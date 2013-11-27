@@ -5,3 +5,4 @@ Data.fs*
 build/
 dist/
 daft.egg-info/
+doc/_build
