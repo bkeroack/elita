@@ -17,6 +17,11 @@ def root_factory(request):
 def main(global_config, **settings):
     """ This function returns a Pyramid WSGI application.
     """
+
+    daft_config.cfg = daft_config.DaftConfiguration()
+    #just to make sure that the config file is found and valid
+    daft_config.cfg.get_build_dir()
+
     #run any necessary migrations
     storage = FileStorage('Data.fs')
     db = DB(storage)
@@ -31,9 +36,5 @@ def main(global_config, **settings):
     config.add_static_view('static', 'static', cache_max_age=3600)
     config.add_renderer('prettyjson', JSON(indent=4))
     config.scan()
-
-    daft_config.cfg = daft_config.DaftConfiguration()
-    #just to make sure that the config file is found and valid
-    daft_config.cfg.get_build_dir()
 
     return config.make_wsgi_app()

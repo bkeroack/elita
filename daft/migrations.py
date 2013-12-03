@@ -1,6 +1,9 @@
 import random
+import pymongo
+import datetime
 from . import util
 from . import models
+import daft_config
 
 __author__ = 'bkeroack'
 
@@ -10,7 +13,7 @@ def run_migrations(root):
     # TODO: iterate through class names rather than hard coding in migrations
     util.debugLog(object, "Running object migrations...")
     migrations = [GitflowFix_1000, Security_1001, Token_usermap_1002, User_attributes_1003, User_permissions_1004,
-                  Build_keys_and_objects_1005, Build_attributes_1006]
+                  Build_keys_and_objects_1005, Build_attributes_1006, Mongodb_1007]
     for m in migrations:
         try:
             mo = m(root)
@@ -193,3 +196,111 @@ class Build_attributes_1006:
                     self.root['app_root']['app'][app]['builds'][b] = bobj
                     i += 1
         util.debugLog(self, "{} builds processed".format(i))
+
+
+class Mongodb_1007:
+    '''Migrate all data to mongo
+    '''
+    def __init__(self, root):
+        assert True
+        self.root = root
+        mongo_info = daft_config.cfg.get_mongo_server()
+        self.client = pymongo.MongoClient(mongo_info[0], mongo_info[1])
+        self.client.write_concern = {'w': 1}
+        if "daft" in self.client.database_names():
+            self.client.drop_database("daft")
+        self.db = self.client['daft']
+
+    def run(self):
+        util.debugLog(self, "running")
+        self.users()
+        self.tokens()
+        self.applications()
+        self.builds()
+
+
+    def drop_if_exists(self, cname):
+        if cname in self.db.collection_names():
+            self.db.drop_collection(cname)
+
+    def get_createddatetime(self, obj):
+        return obj.created_datetime if hasattr(obj, "created_datetime") else datetime.datetime.now()
+
+    def users(self):
+        util.debugLog(self, "...users")
+        self.drop_if_exists("users")
+        users = self.db['users']
+        ulist = list()
+        for i, u in enumerate(self.root['app_root']['global']['users']):
+            uobj = self.root['app_root']['global']['users'][u]
+            ulist.append({
+                "created_datetime": self.get_createddatetime(uobj),
+                "name": uobj.name,
+                "salt": uobj.salt,
+                "hashed_pw": uobj.hashed_pw,
+                "permissions": uobj.permissions,
+                "attributes": uobj.attributes
+            })
+        users.insert(ulist)
+        util.debugLog(self, "...{} users".format(i))
+
+    def tokens(self):
+        util.debugLog(self, "...tokens")
+        self.drop_if_exists("tokens")
+        tokens = self.db['tokens']
+        tlist = list()
+        for i, t in enumerate(self.root['app_root']['global']['tokens']):
+            tobj = self.root['app_root']['global']['tokens'][t]
+            tlist.append({
+                "created_datetime": self.get_createddatetime(tobj),
+                "username": tobj.username,
+                "token": tobj.token
+            })
+        tokens.insert(tlist)
+        util.debugLog(self, "...{} tokens".format(i))
+
+    def applications(self):
+        util.debugLog(self, "...tokens")
+        self.drop_if_exists("applications")
+        applications = self.db['applications']
+        alist = list()
+        for i, a in enumerate(self.root['app_root']['app']):
+            aobj = self.root['app_root']['app'][a]
+            alist.append({
+                "created_datetime": self.get_createddatetime(aobj),
+                "app_name": aobj.app_name
+            })
+        applications.insert(alist)
+        util.debugLog(self, "...{} applications".format(i))
+
+    def builds(self):
+        util.debugLog(self, "...builds")
+        self.drop_if_exists("builds")
+        builds = self.db['builds']
+        blist = list()
+        i = 0
+        for a in self.root['app_root']['app']:
+            for b in self.root['app_root']['app'][a]['builds']:
+                bobj = self.root['app_root']['app'][a]['builds'][b]
+                flist = list()
+                for f in bobj.files:
+                    flist.append({
+                        "path": f,
+                        "file_type": bobj.files[f]
+                    })
+                blist.append({
+                    "created_datetime": self.get_createddatetime(bobj),
+                    "app_name": bobj.app_name,
+                    "build_name": bobj.build_name,
+                    "attributes": bobj.attributes,
+                    "stored": bobj.stored,
+                    "files": flist,
+                    "master_file": bobj.master_file,
+                    "packages": bobj.packages
+                })
+                i += 1
+        builds.insert(blist)
+        util.debugLog(self, "...{} builds".format(i))
+
+
+

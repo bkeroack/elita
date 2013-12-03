@@ -118,7 +118,6 @@ class Build(BaseModelObject):
         self.app_name = app_name
         self.build_name = build_name
         self.attributes = attributes
-        self.subsys = subsys
         self.stored = False
         self.files = dict()  # { filename: filetype }
         self.master_file = None  # original uploaded file
@@ -195,11 +194,6 @@ class User(BaseModelObject):
     def change_password(self, new_pw):
         self.hashed_pw = self.hash_pw(new_pw)
 
-class UserContainer(BaseModelObject):
-    def __init__(self):
-        BaseModelObject.__init__(self)
-        self.salt = base64.urlsafe_b64encode((uuid.uuid4().bytes))
-
 class TokenContainer(BaseModelObject):
     def __init__(self):
         BaseModelObject.__init__(self)
@@ -233,20 +227,20 @@ class Token(BaseModelObject):
         self.username = username
         self.token = base64.urlsafe_b64encode(hashlib.sha256(uuid.uuid4().bytes).hexdigest())[:-2]  # strip '=='
 
-class ApplicationContainer(BaseModelObject):
+class ApplicationContainer(dict):
     pass
 
-class GlobalContainer(BaseModelObject):
+class GlobalContainer(dict):
     pass
 
-class RootApplication(BaseModelObject):
+class UserContainer(dict):
     pass
 
 
 def appmaker(zodb_root):
     global root
     if not 'app_root' in zodb_root:
-        app_root = RootApplication()
+        app_root = dict()
         zodb_root['app_root'] = app_root
         zodb_root['app_root']['app'] = ApplicationContainer()
         zodb_root['app_root']['global'] = GlobalContainer()
