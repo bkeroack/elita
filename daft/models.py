@@ -92,11 +92,16 @@ class SupportedFileType:
     types = [TarBz2, TarGz, Zip]
     
 
-class BaseModelObject(PersistentMapping):
-    def __init__(self):
-        PersistentMapping.__init__(self)
+class BaseModelObject(dict):
+    def __init__(self, db, collection):
+        dict.__init__(self)
+        self.db = db
+        self.collection = self.db[collection]
         self.created_datetime = datetime.datetime.now()
 
+    def __setitem__(self, key, value):
+        self.collection.insert(value)
+        dict.__setitem__(self, key, value)
 
 class Server:
     env_name = None
@@ -174,10 +179,10 @@ class Application(BaseModelObject):
         self.app_name = app_name
 
 class User(BaseModelObject):
-    def __init__(self, name, pw, permissions, salt, attributes={}):
+    def __init__(self, name, pw, permissions, attributes={}):
         BaseModelObject.__init__(self)
         util.debugLog(self, "user: {}, pw: {}".format(name, pw))
-        self.salt = salt
+        self.salt = base64.urlsafe_b64encode(hashlib.sha512(uuid.uuid4()).hexdigest())
         util.debugLog(self, "got salt: {}".format(self.salt))
         self.name = name
         self.hashed_pw = self.hash_pw(pw)
@@ -228,30 +233,28 @@ class Token(BaseModelObject):
         self.token = base64.urlsafe_b64encode(hashlib.sha256(uuid.uuid4().bytes).hexdigest())[:-2]  # strip '=='
 
 class ApplicationContainer(dict):
-    pass
+    def __init__(self, db):
+        self.db = db
+
 
 class GlobalContainer(dict):
     pass
 
-class UserContainer(dict):
+class UserContainer(BaseModelObject):
     pass
 
 
-def appmaker(zodb_root):
-    global root
-    if not 'app_root' in zodb_root:
-        app_root = dict()
-        zodb_root['app_root'] = app_root
-        zodb_root['app_root']['app'] = ApplicationContainer()
-        zodb_root['app_root']['global'] = GlobalContainer()
-        uc = UserContainer()
-        zodb_root['app_root']['global']['users'] = uc
-        zodb_root['app_root']['global']['users']['admin'] = User("admin", "daft", {"_global": "read;write"}, uc.salt)
-        zodb_root['app_root']['global']['tokens'] = TokenContainer()
-        tk = Token('admin')
-        zodb_root['app_root']['global']['tokens'][tk.token] = tk
-        import transaction
-        transaction.commit()
-    root = zodb_root
+def appmaker(db):
+
+    site_root = dict()
+    site_root['app'] = ApplicationContainer()
+    site_root['global'] = GlobalContainer()
+    site_root['global']['users'] = UserContainer()
+    site_root['global']['users']['admin'] = User("admin", "daft", {"_global": "read;write", "*": "read;write"})
+    site_root['global']['tokens'] = TokenContainer()
+    tk = Token('admin')
+    site_root['app_root']['global']['tokens'][tk.token] = tk
+
     daft_action.actionsvc = daft_action.ActionService()
-    return zodb_root['app_root']
+
+    return site_root

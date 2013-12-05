@@ -5,7 +5,7 @@ import ConfigParser
 
 cfg = None
 
-VERSION = "0.38"
+VERSION = "0.46"
 
 
 class DaftConfiguration:
@@ -17,4 +17,8 @@ class DaftConfiguration:
         return self.config.get('builds', 'dir')
 
     def get_mongo_server(self):
-        return self.config.get('mongo', 'host'), int(self.config.get('mongo', 'port'))
+        return {
+            'host': self.config.get('mongo', 'host'),
+            'port': int(self.config.get('mongo', 'port')),
+            'db': self.config.get('mongo', 'db')
+        }
