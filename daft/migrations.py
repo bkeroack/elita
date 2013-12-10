@@ -1,6 +1,8 @@
 import random
 import pymongo
+import bson
 import datetime
+
 from . import util
 from . import models
 import daft_config
@@ -205,19 +207,34 @@ class Mongodb_1007:
         assert True
         self.root = root
         mongo_info = daft_config.cfg.get_mongo_server()
-        self.client = pymongo.MongoClient(mongo_info[0], mongo_info[1])
+        self.client = pymongo.MongoClient(mongo_info['host'], mongo_info['port'])
+        dbname = mongo_info['db']
         self.client.write_concern = {'w': 1}
-        if "daft" in self.client.database_names():
-            self.client.drop_database("daft")
-        self.db = self.client['daft']
+        if dbname in self.client.database_names():
+            self.client.drop_database(dbname)
+        self.db = self.client[dbname]
+        self.root_tree = dict()  # tree w/ dbrefs for mongo insertion
+
+    def setup_root_tree(self):
+        self.root_tree['global'] = dict()
+        self.root_tree['app'] = dict()
+        self.root_tree['global']['users'] = dict()
+        self.root_tree['global']['tokens'] = dict()
 
     def run(self):
         util.debugLog(self, "running")
+        self.setup_root_tree()
         self.users()
         self.tokens()
         self.applications()
         self.builds()
+        self.save_root_tree()
 
+    def save_root_tree(self):
+        util.debugLog(self, "root_tree: {}".format(self.root_tree))
+        self.drop_if_exists("root_tree")
+        root_tree = self.db['root_tree']
+        root_tree.insert(self.root_tree)
 
     def drop_if_exists(self, cname):
         if cname in self.db.collection_names():
@@ -230,10 +247,9 @@ class Mongodb_1007:
         util.debugLog(self, "...users")
         self.drop_if_exists("users")
         users = self.db['users']
-        ulist = list()
         for i, u in enumerate(self.root['app_root']['global']['users']):
             uobj = self.root['app_root']['global']['users'][u]
-            ulist.append({
+            id = users.insert({
                 "created_datetime": self.get_createddatetime(uobj),
                 "name": uobj.name,
                 "salt": uobj.salt,
@@ -241,45 +257,43 @@ class Mongodb_1007:
                 "permissions": uobj.permissions,
                 "attributes": uobj.attributes
             })
-        users.insert(ulist)
+            self.root_tree['global']['users'][uobj.name] = {"doc": bson.DBRef("users", id)}
         util.debugLog(self, "...{} users".format(i))
 
     def tokens(self):
         util.debugLog(self, "...tokens")
         self.drop_if_exists("tokens")
         tokens = self.db['tokens']
-        tlist = list()
         for i, t in enumerate(self.root['app_root']['global']['tokens']):
             tobj = self.root['app_root']['global']['tokens'][t]
-            tlist.append({
+            id = tokens.insert({
                 "created_datetime": self.get_createddatetime(tobj),
                 "username": tobj.username,
                 "token": tobj.token
             })
-        tokens.insert(tlist)
+            self.root_tree['global']['tokens'][tobj.token] = {"doc": bson.DBRef("tokens", id)}
         util.debugLog(self, "...{} tokens".format(i))
 
     def applications(self):
-        util.debugLog(self, "...tokens")
+        util.debugLog(self, "...applications")
         self.drop_if_exists("applications")
         applications = self.db['applications']
-        alist = list()
         for i, a in enumerate(self.root['app_root']['app']):
             aobj = self.root['app_root']['app'][a]
-            alist.append({
+            id = applications.insert({
                 "created_datetime": self.get_createddatetime(aobj),
                 "app_name": aobj.app_name
             })
-        applications.insert(alist)
+            self.root_tree['app'][aobj.app_name] = {"doc": bson.DBRef("applications", id)}
         util.debugLog(self, "...{} applications".format(i))
 
     def builds(self):
         util.debugLog(self, "...builds")
         self.drop_if_exists("builds")
         builds = self.db['builds']
-        blist = list()
         i = 0
         for a in self.root['app_root']['app']:
+            self.root_tree['app'][a]['builds'] = dict()
             for b in self.root['app_root']['app'][a]['builds']:
                 bobj = self.root['app_root']['app'][a]['builds'][b]
                 flist = list()
@@ -288,7 +302,7 @@ class Mongodb_1007:
                         "path": f,
                         "file_type": bobj.files[f]
                     })
-                blist.append({
+                id = builds.insert({
                     "created_datetime": self.get_createddatetime(bobj),
                     "app_name": bobj.app_name,
                     "build_name": bobj.build_name,
@@ -298,8 +312,8 @@ class Mongodb_1007:
                     "master_file": bobj.master_file,
                     "packages": bobj.packages
                 })
+                self.root_tree['app'][a]['builds'][bobj.build_name] = {"doc": bson.DBRef("builds", id)}
                 i += 1
-        builds.insert(blist)
         util.debugLog(self, "...{} builds".format(i))
 
 

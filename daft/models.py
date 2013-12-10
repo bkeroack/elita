@@ -92,16 +92,11 @@ class SupportedFileType:
     types = [TarBz2, TarGz, Zip]
     
 
-class BaseModelObject(dict):
-    def __init__(self, db, collection):
-        dict.__init__(self)
-        self.db = db
-        self.collection = self.db[collection]
+class BaseModelObject(PersistentMapping):
+    def __init__(self):
+        PersistentMapping.__init__(self)
         self.created_datetime = datetime.datetime.now()
 
-    def __setitem__(self, key, value):
-        self.collection.insert(value)
-        dict.__setitem__(self, key, value)
 
 class Server:
     env_name = None
@@ -123,6 +118,7 @@ class Build(BaseModelObject):
         self.app_name = app_name
         self.build_name = build_name
         self.attributes = attributes
+        self.subsys = subsys
         self.stored = False
         self.files = dict()  # { filename: filetype }
         self.master_file = None  # original uploaded file
@@ -179,13 +175,12 @@ class Application(BaseModelObject):
         self.app_name = app_name
 
 class User(BaseModelObject):
-    def __init__(self, name, pw, permissions, attributes={}):
+    def __init__(self, name, permissions, salt, attributes={}):
         BaseModelObject.__init__(self)
-        util.debugLog(self, "user: {}, pw: {}".format(name, pw))
-        self.salt = base64.urlsafe_b64encode(hashlib.sha512(uuid.uuid4()).hexdigest())
+        util.debugLog(self, "user: {}".format(name))
+        self.salt = salt
         util.debugLog(self, "got salt: {}".format(self.salt))
         self.name = name
-        self.hashed_pw = self.hash_pw(pw)
         util.debugLog(self, "hashed pw: {}".format(self.hashed_pw))
         self.permissions = permissions
         self.attributes = attributes
@@ -198,6 +193,11 @@ class User(BaseModelObject):
 
     def change_password(self, new_pw):
         self.hashed_pw = self.hash_pw(new_pw)
+
+class UserContainer(BaseModelObject):
+    def __init__(self):
+        BaseModelObject.__init__(self)
+        self.salt = base64.urlsafe_b64encode((uuid.uuid4().bytes))
 
 class TokenContainer(BaseModelObject):
     def __init__(self):
@@ -227,34 +227,88 @@ class TokenContainer(BaseModelObject):
         return tokenobj.token
 
 class Token(BaseModelObject):
-    def __init__(self, username):
+    def __init__(self, username, token=None):
         BaseModelObject.__init__(self)
         self.username = username
-        self.token = base64.urlsafe_b64encode(hashlib.sha256(uuid.uuid4().bytes).hexdigest())[:-2]  # strip '=='
+        self.token = base64.urlsafe_b64encode(hashlib.sha256(uuid.uuid4().bytes).hexdigest())[:-2] \
+            if token is None else token
 
-class ApplicationContainer(dict):
-    def __init__(self, db):
+class ApplicationContainer(BaseModelObject):
+    pass
+
+class GlobalContainer(BaseModelObject):
+    pass
+
+class RootApplication(BaseModelObject):
+    pass
+
+class AppTreeDict(dict):
+    def __init__(self, app_tree, db):
+        dict.__init__(self)
+        self.app_tree = app_tree
+        self.db = db
+        self.applications = self.db['applications']
+
+    def __getitem__(self, item):
+        appdoc = self.applications.find_one({"app_name": item})
+        if appdoc is None:
+            raise KeyError
+        return Application(appdoc['app_name'])
+
+class UserTreeDict(dict):
+    def __init__(self, user_tree, db):
+        dict.__init__(self)
+        self.user_tree = user_tree
+        self.db = db
+        self.users = self.db['users']
+
+    def __getitem__(self, item):
+        userdoc = self.users.find_one({"username": item})
+        if userdoc is None:
+            raise KeyError
+        return User(userdoc['name'], userdoc['permissions'], userdoc['salt'], userdoc['attributes'])
+
+class TokenTreeDict(dict):
+    def __init__(self, token_tree, db):
+        dict.__init__(self)
+        self.token_tree = token_tree
+        self.db = db
+        self.tokens = self.db['tokens']
+
+    def __getitem__(self, item):
+        tokendoc = self.tokens.find_one({"token": item})
+        if tokendoc is None:
+            raise KeyError
+        return Token(tokendoc['username'], token=tokendoc['token'])
+
+class GlobalTreeDict(dict):
+    def __init__(self, global_tree, db):
+        dict.__init__(self)
+        self.global_tree = global_tree
         self.db = db
 
+    def __getitem__(self, item):
+        if item == "users":
+            self['users'] = UserTreeDict(self.global_tree['users'], self.db)
+        elif item == "tokens":
+            self['tokens'] = TokenTreeDict(self.global_tree['tokens'], self.db)
 
-class GlobalContainer(dict):
-    pass
 
-class UserContainer(BaseModelObject):
-    pass
+class RootTree(dict):
+    def __init__(self, root_tree, db):
+        dict.__init__(self)
+        self.root_tree = root_tree
+        self.db = db
+
+    def __getitem__(self, item):
+        if item == "global":
+            self['global'] = GlobalTreeDict(self.root_tree['global'], self.db)
+        elif item == "app":
+            self['app'] = AppTreeDict(self.root_tree['app'], self.db)
+        else:
+            return
+        return dict.__getitem__(self, item)
 
 
 def appmaker(db):
-
-    site_root = dict()
-    site_root['app'] = ApplicationContainer()
-    site_root['global'] = GlobalContainer()
-    site_root['global']['users'] = UserContainer()
-    site_root['global']['users']['admin'] = User("admin", "daft", {"_global": "read;write", "*": "read;write"})
-    site_root['global']['tokens'] = TokenContainer()
-    tk = Token('admin')
-    site_root['app_root']['global']['tokens'][tk.token] = tk
-
-    daft_action.actionsvc = daft_action.ActionService()
-
-    return site_root
+    return db['root_tree'].find_one()
