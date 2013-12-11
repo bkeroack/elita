@@ -242,73 +242,88 @@ class GlobalContainer(BaseModelObject):
 class RootApplication(BaseModelObject):
     pass
 
-class AppTreeDict(dict):
+#-------------- New data model ---------------------
+
+#containers are subclasses of GenericTreeDict
+
+
+class GenericTreeDict(dict):
+    def __init__(self, tree, subtree, db, child_class):
+        dict.__init__(self)
+        self.tree = tree            # current tree structure
+        self.subtree = subtree      # child tree structure(s), if None then use the __getitem__ item
+        self.db = db
+        self.child_class = child_class  # class of child items
+
+    def __getitem__(self, item):
+        args = [self.tree, item if self.subtree is None else self.subtree]
+        if 'doc' in self.tree[item]:
+            doc = self.db.dereference(self.tree[item]['doc'])
+            if doc is None:
+                raise KeyError
+            args += [doc[a] for a in doc]
+        return self.child_class(args)
+
+class ApplicationModelObject:
+    def __init__(self, app_name):
+        self.app_name = app_name
+
+class UserModelObject:
+    def __init__(self, tree, subtree, name, permissions, salt, attributes):
+        self.tree = tree
+        self.subtree = subtree
+        self.name = name
+        self.permissions = permissions
+        self.salt = salt
+        self.attributes = attributes
+
+class TokenModelObject:
+    def __init__(self, tree, subtree, username, token):
+        self.username = username
+        self.token = token
+
+class AppContainerTreeDict(GenericTreeDict):
     def __init__(self, app_tree, db):
-        dict.__init__(self)
-        self.app_tree = app_tree
-        self.db = db
-        self.applications = self.db['applications']
+        GenericTreeDict.__init__(self, app_tree, None, db, ApplicationModelObject)
 
-    def __getitem__(self, item):
-        appdoc = self.applications.find_one({"app_name": item})
-        if appdoc is None:
-            raise KeyError
-        return Application(appdoc['app_name'])
-
-class UserTreeDict(dict):
+class UserContainerTreeDict(GenericTreeDict):
     def __init__(self, user_tree, db):
-        dict.__init__(self)
-        self.user_tree = user_tree
-        self.db = db
-        self.users = self.db['users']
+        GenericTreeDict.__init__(self, user_tree, None, db, UserModelObject)
 
-    def __getitem__(self, item):
-        userdoc = self.users.find_one({"username": item})
-        if userdoc is None:
-            raise KeyError
-        return User(userdoc['name'], userdoc['permissions'], userdoc['salt'], userdoc['attributes'])
-
-class TokenTreeDict(dict):
+class TokenContainerTreeDict(GenericTreeDict):
     def __init__(self, token_tree, db):
-        dict.__init__(self)
-        self.token_tree = token_tree
-        self.db = db
-        self.tokens = self.db['tokens']
+        GenericTreeDict.__init__(self, token_tree, None, db, TokenModelObject)
 
-    def __getitem__(self, item):
-        tokendoc = self.tokens.find_one({"token": item})
-        if tokendoc is None:
-            raise KeyError
-        return Token(tokendoc['username'], token=tokendoc['token'])
-
-class GlobalTreeDict(dict):
+class GlobalContainerTreeDict(GenericTreeDict):
     def __init__(self, global_tree, db):
-        dict.__init__(self)
-        self.global_tree = global_tree
-        self.db = db
+        GenericTreeDict.__init__(self, global_tree, ('users', 'tokens'), db,
+                                 (UserContainerTreeDict, TokenContainerTreeDict))
 
     def __getitem__(self, item):
         if item == "users":
-            self['users'] = UserTreeDict(self.global_tree['users'], self.db)
+            self.child_class = self.child_class[0]
+            self.subtree = self.subtree[0]
         elif item == "tokens":
-            self['tokens'] = TokenTreeDict(self.global_tree['tokens'], self.db)
+            self.child_class = self.child_class[1]
+            self.subtree = self.subtree[1]
+        return GenericTreeDict.__getitem__(self, item)
 
-
-class RootTree(dict):
+class RootTree(GenericTreeDict):
     def __init__(self, root_tree, db):
-        dict.__init__(self)
-        self.root_tree = root_tree
-        self.db = db
+        GenericTreeDict.__init__(self, root_tree, ('global', 'app'), db,
+                                 (GlobalContainerTreeDict, AppContainerTreeDict))
 
     def __getitem__(self, item):
         if item == "global":
-            self['global'] = GlobalTreeDict(self.root_tree['global'], self.db)
+            self.child_class = self.child_class[0]
+            self.subtree = self.subtree[0]
         elif item == "app":
-            self['app'] = AppTreeDict(self.root_tree['app'], self.db)
+            self.child_class = self.child_class[1]
+            self.subtree = self.subtree[1]
         else:
             return
-        return dict.__getitem__(self, item)
+        return GenericTreeDict.__getitem__(self, item)
 
 
 def appmaker(db):
-    return db['root_tree'].find_one()
+    return RootTree(db['root_tree'].find_one(), db)
