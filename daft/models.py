@@ -1,4 +1,5 @@
 from persistent.mapping import PersistentMapping
+import collections
 import datetime
 import hashlib
 import uuid
@@ -239,91 +240,38 @@ class ApplicationContainer(BaseModelObject):
 class GlobalContainer(BaseModelObject):
     pass
 
-class RootApplication(BaseModelObject):
-    pass
 
-#-------------- New data model ---------------------
-
-#containers are subclasses of GenericTreeDict
-
-
-class GenericTreeDict(dict):
-    def __init__(self, tree, subtree, db, child_class):
-        dict.__init__(self)
-        self.tree = tree            # current tree structure
-        self.subtree = subtree      # child tree structure(s), if None then use the __getitem__ item
+class RootTree(collections.MutableMapping):
+    def __init__(self, db, tree, doc, *args, **kwargs):
         self.db = db
-        self.child_class = child_class  # class of child items
+        self.tree = tree
+        self.store = dict()
+        self.doc = doc
 
-    def __getitem__(self, item):
-        args = [self.tree, item if self.subtree is None else self.subtree]
-        if 'doc' in self.tree[item]:
-            doc = self.db.dereference(self.tree[item]['doc'])
+    def __getitem__(self, key):
+        if key in self.tree:
+            doc = self.db.dereference(self.tree[key]['_doc'])
             if doc is None:
                 raise KeyError
-            args += [doc[a] for a in doc]
-        return self.child_class(args)
-
-class ApplicationModelObject:
-    def __init__(self, app_name):
-        self.app_name = app_name
-
-class UserModelObject:
-    def __init__(self, tree, subtree, name, permissions, salt, attributes):
-        self.tree = tree
-        self.subtree = subtree
-        self.name = name
-        self.permissions = permissions
-        self.salt = salt
-        self.attributes = attributes
-
-class TokenModelObject:
-    def __init__(self, tree, subtree, username, token):
-        self.username = username
-        self.token = token
-
-class AppContainerTreeDict(GenericTreeDict):
-    def __init__(self, app_tree, db):
-        GenericTreeDict.__init__(self, app_tree, None, db, ApplicationModelObject)
-
-class UserContainerTreeDict(GenericTreeDict):
-    def __init__(self, user_tree, db):
-        GenericTreeDict.__init__(self, user_tree, None, db, UserModelObject)
-
-class TokenContainerTreeDict(GenericTreeDict):
-    def __init__(self, token_tree, db):
-        GenericTreeDict.__init__(self, token_tree, None, db, TokenModelObject)
-
-class GlobalContainerTreeDict(GenericTreeDict):
-    def __init__(self, global_tree, db):
-        GenericTreeDict.__init__(self, global_tree, ('users', 'tokens'), db,
-                                 (UserContainerTreeDict, TokenContainerTreeDict))
-
-    def __getitem__(self, item):
-        if item == "users":
-            self.child_class = self.child_class[0]
-            self.subtree = self.subtree[0]
-        elif item == "tokens":
-            self.child_class = self.child_class[1]
-            self.subtree = self.subtree[1]
-        return GenericTreeDict.__getitem__(self, item)
-
-class RootTree(GenericTreeDict):
-    def __init__(self, root_tree, db):
-        GenericTreeDict.__init__(self, root_tree, ('global', 'app'), db,
-                                 (GlobalContainerTreeDict, AppContainerTreeDict))
-
-    def __getitem__(self, item):
-        if item == "global":
-            self.child_class = self.child_class[0]
-            self.subtree = self.subtree[0]
-        elif item == "app":
-            self.child_class = self.child_class[1]
-            self.subtree = self.subtree[1]
+            self.__setitem__(key, RootTree(self.db, self.tree[key], doc))
+            return self.store[self.__keytransform__(key)]
         else:
-            return
-        return GenericTreeDict.__getitem__(self, item)
+            raise KeyError
 
+    def __setitem__(self, key, value):
+        self.store[self.__keytransform__(key)] = value
+
+    def __delitem__(self, key):
+        del self.store[self.__keytransform__(key)]
+
+    def __iter__(self):
+        return iter(self.store)
+
+    def __len__(self):
+        return len(self.store)
+
+    def __keytransform__(self, key):
+        return key
 
 def appmaker(db):
-    return RootTree(db['root_tree'].find_one(), db)
+    return RootTree(db, db['root_tree'].find_one(), None)

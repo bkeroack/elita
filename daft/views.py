@@ -519,11 +519,17 @@ def Action(context, request):
     logging.debug("REQUEST: method: {}".format(request.method))
     logging.debug("REQUEST: params: {}".format(request.params))
 
-    cname = context.__class__.__name__
-    logging.debug(cname)
+    cname = context.doc['_class']
+    args = {k: context.doc[k] for k in context.doc if k[0] is not '_'}
+
+    logging.debug("Model class: {}".format(cname))
+    logging.debug("Model args: {}".format(args))
+
+    mobj = globals()[cname](**args)
+
     view_class = globals()[cname + "View"]
 
-    return view_class(context, request).__call__()
+    return view_class(mobj, request).__call__()
 
 @view_config(name="about", renderer='json')
 def About(request):

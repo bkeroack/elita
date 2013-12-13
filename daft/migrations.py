@@ -217,7 +217,9 @@ class Mongodb_1007:
 
     def setup_root_tree(self):
         self.root_tree['global'] = dict()
+        self.root_tree['global']['_doc'] = self.save_container(class_name="GlobalContainer", parent="", name="global")
         self.root_tree['app'] = dict()
+        self.root_tree['app']['_doc'] = self.save_container(class_name="AppContainer", parent="", name="app")
         self.root_tree['global']['users'] = dict()
         self.root_tree['global']['tokens'] = dict()
 
@@ -231,7 +233,6 @@ class Mongodb_1007:
         self.save_root_tree()
 
     def save_root_tree(self):
-        util.debugLog(self, "root_tree: {}".format(self.root_tree))
         self.drop_if_exists("root_tree")
         root_tree = self.db['root_tree']
         root_tree.insert(self.root_tree)
@@ -240,8 +241,10 @@ class Mongodb_1007:
         if cname in self.db.collection_names():
             self.db.drop_collection(cname)
 
-    def get_createddatetime(self, obj):
-        return obj.created_datetime if hasattr(obj, "created_datetime") else datetime.datetime.now()
+    def save_container(self, class_name, parent, name):
+        containers = self.db['containers']
+        cid = containers.insert({"_class": class_name, "name": name, "parent": parent})
+        return bson.DBRef("containers", cid)
 
     def users(self):
         util.debugLog(self, "...users")
@@ -250,14 +253,16 @@ class Mongodb_1007:
         for i, u in enumerate(self.root['app_root']['global']['users']):
             uobj = self.root['app_root']['global']['users'][u]
             id = users.insert({
-                "created_datetime": self.get_createddatetime(uobj),
+                "_class": "User",
                 "name": uobj.name,
                 "salt": uobj.salt,
                 "hashed_pw": uobj.hashed_pw,
                 "permissions": uobj.permissions,
                 "attributes": uobj.attributes
             })
-            self.root_tree['global']['users'][uobj.name] = {"doc": bson.DBRef("users", id)}
+            self.root_tree['global']['users'][uobj.name] = {"_doc": bson.DBRef("users", id)}
+        self.root_tree['global']['users']["_doc"] = self.save_container(class_name="UserContainer",
+                                                                       parent="global", name="users")
         util.debugLog(self, "...{} users".format(i))
 
     def tokens(self):
@@ -267,11 +272,13 @@ class Mongodb_1007:
         for i, t in enumerate(self.root['app_root']['global']['tokens']):
             tobj = self.root['app_root']['global']['tokens'][t]
             id = tokens.insert({
-                "created_datetime": self.get_createddatetime(tobj),
+                "_class": "Token",
                 "username": tobj.username,
                 "token": tobj.token
             })
-            self.root_tree['global']['tokens'][tobj.token] = {"doc": bson.DBRef("tokens", id)}
+            self.root_tree['global']['tokens'][tobj.token] = {"_doc": bson.DBRef("tokens", id)}
+        self.root_tree['global']['tokens']["_doc"] = self.save_container(class_name="TokenContainer",
+                                                                        parent="global", name="tokens")
         util.debugLog(self, "...{} tokens".format(i))
 
     def applications(self):
@@ -281,10 +288,11 @@ class Mongodb_1007:
         for i, a in enumerate(self.root['app_root']['app']):
             aobj = self.root['app_root']['app'][a]
             id = applications.insert({
-                "created_datetime": self.get_createddatetime(aobj),
+                "_class": "Application",
                 "app_name": aobj.app_name
             })
-            self.root_tree['app'][aobj.app_name] = {"doc": bson.DBRef("applications", id)}
+            self.root_tree['app'][aobj.app_name] = {"_doc": bson.DBRef("applications", id)}
+        self.root_tree['app']["_doc"] = self.save_container(class_name="AppContainer", parent="", name="app")
         util.debugLog(self, "...{} applications".format(i))
 
     def builds(self):
@@ -303,7 +311,7 @@ class Mongodb_1007:
                         "file_type": bobj.files[f]
                     })
                 id = builds.insert({
-                    "created_datetime": self.get_createddatetime(bobj),
+                    "_class": "Build",
                     "app_name": bobj.app_name,
                     "build_name": bobj.build_name,
                     "attributes": bobj.attributes,
@@ -312,8 +320,10 @@ class Mongodb_1007:
                     "master_file": bobj.master_file,
                     "packages": bobj.packages
                 })
-                self.root_tree['app'][a]['builds'][bobj.build_name] = {"doc": bson.DBRef("builds", id)}
+                self.root_tree['app'][a]['builds'][bobj.build_name] = {"_doc": bson.DBRef("builds", id)}
                 i += 1
+            self.root_tree['app'][a]['builds']["_doc"] = self.save_container(class_name="BuildContainer",
+                                                                            parent=a, name="builds")
         util.debugLog(self, "...{} builds".format(i))
 
 
