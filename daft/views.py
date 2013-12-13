@@ -520,7 +520,7 @@ def Action(context, request):
     logging.debug("REQUEST: params: {}".format(request.params))
 
     cname = context.doc['_class']
-    args = {k: context.doc[k] for k in context.doc if k[0] is not '_'}
+    args = {k: context.doc[k] for k in context.doc if k[0] != u'_'}
 
     logging.debug("Model class: {}".format(cname))
     logging.debug("Model args: {}".format(args))
