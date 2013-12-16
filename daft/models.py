@@ -1,11 +1,11 @@
-from persistent.mapping import PersistentMapping
 import collections
-import datetime
 import hashlib
 import uuid
 import base64
 import os.path
 import shutil
+import bson
+import pymongo
 
 import util
 import daft_config
@@ -25,78 +25,70 @@ import action as daft_action
 #global handle for the root object, so all views have access
 root = None
 
-class RootService:
-    def __init__(self):
-        self.root = root
-
-    def Application(self, app):
-        return self.root['app_root']['app'][app]
-
-    def ApplicationContainer(self):
-        return self.root['app_root']['app']
-
-    def BuildContainer(self, app):
-        return self.root['app_root']['app'][app]['builds']
-
-    def ActionContainer(self, app):
-        return self.root['app_root']['app'][app]['action']
-
-    def UserContainer(self):
-        return self.root['app_root']['global']['users']
-
 
 class DataService:
-    def __init__(self):
-        self.rs = RootService()
+    def __init__(self, db):
+        self.db = db
+        self.root = RootTree(db, db['root_tree'].find_one(), None)
+
+    def NewContainer(self, class_name, name, parent):
+        cdoc = self.db['containers'].insert({'_class': class_name,
+                                         'name': name,
+                                         'parent': parent})
+        return bson.DBRef('containers', cdoc['_id'])
 
     def Builds(self, app_name):
-        return self.rs.BuildContainer(app_name)
+        pass
 
     def Applications(self):
-        return self.rs.ApplicationContainer()
+        pass
 
     def NewAction(self, app_name, action_name, params, callable):
         util.debugLog(self, "NewAction: app_name: {}".format(app_name))
         util.debugLog(self, "NewAction: action_name: {}".format(action_name))
-        action = Action(app_name, action_name, params, callable)
-        self.rs.ActionContainer(app_name)[action_name] = action
+        self.root['app'][app_name]['action'][action_name] = Action(app_name, action_name, params, callable)
 
     def NewBuild(self, app_name, build_name, attribs, subsys):
-        build = Build(app_name, build_name, attributes=attribs, subsys=subsys)
-        build["info"] = BuildDetail(build)
-        self.rs.BuildContainer(app_name)[build_name] = build
+        id = self.db['builds'].insert({'build_name': build_name,
+                                       'files': [],
+                                       'stored': False,
+                                       'app_name': app_name,
+                                       'packages': [],
+                                       'attributes': attribs,
+                                       'subsys': subsys})
+        self.root['app'][app_name]['builds'][build_name] = {
+            "_doc": bson.DBRef("builds", id)
+        }
 
     def DeleteBuild(self, app_name, build_name):
-        self.rs.BuildContainer(app_name).remove_build(build_name)
+        pass
 
     def NewApplication(self, app_name):
-        app = Application(app_name)
-        app['environments'] = EnvironmentContainer(app_name)
-        app['builds'] = BuildContainer(app_name)
-        app['subsys'] = SubsystemContainer(app_name)
-        app['action'] = ActionContainer(app_name)
-        self.rs.ApplicationContainer()[app_name] = app
+
+        id = self.db['applications'].insert({'_class': "Application", "app_name": app_name})
+
+        self.root['app'][app_name] = {
+            "_doc": bson.DBRef("applications", id),
+            "environments": {"_doc": self.NewContainer("EnvironmentContainer", "evironments", app_name)},
+            "builds": {"_doc": self.NewContainer("BuildContainer", "builds", app_name)},
+            "subsys": {"_doc": self.NewContainer("SubsystemContainer", "subsystems", app_name)},
+            "action": {"_doc": self.NewContainer("ActionContainer", "action", app_name)}
+        }
 
     def DeleteApplication(self, app_name):
-        self.rs.ApplicationContainer().pop(app_name, None)
+        pass
 
     def GetUsers(self):
-        return self.rs.UserContainer()
+        return self.root['global']['users'].keys()
 
     def GetUser(self, username):
-        return self.rs.UserContainer()[username]
+        return self.root['global']['users'][username]
 
 class SupportedFileType:
     TarGz = 'tar.gz'
     TarBz2 = 'tar.bz2'
     Zip = 'zip'
     types = [TarBz2, TarGz, Zip]
-    
-
-class BaseModelObject(PersistentMapping):
-    def __init__(self):
-        PersistentMapping.__init__(self)
-        self.created_datetime = datetime.datetime.now()
 
 
 class Server:
@@ -108,14 +100,12 @@ class Deployment:
 class Environment:
     app_name = None
 
-class EnvironmentContainer(BaseModelObject):
+class EnvironmentContainer:
     def __init__(self, app_name):
-        BaseModelObject.__init__(self)
         self.app_name = app_name
 
-class Build(BaseModelObject):
+class Build:
     def __init__(self, app_name, build_name, attributes={}, subsys=[]):
-        BaseModelObject.__init__(self)
         self.app_name = app_name
         self.build_name = build_name
         self.attributes = attributes
@@ -125,14 +115,12 @@ class Build(BaseModelObject):
         self.master_file = None  # original uploaded file
         self.packages = dict()  # { package_type: {'filename': filename, 'file_type': file_type}}
 
-class BuildDetail(BaseModelObject):
+class BuildDetail:
     def __init__(self, buildobj):
-        BaseModelObject.__init__(self)
         self.buildobj = buildobj
 
-class BuildContainer(BaseModelObject):
+class BuildContainer:
     def __init__(self, app_name):
-        BaseModelObject.__init__(self)
         self.app_name = app_name
 
     def remove_build(self, buildname):
@@ -144,19 +132,16 @@ class BuildContainer(BaseModelObject):
             shutil.rmtree(path)
         del self[buildname]
 
-class Subsystem(BaseModelObject):
+class Subsystem:
     def __init__(self, app_name):
-        BaseModelObject.__init__(self)
         self.app_name = app_name
 
-class SubsystemContainer(BaseModelObject):
+class SubsystemContainer:
     def __init__(self, app_name):
-        BaseModelObject.__init__(self)
         self.app_name = app_name
 
-class Action(BaseModelObject):
+class Action:
     def __init__(self, app_name, action_name, params, callable):
-        BaseModelObject.__init__(self)
         self.app_name = app_name
         self.action_name = action_name
         self.params = params
@@ -165,23 +150,21 @@ class Action(BaseModelObject):
     def execute(self, params, verb):
         return self.callable(DataService()).start(params, verb)
 
-class ActionContainer(BaseModelObject):
+class ActionContainer:
     def __init__(self, app_name):
-        BaseModelObject.__init__(self)
         self.app_name = app_name
 
-class Application(BaseModelObject):
+class Application:
     def __init__(self, app_name):
-        BaseModelObject.__init__(self)
         self.app_name = app_name
 
-class User(BaseModelObject):
-    def __init__(self, name, permissions, salt, attributes={}):
-        BaseModelObject.__init__(self)
+class User:
+    def __init__(self, name, permissions, hashed_pw, salt, attributes={}):
         util.debugLog(self, "user: {}".format(name))
         self.salt = salt
         util.debugLog(self, "got salt: {}".format(self.salt))
         self.name = name
+        self.hashed_pw = hashed_pw
         util.debugLog(self, "hashed pw: {}".format(self.hashed_pw))
         self.permissions = permissions
         self.attributes = attributes
@@ -195,18 +178,15 @@ class User(BaseModelObject):
     def change_password(self, new_pw):
         self.hashed_pw = self.hash_pw(new_pw)
 
-class UserContainer(BaseModelObject):
+class UserContainer:
     def __init__(self):
-        BaseModelObject.__init__(self)
         self.salt = base64.urlsafe_b64encode((uuid.uuid4().bytes))
 
-class TokenContainer(BaseModelObject):
+class TokenContainer:
     def __init__(self):
-        BaseModelObject.__init__(self)
         self.usermap = dict()  # for quick token lookup by user
 
     def __setitem__(self, key, value):
-        BaseModelObject.__setitem__(self, key, value)
         if value.username in self.usermap:
             self.usermap[value.username].append(value)
         else:
@@ -227,48 +207,71 @@ class TokenContainer(BaseModelObject):
         self[tokenobj.token] = tokenobj
         return tokenobj.token
 
-class Token(BaseModelObject):
+class Token:
     def __init__(self, username, token=None):
-        BaseModelObject.__init__(self)
         self.username = username
         self.token = base64.urlsafe_b64encode(hashlib.sha256(uuid.uuid4().bytes).hexdigest())[:-2] \
             if token is None else token
 
-class ApplicationContainer(BaseModelObject):
+class ApplicationContainer:
     pass
 
-class GlobalContainer(BaseModelObject):
+class GlobalContainer:
     pass
+
 
 
 class RootTree(collections.MutableMapping):
     def __init__(self, db, tree, doc, *args, **kwargs):
         self.db = db
         self.tree = tree
-        self.store = dict()
         self.doc = doc
+        self.store = dict()
+
+    def is_application(self, key):
+        return self.doc['_class'] == 'Application' and key == 'action'
 
     def __getitem__(self, key):
+        key = self.__keytransform__(key)
+        if self.is_application(key):
+            return self.store[key]
         if key in self.tree:
             doc = self.db.dereference(self.tree[key]['_doc'])
             if doc is None:
                 raise KeyError
-            self.__setitem__(key, RootTree(self.db, self.tree[key], doc))
-            return self.store[self.__keytransform__(key)]
+            return RootTree(self.db, self.tree[key], doc)
         else:
             raise KeyError
 
     def __setitem__(self, key, value):
-        self.store[self.__keytransform__(key)] = value
+        root_tree = self.db['root_tree'].find_one()
+        #there's only a few legal places for dynamic tree insertion
+        if self.is_application(key):     # dynamically populated each request
+            if 'action' not in self.store:
+                self.store['action'] = dict()
+            self.store['action'][key] = value
+            return
+        if self.doc['_class'] == "AppContainer":
+            root_tree['app'][key] = value
+        if self.doc['_class'] == "UserContainer":
+            root_tree['global']['users'][key] = value
+        if self.doc['_class'] == "TokenContainer":
+            root_tree['global']['tokens'][key] = value
+        if self.doc['_class'] == "BuildContainer":
+            root_tree['app'][self.doc['parent']]['builds'][key] = value
+        else:
+            raise ValueError
+        self.db['root_tree'].update({"_id": root_tree['_id']}, root_tree)
 
     def __delitem__(self, key):
-        del self.store[self.__keytransform__(key)]
+        #unimplmented
+        return
 
     def __iter__(self):
-        return iter(self.store)
+        return iter(self.tree)
 
     def __len__(self):
-        return len(self.store)
+        return len(self.tree)
 
     def __keytransform__(self, key):
         return key

@@ -23,6 +23,7 @@ class GenericView:
         self.required_params = {"GET": [], "PUT": [], "POST": [], "DELETE": []}  # { reqverb: [ params ] }
         logging.debug("{}: {} ; {}".format(self.__class__.__name__, type(context), request.subpath))
         self.req = request
+        self.db = request.db
         self.context = context
         if 'pretty' in self.req.params:
             if self.req.params['pretty'] in ("true", "True", "yes", "si"):
@@ -31,7 +32,7 @@ class GenericView:
         self.is_action = is_action
         self.allow_pw_auth = allow_pw_auth
         self.setup_permissions(app_name)
-        self.datasvc = models.DataService()
+        self.datasvc = models.DataService(self.db)
 
     def get_created_datetime_text(self):
         return self.context.created_datetime.isoformat(' ') if hasattr(self.context, 'created_datetime') else None
@@ -139,10 +140,6 @@ class GenericView:
     def UNKNOWN_VERB(self):
         return self.Error("unknown or unimplemented HTTP verb")
 
-
-@view_config(context=models.RootApplication, renderer='templates/mytemplate.pt')
-def root_view(request):
-    return {'project': 'daft'}
 
 
 @view_config(context=pyramid.exceptions.HTTPNotFound, renderer='json')
@@ -525,7 +522,7 @@ def Action(context, request):
     logging.debug("Model class: {}".format(cname))
     logging.debug("Model args: {}".format(args))
 
-    mobj = globals()[cname](**args)
+    mobj = models.__dict__[cname](**args)
 
     view_class = globals()[cname + "View"]
 
