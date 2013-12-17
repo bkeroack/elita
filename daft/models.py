@@ -6,6 +6,7 @@ import os.path
 import shutil
 import bson
 import pymongo
+import pprint
 
 import util
 import daft_config
@@ -34,7 +35,8 @@ class DataService:
         for a in self.root['app']:
             if a[0] != '_':
                 util.debugLog(self, "ListAllActions: {}".format(a))
-                util.debugLog(self, "...actions: {}".format(self.root['app'][a]['action']))
+                if 'action' in self.root['app'][a]:
+                    util.debugLog(self, "...actions: {}".format(self.root['app'][a]['action']))
 
     def NewContainer(self, class_name, name, parent):
         cdoc = self.db['containers'].insert({'_class': class_name,
@@ -54,7 +56,8 @@ class DataService:
         if 'action' not in self.root['app'][app_name]:
             self.root['app'][app_name]['action'] = dict()
         self.root['app'][app_name]['action'][action_name] = Action(app_name, action_name, params, callable)
-        util.debugLog(self, "NewAction: actions: {}".format(self.root['app'][app_name]['action']))
+        pp = pprint.PrettyPrinter(indent=4)
+        util.debugLog(self, "NewAction: actions: {}".format(pp.pformat(self.root['app'][app_name]['action'])))
 
     def NewBuild(self, app_name, build_name, attribs, subsys):
         id = self.db['builds'].insert({'build_name': build_name,
@@ -67,6 +70,18 @@ class DataService:
         self.root['app'][app_name]['builds'][build_name] = {
             "_doc": bson.DBRef("builds", id)
         }
+
+    def NewToken(self, username):
+        token = Token(username)
+        id = self.db['tokens'].insert({
+            'username': username,
+            'token': token.token,
+            '_class': "Token"
+        })
+        self.root['global']['tokens'][token.token] = {
+            "_doc": bson.DBRef("tokens", id)
+        }
+        return token
 
     def DeleteBuild(self, app_name, build_name):
         pass
@@ -83,6 +98,9 @@ class DataService:
             "action": {"_doc": self.NewContainer("ActionContainer", "action", app_name)}
         }
 
+    def GetUserTokens(self, username):
+        return [d['token'] for d in self.db['tokens'].find({"username": username})]
+
     def DeleteApplication(self, app_name):
         pass
 
@@ -91,6 +109,16 @@ class DataService:
 
     def GetUser(self, username):
         return self.root['global']['users'][username]
+
+    def SaveUser(self, userobj):
+        #find and update user document
+        doc = self.db['users'].find_one({"name": userobj.name})
+        assert doc is not None
+        doc['hashed_pw'] = userobj.hashed_pw
+        doc['attributes'] = userobj.attributes
+        doc['salt'] = userobj.salt
+        doc['permissions'] = userobj.permissions
+        self.db['users'].update({"_id": doc["_id"]}, doc)
 
 class SupportedFileType:
     TarGz = 'tar.gz'
@@ -192,28 +220,7 @@ class UserContainer:
 
 class TokenContainer:
     def __init__(self):
-        self.usermap = dict()  # for quick token lookup by user
-
-    def __setitem__(self, key, value):
-        if value.username in self.usermap:
-            self.usermap[value.username].append(value)
-        else:
-            self.usermap[value.username] = [value]
-
-    def get_tokens_by_username(self, username):
-        return self.usermap[username] if username in self.usermap else []
-
-    def remove_token(self, token):
-        username = self[token].username
-        for t in self.usermap[username]:
-            if t.token == token:
-                self.usermap[username].remove(t)
-        del self[token]
-
-    def new_token(self, username):
-        tokenobj = Token(username)
-        self[tokenobj.token] = tokenobj
-        return tokenobj.token
+        pass
 
 class Token:
     def __init__(self, username, token=None):
@@ -231,20 +238,20 @@ class GlobalContainer:
 
 class RootTree(collections.MutableMapping):
     def __init__(self, db, tree, doc, *args, **kwargs):
+        self.pp = pprint.PrettyPrinter(indent=4)
         self.db = db
         self.tree = tree
         self.doc = doc
-        self.store = dict()
 
     def is_application(self, key):
         return self.doc is not None and self.doc['_class'] == 'Application' and key == 'action'
 
     def __getitem__(self, key):
-        util.debugLog(self, "__getitem__: key: {}; self.doc: {}".format(key, self.doc))
+        #util.debugLog(self, "__getitem__: key: {}; self.doc: {}".format(key, self.doc))
         key = self.__keytransform__(key)
         if self.is_application(key):
-            util.debugLog(self, "__getitem__: self.store: {}".format(self.store))
-            return self.store[key]
+            #util.debugLog(self, "__getitem__: is application")
+            return self.tree[key]
         if key in self.tree:
             doc = self.db.dereference(self.tree[key]['_doc'])
             if doc is None:
@@ -254,16 +261,13 @@ class RootTree(collections.MutableMapping):
             raise KeyError
 
     def __setitem__(self, key, value):
-        util.debugLog(self, "__setitem__: key: {}; value: {}; self.doc: {}".format(key, value, self.doc))
+        #util.debugLog(self, "__setitem__: key: {}; value: {}; self.doc: {}".format(key, value, self.doc))
         root_tree = self.db['root_tree'].find_one()
         #there's only a few legal places for dynamic tree insertion
         if self.is_application(key):     # dynamically populated each request
-            util.debugLog(self, "is_application: true")
-            if key not in self.store:
-                util.debugLog(self, "__setitem__: creating key in self.store: {}".format(key))
-                self.store[key] = dict()
-            self.store[key] = value
-            util.debugLog(self, "__setitem__: self.store: {}".format(self.store))
+            #util.debugLog(self, "is_application: true")
+            self.tree[key] = value
+            #util.debugLog(self, "__setitem__: self.tree: {}".format(self.pp.pformat(self.tree)))
             return
         if self.doc['_class'] == "AppContainer":
             root_tree['app'][key] = value

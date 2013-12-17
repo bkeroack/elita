@@ -9,12 +9,9 @@ CHANGES = open(os.path.join(here, 'CHANGES.txt')).read()
 
 requires = [
     'pyramid',
-    'pyramid_zodbconn',
-    'transaction',
     'pyramid_tm',
     'pyramid_debugtoolbar',
-    'ZODB3',
-    'waitress',
+    'gunicorn',
     ]
 
 setup(name='daft',

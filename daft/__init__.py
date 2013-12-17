@@ -6,7 +6,7 @@ from pyramid.renderers import JSON
 import pymongo
 
 import daft_config
-import migrations
+#import migrations
 import models
 
 def DataStore(request):

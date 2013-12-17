@@ -424,20 +424,19 @@ class UserView(GenericView):
         GenericView.__init__(self, context, request, allow_pw_auth=True)  # allow both pw and auth_token auth
         self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
 
-    def create_new_token(self, username):
-        if models.root['app_root']['global']['tokens'].new_token(username) is None:
-            return self.Error('error creating token')
-
-    def get_token_strings(self, username):
-        return [t.token for t in models.root['app_root']['global']['tokens'].get_tokens_by_username(username)]
 
     def status_ok_with_token(self, username):
         return self.status_ok({"username": username, "permissions": self.context.permissions,
                                "attributes": self.context.attributes,
-                               "auth_token": self.get_token_strings(username)})
+                               "auth_token": self.datasvc.GetUserTokens(username)})
 
     def change_password(self, new_pw):
         self.context.change_password(new_pw)
+        self.datasvc.SaveUser(self.context)
+
+    def change_attributes(self, attribs):
+        self.context.attributes = attribs
+        self.datasvc.SaveUser(self.context)
 
     def GET(self):  # return active
         if 'password' in self.req.params:
@@ -446,8 +445,8 @@ class UserView(GenericView):
         elif 'auth_token' not in self.req.params:
             return self.Error("password or auth token required")
         name = self.context.name
-        if name not in models.root['app_root']['global']['tokens'].usermap:
-            self.create_new_token(name)
+        if self.datasvc.GetUserTokens(name) is None:
+            self.datasvc.NewToken(name)
         return self.status_ok_with_token(name)
 
     def POST(self):
@@ -456,7 +455,7 @@ class UserView(GenericView):
                 return self.Error("incorrect password")
         request = self.req.params['request'] if 'request' in self.req.params else 'token'
         if request == "token":
-            self.create_new_token(self.context.name)
+            self.datasvc.NewToken(self.context.name)
             return self.status_ok_with_token(self.context.name)
         elif request == "password":
             if "new_password" in self.req.params:
@@ -469,7 +468,7 @@ class UserView(GenericView):
                 attribs = self.req.json_body
             except:
                 return self.Error("problem deserializing attributes object")
-            self.context.attributes = attribs
+            self.change_attributes(attribs)
             return self.status_ok({"new_attributes": attribs})
         else:
             return self.Error("incorrect request type '{}'".format(self.req.params['request']))
