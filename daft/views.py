@@ -24,6 +24,7 @@ class GenericView:
         logging.debug("{}: {} ; {}".format(self.__class__.__name__, type(context), request.subpath))
         self.req = request
         self.db = request.db
+        self.datasvc = request.datasvc
         self.context = context
         if 'pretty' in self.req.params:
             if self.req.params['pretty'] in ("true", "True", "yes", "si"):
@@ -32,7 +33,6 @@ class GenericView:
         self.is_action = is_action
         self.allow_pw_auth = allow_pw_auth
         self.setup_permissions(app_name)
-        self.datasvc = models.DataService(self.db)
 
     def get_created_datetime_text(self):
         return self.context.created_datetime.isoformat(' ') if hasattr(self.context, 'created_datetime') else None

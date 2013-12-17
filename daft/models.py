@@ -22,14 +22,19 @@ import action as daft_action
 # root/app/{app_name}/environemnt/{env_name}/servers/{server_name}
 
 
-#global handle for the root object, so all views have access
-root = None
-
-
 class DataService:
     def __init__(self, db):
         self.db = db
         self.root = RootTree(db, db['root_tree'].find_one(), None)
+        self.actionsvc = daft_action.ActionService(self)   # potential reference cycle
+
+        self.ListAllActions()  # debugging
+
+    def ListAllActions(self):
+        for a in self.root['app']:
+            if a[0] != '_':
+                util.debugLog(self, "ListAllActions: {}".format(a))
+                util.debugLog(self, "...actions: {}".format(self.root['app'][a]['action']))
 
     def NewContainer(self, class_name, name, parent):
         cdoc = self.db['containers'].insert({'_class': class_name,
@@ -38,15 +43,18 @@ class DataService:
         return bson.DBRef('containers', cdoc['_id'])
 
     def Builds(self, app_name):
-        pass
+        return self.root['app'][app_name]['builds']
 
     def Applications(self):
-        pass
+        return self.root['app']
 
     def NewAction(self, app_name, action_name, params, callable):
         util.debugLog(self, "NewAction: app_name: {}".format(app_name))
         util.debugLog(self, "NewAction: action_name: {}".format(action_name))
+        if 'action' not in self.root['app'][app_name]:
+            self.root['app'][app_name]['action'] = dict()
         self.root['app'][app_name]['action'][action_name] = Action(app_name, action_name, params, callable)
+        util.debugLog(self, "NewAction: actions: {}".format(self.root['app'][app_name]['action']))
 
     def NewBuild(self, app_name, build_name, attribs, subsys):
         id = self.db['builds'].insert({'build_name': build_name,
@@ -229,11 +237,13 @@ class RootTree(collections.MutableMapping):
         self.store = dict()
 
     def is_application(self, key):
-        return self.doc['_class'] == 'Application' and key == 'action'
+        return self.doc is not None and self.doc['_class'] == 'Application' and key == 'action'
 
     def __getitem__(self, key):
+        util.debugLog(self, "__getitem__: key: {}; self.doc: {}".format(key, self.doc))
         key = self.__keytransform__(key)
         if self.is_application(key):
+            util.debugLog(self, "__getitem__: self.store: {}".format(self.store))
             return self.store[key]
         if key in self.tree:
             doc = self.db.dereference(self.tree[key]['_doc'])
@@ -244,12 +254,16 @@ class RootTree(collections.MutableMapping):
             raise KeyError
 
     def __setitem__(self, key, value):
+        util.debugLog(self, "__setitem__: key: {}; value: {}; self.doc: {}".format(key, value, self.doc))
         root_tree = self.db['root_tree'].find_one()
         #there's only a few legal places for dynamic tree insertion
         if self.is_application(key):     # dynamically populated each request
-            if 'action' not in self.store:
-                self.store['action'] = dict()
-            self.store['action'][key] = value
+            util.debugLog(self, "is_application: true")
+            if key not in self.store:
+                util.debugLog(self, "__setitem__: creating key in self.store: {}".format(key))
+                self.store[key] = dict()
+            self.store[key] = value
+            util.debugLog(self, "__setitem__: self.store: {}".format(self.store))
             return
         if self.doc['_class'] == "AppContainer":
             root_tree['app'][key] = value

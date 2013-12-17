@@ -14,6 +14,8 @@ def DataStore(request):
     client = pymongo.MongoClient(mdb_info['host'], mdb_info['port'])
     return client[mdb_info['db']]
 
+def DataService(request):
+    return models.DataService(request.db)
 
 def root_factory(request):
     return models.appmaker(request.db)
@@ -42,5 +44,6 @@ def main(global_config, **settings):
     config.scan()
 
     config.add_request_method(DataStore, 'db', reify=True)
+    config.add_request_method(DataService, 'datasvc', reify=True)
 
     return config.make_wsgi_app()
