@@ -396,7 +396,7 @@ class UserContainerView(GenericView):
             perms = perms_attribs['permissions']
             attribs = perms_attribs['attributes'] if 'attributes' in perms_attribs else dict()
             if auth.ValidatePermissionsObject(perms).run():
-                self.context[name] = models.User(name, pw, perms, self.context.salt, attribs)
+                self.datasvc.NewUser(name, pw, perms, self.context.salt, attribs)
                 return self.status_ok({"user_created": {"username": name, "password": "(hidden)",
                                                         "permissions": perms, "attributes": attribs}})
             else:

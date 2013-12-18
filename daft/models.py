@@ -24,9 +24,9 @@ import action as daft_action
 
 
 class DataService:
-    def __init__(self, db):
+    def __init__(self, db, root):
         self.db = db
-        self.root = RootTree(db, db['root_tree'].find_one(), None)
+        self.root = root
         self.actionsvc = daft_action.ActionService(self)   # potential reference cycle
 
         self.ListAllActions()  # debugging
@@ -82,6 +82,22 @@ class DataService:
             "_doc": bson.DBRef("tokens", id)
         }
         return token
+
+    def NewUser(self, name, pw, perms, salt, attribs):
+        userobj = User(name, pw, perms, salt, attribs)
+        id = self.db['users'].insert({
+            "name": userobj.name,
+            "hashed_pw": userobj.hashed_pw,
+            "attributes": userobj.attributes,
+            "salt": userobj.salt,
+            "permissions": userobj.permissions
+        })
+        self.root['global']['users'][userobj.name] = {
+            "_doc": bson.DBRef("users", id)
+        }
+
+    def DeleteUser(self, name):
+        pass
 
     def DeleteBuild(self, app_name, build_name):
         pass
@@ -237,52 +253,37 @@ class GlobalContainer:
 
 
 class RootTree(collections.MutableMapping):
-    def __init__(self, db, tree, doc, *args, **kwargs):
+    def __init__(self, db, updater, tree, doc, *args, **kwargs):
         self.pp = pprint.PrettyPrinter(indent=4)
         self.db = db
         self.tree = tree
         self.doc = doc
+        self.updater = updater
 
     def is_application(self, key):
         return self.doc is not None and self.doc['_class'] == 'Application' and key == 'action'
 
     def __getitem__(self, key):
-        #util.debugLog(self, "__getitem__: key: {}; self.doc: {}".format(key, self.doc))
         key = self.__keytransform__(key)
         if self.is_application(key):
-            #util.debugLog(self, "__getitem__: is application")
             return self.tree[key]
         if key in self.tree:
             doc = self.db.dereference(self.tree[key]['_doc'])
             if doc is None:
                 raise KeyError
-            return RootTree(self.db, self.tree[key], doc)
+            return RootTree(self.db, self.updater, self.tree[key], doc)
         else:
             raise KeyError
 
     def __setitem__(self, key, value):
-        #util.debugLog(self, "__setitem__: key: {}; value: {}; self.doc: {}".format(key, value, self.doc))
-        root_tree = self.db['root_tree'].find_one()
-        #there's only a few legal places for dynamic tree insertion
-        if self.is_application(key):     # dynamically populated each request
-            #util.debugLog(self, "is_application: true")
-            self.tree[key] = value
-            #util.debugLog(self, "__setitem__: self.tree: {}".format(self.pp.pformat(self.tree)))
-            return
-        if self.doc['_class'] == "AppContainer":
-            root_tree['app'][key] = value
-        if self.doc['_class'] == "UserContainer":
-            root_tree['global']['users'][key] = value
-        if self.doc['_class'] == "TokenContainer":
-            root_tree['global']['tokens'][key] = value
-        if self.doc['_class'] == "BuildContainer":
-            root_tree['app'][self.doc['parent']]['builds'][key] = value
-        else:
-            raise ValueError
-        self.db['root_tree'].update({"_id": root_tree['_id']}, root_tree)
+        self.tree[key] = value
+        if not self.is_application(key):     # dynamically populated each request
+            self.updater.update()
+
 
     def __delitem__(self, key):
-        #unimplmented
+        del self.tree[key]
+        self.updater.update()
         return
 
     def __iter__(self):
@@ -294,5 +295,12 @@ class RootTree(collections.MutableMapping):
     def __keytransform__(self, key):
         return key
 
-def appmaker(db):
-    return RootTree(db, db['root_tree'].find_one(), None)
+class RootTreeUpdater:
+    def __init__(self, tree, db):
+        self.tree = tree
+        self.db = db
+
+    def update(self):
+        root_tree = self.db['root_tree'].find_one()
+        self.db['root_tree'].update({"_id": root_tree['_id']}, self.tree)
+

@@ -1,12 +1,9 @@
 from pyramid.config import Configurator
-#from pyramid_zodbconn import get_connection
 from pyramid.renderers import JSON
-#from ZODB.FileStorage import FileStorage
-#from ZODB.DB import DB
+
 import pymongo
 
 import daft_config
-#import migrations
 import models
 
 def DataStore(request):
@@ -14,11 +11,16 @@ def DataStore(request):
     client = pymongo.MongoClient(mdb_info['host'], mdb_info['port'])
     return client[mdb_info['db']]
 
+def RootService(request):
+    tree = request.db['root_tree'].find_one()
+    updater = models.RootTreeUpdater(tree, request.db)
+    return models.RootTree(request.db, updater, tree, None)
+
 def DataService(request):
-    return models.DataService(request.db)
+    return models.DataService(request.db, request.root)
 
 def root_factory(request):
-    return models.appmaker(request.db)
+    return request.root
 
 
 def main(global_config, **settings):
@@ -28,22 +30,13 @@ def main(global_config, **settings):
     #just to make sure that the config file is found and valid
     daft_config.cfg.get_build_dir()
 
-    #run any necessary migrations
-    #storage = FileStorage('Data.fs')
-    #db = DB(storage)
-    #conn = db.open()
-    #root = conn.root()
-    #root = migrations.run_migrations(root)
-    #import transaction
-    #transaction.commit()
-    #db.close()
-
     config = Configurator(root_factory=root_factory, settings=settings)
     config.add_static_view('static', 'static', cache_max_age=3600)
     config.add_renderer('prettyjson', JSON(indent=4))
     config.scan()
 
     config.add_request_method(DataStore, 'db', reify=True)
+    config.add_request_method(RootService, 'root', reify=True)
     config.add_request_method(DataService, 'datasvc', reify=True)
 
     return config.make_wsgi_app()
