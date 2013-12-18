@@ -44,7 +44,7 @@ class DataService:
                                          'parent': parent})
         return bson.DBRef('containers', cdoc['_id'])
 
-    def Builds(self, app_name):
+    def GetBuilds(self, app_name):
         return self.root['app'][app_name]['builds'].keys()
 
     def Applications(self):
@@ -60,17 +60,28 @@ class DataService:
         util.debugLog(self, "NewAction: actions: {}".format(pp.pformat(self.root['app'][app_name]['action'])))
 
     def NewBuild(self, app_name, build_name, attribs, subsys):
+        buildobj = Build(app_name, build_name, None, attributes=attribs, subsys=subsys)
         id = self.db['builds'].insert({'_class': "Build",
-                                       'build_name': build_name,
-                                       'files': [],
-                                       'stored': False,
-                                       'app_name': app_name,
-                                       'packages': [],
-                                       'attributes': attribs,
-                                       'subsys': subsys})
+                                       'build_name': buildobj.build_name,
+                                       'files': buildobj.files,
+                                       'stored': buildobj.stored,
+                                       'app_name': buildobj.app_name,
+                                       'packages': buildobj.packages,
+                                       'attributes': buildobj.attributes,
+                                       'subsys': buildobj.subsys})
         self.root['app'][app_name]['builds'][build_name] = {
             "_doc": bson.DBRef("builds", id)
         }
+
+    def UpdateBuild(self, buildobj):
+        doc = self.db['builds'].find_one({"build_name": buildobj.build_name})
+        assert doc is not None
+        doc["files"] = buildobj.files
+        doc["stored"] = buildobj.stored
+        doc["packages"] = buildobj.packages
+        doc["master_file"] = buildobj.master_file
+        doc["attributes"] = buildobj.attributes
+        self.db['builds'].update({"_id": doc['_id']}, doc)
 
     def NewToken(self, username):
         token = Token(username, None)
@@ -192,33 +203,17 @@ class EnvironmentContainer:
         self.app_name = app_name
 
 class Build:
-    def __init__(self, app_name, build_name, created_datetime, attributes={}, subsys=[]):
+    def __init__(self, app_name, build_name, created_datetime, files=list(), master_file=None, packages=dict(),
+                 stored=False, attributes={}, subsys=[]):
         self.app_name = app_name
         self.created_datetime = created_datetime
         self.build_name = build_name
         self.attributes = attributes
         self.subsys = subsys
-        self.stored = False
-        self.files = dict()  # { filename: filetype }
-        self.master_file = None  # original uploaded file
-        self.packages = dict()  # { package_type: {'filename': filename, 'file_type': file_type}}
-
-class BuildDetail:
-    def __init__(self, buildobj):
-        self.buildobj = buildobj
-
-class BuildContainer:
-    def __init__(self, app_name):
-        self.app_name = app_name
-
-    def remove_build(self, buildname):
-        dir = daft_config.DaftConfiguration().get_build_dir()
-        path = "{root_dir}/{app}/{build}".format(root_dir=dir, app=self.app_name, build=buildname)
-        util.debugLog(self, "remove_build: path: {}".format(path))
-        if os.path.isdir(path):
-            util.debugLog(self, "remove_build: deleting")
-            shutil.rmtree(path)
-        del self[buildname]
+        self.stored = stored
+        self.files = files  # { filename: filetype }
+        self.master_file = master_file  # original uploaded file
+        self.packages = packages  # { package_type: {'filename': filename, 'file_type': file_type}}
 
 class Subsystem:
     def __init__(self, app_name):
@@ -237,10 +232,6 @@ class Action:
 
     def execute(self, params, verb):
         return self.callable(DataService()).start(params, verb)
-
-class ActionContainer:
-    def __init__(self, app_name):
-        self.app_name = app_name
 
 class Application:
     def __init__(self, app_name, created_datetime):
@@ -276,6 +267,11 @@ class Token:
         self.token = base64.urlsafe_b64encode(hashlib.sha256(uuid.uuid4().bytes).hexdigest())[:-2] \
             if token is None else token
 
+class BuildContainer(GenericContainer):
+    pass
+
+class ActionContainer(GenericContainer):
+    pass
 
 class UserContainer(GenericContainer):
     pass

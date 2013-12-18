@@ -195,7 +195,8 @@ class ApplicationView(GenericView):
         self.set_params({"GET": [], "PUT": [], "POST": ["app_name"], "DELETE": []})
 
     def GET(self):
-        return {"application": self.context.app_name}
+        return {"application": self.context.app_name,
+                "created": self.get_created_datetime_text()}
 
 class ActionContainerView(GenericView):
     def __init__(self, context, request):
@@ -236,17 +237,17 @@ class EnvironmentView(GenericView):
 
 class BuildContainerView(GenericView):
     def __init__(self, context, request):
-        self.app_name = context.app_name
+        self.app_name = context.parent
         GenericView.__init__(self, context, request, app_name=self.app_name)
         self.set_params({"GET": [], "PUT": ["build_name"], "POST": ["build_name"], "DELETE": ["build_name"]})
 
 
     def validate_build_name(self, build_name):
-        return build_name in self.context.keys()
+        return build_name in self.datasvc.GetBuilds(self.app_name)
 
     def GET(self):
         return {"application": self.app_name,
-                "builds": self.context.keys()}
+                "builds": self.datasvc.GetBuilds(self.app_name)}
 
     def PUT(self):
         msg = list()
@@ -254,7 +255,7 @@ class BuildContainerView(GenericView):
         if '/' in build_name:
             build_name = str(build_name).replace('/', '-')
             msg.append("warning: forward slash in build name replaced by hyphen")
-        if build_name in self.context:
+        if build_name in self.datasvc.GetBuilds(self.app_name):
             msg.append("build exists")
         subsys = self.req.params["subsys"] if "sybsys" in self.req.params else []
         try:
@@ -280,28 +281,15 @@ class BuildContainerView(GenericView):
         return self.return_action_status({"delete_build": {"application": self.app_name, "build_name": build_name}})
 
 
-class BuildDetailView(GenericView):
-    def __init__(self, context, request):
-        self.app_name = context.buildobj.app_name
-        GenericView.__init__(self, context, request, app_name=self.app_name)
-
-    def GET(self):
-        return {'application': self.context.buildobj.app_name, 'build': self.context.buildobj.build_name,
-                'stored': self.context.buildobj.stored, 'packages': self.context.buildobj.packages,
-                'files': self.context.buildobj.files,
-                'created_datetime': self.get_created_datetime_text(),
-                'attributes': self.context.buildobj.attributes}
-
-
 class BuildView(GenericView):
     def __init__(self, context, request):
         self.app_name = context.app_name
         GenericView.__init__(self, context, request, app_name=self.app_name)
-        self.set_params({"GET": ["package"], "PUT": [], "POST": ["file_type"], "DELETE": ["file_name"]})
+        self.set_params({"GET": [], "PUT": [], "POST": ["file_type"], "DELETE": ["file_name"]})
         self.build_name = None
 
     def upload_success_action(self):
-        return daft_action.actionsvc.hooks.run_hook(self.app_name, 'BUILD_UPLOAD_SUCCESS', build_name=self.build_name)
+        return self.datasvc.actionsvc.hooks.run_hook(self.app_name, 'BUILD_UPLOAD_SUCCESS', build_name=self.build_name)
 
     def store_build(self, input_file, ftype):
         bs_obj = builds.BuildStorage(self.app_name, self.build_name, file_type=ftype, fd=input_file)
@@ -321,8 +309,9 @@ class BuildView(GenericView):
         for k in self.context.packages:
             fname = self.context.packages[k]['filename']
             ftype = self.context.packages[k]['file_type']
-            self.context.files[fname] = ftype
+            self.context.files.append({"file_type": ftype, "path": fname})
         self.context.stored = True
+        self.datasvc.UpdateBuild(self.context)
 
         action_res = "ok" if self.upload_success_action() else "error"
 
@@ -358,10 +347,18 @@ class BuildView(GenericView):
             return self.direct_upload()
 
     def GET(self):
-        pkg = self.req.params['package']
-        if pkg not in self.context.packages:
-            return self.Error("package type '{}' not found".format(pkg))
-        return pyramid.response.FileResponse(self.context.packages[pkg]['filename'], request=self.req, cache_max_age=0)
+        if "package" in self.req.params:
+            pkg = self.req.params['package']
+            if pkg not in self.context.packages:
+                return self.Error("package type '{}' not found".format(pkg))
+            return pyramid.response.FileResponse(self.context.packages[pkg]['filename'], request=self.req,
+                                                 cache_max_age=0)
+        else:
+            return {'application': self.context.app_name, 'build': self.context.build_name,
+                'stored': self.context.stored, 'packages': self.context.packages,
+                'files': self.context.files,
+                'created_datetime': self.get_created_datetime_text(),
+                'attributes': self.context.attributes}
 
 
 class ServerView(GenericView):
