@@ -45,10 +45,10 @@ class DataService:
         return bson.DBRef('containers', cdoc['_id'])
 
     def Builds(self, app_name):
-        return self.root['app'][app_name]['builds']
+        return self.root['app'][app_name]['builds'].keys()
 
     def Applications(self):
-        return self.root['app']
+        return self.root['app'].keys()
 
     def NewAction(self, app_name, action_name, params, callable):
         util.debugLog(self, "NewAction: app_name: {}".format(app_name))
@@ -60,7 +60,8 @@ class DataService:
         util.debugLog(self, "NewAction: actions: {}".format(pp.pformat(self.root['app'][app_name]['action'])))
 
     def NewBuild(self, app_name, build_name, attribs, subsys):
-        id = self.db['builds'].insert({'build_name': build_name,
+        id = self.db['builds'].insert({'_class': "Build",
+                                       'build_name': build_name,
                                        'files': [],
                                        'stored': False,
                                        'app_name': app_name,
@@ -72,7 +73,7 @@ class DataService:
         }
 
     def NewToken(self, username):
-        token = Token(username)
+        token = Token(username, None)
         id = self.db['tokens'].insert({
             'username': username,
             'token': token.token,
@@ -83,9 +84,10 @@ class DataService:
         }
         return token
 
-    def NewUser(self, name, pw, perms, salt, attribs):
-        userobj = User(name, pw, perms, salt, attribs)
+    def NewUser(self, name, pw, perms, attribs):
+        userobj = User(name, perms, None, password=pw, attributes=attribs)
         id = self.db['users'].insert({
+            "_class": "User",
             "name": userobj.name,
             "hashed_pw": userobj.hashed_pw,
             "attributes": userobj.attributes,
@@ -96,11 +98,19 @@ class DataService:
             "_doc": bson.DBRef("users", id)
         }
 
+    def DeleteObject(self, container, key, collection):
+        id = container[key].doc['_id']
+        self.db[collection].remove({'_id': id})
+        del container[key]
+
     def DeleteUser(self, name):
-        pass
+        self.DeleteObject(self.root['global']['users'], name, "users")
 
     def DeleteBuild(self, app_name, build_name):
-        pass
+        self.DeleteObject(self.root['app'][app_name]['builds'], build_name, "builds")
+
+    def DeleteToken(self, token):
+        self.DeleteObject(self.root['global']['tokens'], token, "tokens")
 
     def NewApplication(self, app_name):
 
@@ -117,14 +127,33 @@ class DataService:
     def GetUserTokens(self, username):
         return [d['token'] for d in self.db['tokens'].find({"username": username})]
 
+    def GetUserFromToken(self, token):
+        pp = pprint.PrettyPrinter(indent=4)
+        util.debugLog(self, "GetUserFromToken: token: {}".format(token))
+        tok = self.root['global']['tokens'][token]
+        doc = tok.doc
+        util.debugLog(self, "GetUserFromToken: doc: {}".format(pp.pformat(doc)))
+        return doc['username']
+
+    def GetAllTokens(self):
+        return self.root['global']['tokens'].keys()
+
     def DeleteApplication(self, app_name):
-        pass
+        self.DeleteObject(self.root['app'], app_name, 'applications')
 
     def GetUsers(self):
         return self.root['global']['users'].keys()
 
     def GetUser(self, username):
-        return self.root['global']['users'][username]
+        return self.PopulateObject(self.root['global']['users'][username].doc, User)
+
+    def PopulateObject(self, doc, class_obj):
+        #generate model object from mongo doc
+        pp = pprint.PrettyPrinter(indent=4)
+        util.debugLog(self, "PopulateObject: doc: {}".format(pp.pformat(doc)))
+        args = {k: doc[k] for k in doc if k[0] != u'_'}
+        args['created_datetime'] = doc['_id'].generation_time
+        return class_obj(**args)
 
     def SaveUser(self, userobj):
         #find and update user document
@@ -143,6 +172,12 @@ class SupportedFileType:
     types = [TarBz2, TarGz, Zip]
 
 
+class GenericContainer:
+    def __init__(self, name, parent, created_datetime):
+        self.name = name
+        self.parent = parent
+        self.created_datetime = created_datetime
+
 class Server:
     env_name = None
 
@@ -157,8 +192,9 @@ class EnvironmentContainer:
         self.app_name = app_name
 
 class Build:
-    def __init__(self, app_name, build_name, attributes={}, subsys=[]):
+    def __init__(self, app_name, build_name, created_datetime, attributes={}, subsys=[]):
         self.app_name = app_name
+        self.created_datetime = created_datetime
         self.build_name = build_name
         self.attributes = attributes
         self.subsys = subsys
@@ -207,21 +243,24 @@ class ActionContainer:
         self.app_name = app_name
 
 class Application:
-    def __init__(self, app_name):
+    def __init__(self, app_name, created_datetime):
         self.app_name = app_name
+        self.created_datetime = created_datetime
 
 class User:
-    def __init__(self, name, permissions, hashed_pw, salt, attributes={}):
+    def __init__(self, name, permissions, created_datetime, password=None, hashed_pw=None, salt=None, attributes={}):
         util.debugLog(self, "user: {}".format(name))
-        self.salt = salt
+        self.salt = base64.urlsafe_b64encode(uuid.uuid4().bytes) if salt is None else salt
         util.debugLog(self, "got salt: {}".format(self.salt))
         self.name = name
-        self.hashed_pw = hashed_pw
+        self.hashed_pw = hashed_pw if hashed_pw is not None else self.hash_pw(password)
         util.debugLog(self, "hashed pw: {}".format(self.hashed_pw))
         self.permissions = permissions
         self.attributes = attributes
+        self.created_datetime = created_datetime
 
     def hash_pw(self, pw):
+        assert pw is not None
         return base64.urlsafe_b64encode(hashlib.sha512(pw + self.salt).hexdigest())
 
     def validate_password(self, pw):
@@ -230,24 +269,24 @@ class User:
     def change_password(self, new_pw):
         self.hashed_pw = self.hash_pw(new_pw)
 
-class UserContainer:
-    def __init__(self):
-        self.salt = base64.urlsafe_b64encode((uuid.uuid4().bytes))
-
-class TokenContainer:
-    def __init__(self):
-        pass
-
 class Token:
-    def __init__(self, username, token=None):
+    def __init__(self, username, created_datetime, token=None):
         self.username = username
+        self.created_datetime = created_datetime
         self.token = base64.urlsafe_b64encode(hashlib.sha256(uuid.uuid4().bytes).hexdigest())[:-2] \
             if token is None else token
 
-class ApplicationContainer:
+
+class UserContainer(GenericContainer):
     pass
 
-class GlobalContainer:
+class TokenContainer(GenericContainer):
+    pass
+
+class ApplicationContainer(GenericContainer):
+    pass
+
+class GlobalContainer(GenericContainer):
     pass
 
 
@@ -264,15 +303,19 @@ class RootTree(collections.MutableMapping):
         return self.doc is not None and self.doc['_class'] == 'Application' and key == 'action'
 
     def __getitem__(self, key):
+        #util.debugLog(self, "__getitem__: key: {}".format(key))
         key = self.__keytransform__(key)
         if self.is_application(key):
             return self.tree[key]
         if key in self.tree:
             doc = self.db.dereference(self.tree[key]['_doc'])
             if doc is None:
+                #util.debugLog(self, "__getitem__: doc is none")
                 raise KeyError
+            #util.debugLog(self, "__getitem__: returning subtree")
             return RootTree(self.db, self.updater, self.tree[key], doc)
         else:
+            #util.debugLog(self, "__getitem__: key not found in tree ")
             raise KeyError
 
     def __setitem__(self, key, value):
@@ -300,7 +343,15 @@ class RootTreeUpdater:
         self.tree = tree
         self.db = db
 
+    def clean_actions(self):
+        #actions can't be serialized into mongo
+        for a in self.tree['app']:
+            if a[0] != '_':
+                if "action" in self.tree['app'][a]:
+                    del self.tree['app'][a]['action']
+
     def update(self):
+        self.clean_actions()
         root_tree = self.db['root_tree'].find_one()
         self.db['root_tree'].update({"_id": root_tree['_id']}, self.tree)
 

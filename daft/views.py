@@ -3,6 +3,7 @@ import pyramid.exceptions
 import pyramid.response
 import logging
 import urllib2
+import pprint
 
 import models
 import daft_config
@@ -98,10 +99,10 @@ class GenericView:
         if 'auth_token' in self.req.params:
             token = self.req.params['auth_token']
             if self.is_action:
-                self.permissions = auth.UserPermissions(token).get_action_permissions(app_name,
+                self.permissions = auth.UserPermissions(self.datasvc, token).get_action_permissions(app_name,
                                                                                       self.context.action_name)
             else:
-                self.permissions = auth.UserPermissions(token).get_app_permissions(app_name)
+                self.permissions = auth.UserPermissions(self.datasvc, token).get_app_permissions(app_name)
         else:
             self.permissions = None
 
@@ -194,7 +195,7 @@ class ApplicationView(GenericView):
         self.set_params({"GET": [], "PUT": [], "POST": ["app_name"], "DELETE": []})
 
     def GET(self):
-        return {"application": self.context.app_name, "data": self.context.keys()}
+        return {"application": self.context.app_name}
 
 class ActionContainerView(GenericView):
     def __init__(self, context, request):
@@ -376,7 +377,7 @@ class GlobalContainerView(GenericView):
         GenericView.__init__(self, context, request, permissionless=True)
 
     def GET(self):
-        return {"global": self.context.keys()}
+        return {"global": ["users", "tokens"]}
 
 
 class UserContainerView(GenericView):
@@ -396,7 +397,7 @@ class UserContainerView(GenericView):
             perms = perms_attribs['permissions']
             attribs = perms_attribs['attributes'] if 'attributes' in perms_attribs else dict()
             if auth.ValidatePermissionsObject(perms).run():
-                self.datasvc.NewUser(name, pw, perms, self.context.salt, attribs)
+                self.datasvc.NewUser(name, pw, perms, attribs)
                 return self.status_ok({"user_created": {"username": name, "password": "(hidden)",
                                                         "permissions": perms, "attributes": attribs}})
             else:
@@ -405,15 +406,15 @@ class UserContainerView(GenericView):
             return self.Error("invalid user attributes object (missing permissions)")
 
     def GET(self):
-        return {"users": self.context.keys()}
+        return {"users": self.datasvc.GetUsers()}
 
     def POST(self):
         return self.PUT()
 
     def DELETE(self):
         name = self.req.params['username']
-        if name in self.context:
-            del self.context[name]
+        if name in self.datasvc.GetUsers():
+            self.datasvc.DeleteUser(name)
             return self.status_ok({"user_deleted": {"username": name}})
         else:
             return self.Error("unknown user")
@@ -445,7 +446,7 @@ class UserView(GenericView):
         elif 'auth_token' not in self.req.params:
             return self.Error("password or auth token required")
         name = self.context.name
-        if self.datasvc.GetUserTokens(name) is None:
+        if len(self.datasvc.GetUserTokens(name)) == 0:
             self.datasvc.NewToken(name)
         return self.status_ok_with_token(name)
 
@@ -473,6 +474,7 @@ class UserView(GenericView):
         else:
             return self.Error("incorrect request type '{}'".format(self.req.params['request']))
 
+
 class TokenContainerView(GenericView):
     def __init__(self, context, request):
         #permissionless b/c the token is the secret. no need to supply token in URL and auth_token param
@@ -482,9 +484,10 @@ class TokenContainerView(GenericView):
     def GET(self):
         username = self.req.params['username']
         pw = self.req.params['password']
-        if auth.UserPermissions(None).validate_pw(username, pw):
-            if username in self.context.usermap:
-                return self.status_ok({"username": username, "token": self.context.usermap[username].token})
+        if auth.UserPermissions(self.datasvc, None).validate_pw(username, pw):
+            tokens = self.datasvc.GetUserTokens(username)
+            if len(tokens) > 0:
+                return self.status_ok({"username": username, "token": tokens})
             else:
                 return self.Error("no token found for '{}'".format(username))
         else:
@@ -492,9 +495,9 @@ class TokenContainerView(GenericView):
 
     def DELETE(self):
         token = self.req.params['token']
-        if token in self.context:
-            username = self.context[token].username
-            self.context.remove_token(token)
+        if token in self.datasvc.GetAllTokens():
+            username = self.datasvc.GetUserFromToken(token)
+            self.datasvc.DeleteToken(token)
             return self.status_ok({"token_deleted": {"username": username, "token": token}})
         else:
             return self.Error("unknown token")
@@ -507,6 +510,12 @@ class TokenView(GenericView):
         return {"token": self.context.token, "created": self.get_created_datetime_text(),
                 "username": self.context.username}
 
+    def DELETE(self):
+        token = self.context.token
+        user = self.context.username
+        self.datasvc.DeleteToken(token)
+        return self.status_ok({"token_deleted": {"username": user, "token": token}})
+
 
 @view_config(name="", renderer='json')
 def Action(context, request):
@@ -515,13 +524,14 @@ def Action(context, request):
     logging.debug("REQUEST: method: {}".format(request.method))
     logging.debug("REQUEST: params: {}".format(request.params))
 
+    pp = pprint.PrettyPrinter(indent=4)
+    logging.debug("REQUEST: context.doc: {}".format(pp.pformat(context.doc)))
+
     cname = context.doc['_class']
-    args = {k: context.doc[k] for k in context.doc if k[0] != u'_'}
 
     logging.debug("Model class: {}".format(cname))
-    logging.debug("Model args: {}".format(args))
 
-    mobj = models.__dict__[cname](**args)
+    mobj = request.datasvc.PopulateObject(context.doc, models.__dict__[cname])
 
     view_class = globals()[cname + "View"]
 
