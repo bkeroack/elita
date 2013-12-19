@@ -1,11 +1,10 @@
 __author__ = 'bkeroack'
 
 import logging
-import boto
-import salt.client
 import requests
 import re
 import datetime
+import pytz
 
 
 def debugLog(self, msg):
@@ -76,7 +75,7 @@ class RegisterBuildSkynetQA(RegisterBuild):
 
 class CleanupOldBuilds:
     def __init__(self, datasvc):
-        self.now = datetime.datetime.now()
+        self.now = datetime.datetime.now().replace(tzinfo=pytz.utc)
         self.datasvc = datasvc
 
     def start(self, params, verb):
@@ -87,11 +86,12 @@ class CleanupOldBuilds:
             return {"CleanupOldBuilds": {"status": "error", "result": "incorrect days parameter (must be integer)"}}
         cutoff = self.now - datetime.timedelta(days=days)
         debugLog(self, "days: {}".format(params['days']))
-        builds = self.datasvc.Builds("scorebig")
+        builds = self.datasvc.GetBuilds("scorebig")
         i = len(builds)
         dlist = list()
         for b in builds:
-            buildobj = builds[b]
+            debugLog(self, "build: {}".format(b))
+            buildobj = self.datasvc.GetBuild("scorebig", b)
             #if it doesn't have timestamp it's super old
             if (not hasattr(buildobj, "created_datetime")) or buildobj.created_datetime < cutoff:
                 debugLog(self, "...removing build: {}".format(buildobj.build_name))
@@ -117,49 +117,3 @@ class CleanupOldBuilds:
     def params():
         return {"POST": ["delete", "days"]}
 
-class ProvisionQual:
-    def __init__(self, qual_type, build):
-        self.qual_type = qual_type
-        self.build = build
-        assert self.build.__class__.__name__ == 'Build'
-
-    def start(self):
-        self.verify_master_server()
-        self.copy_build()
-        self.shut_down_master()
-        self.take_snapshot()
-        self.create_qual()
-        self.setup_qual()
-        self.setup_dns()
-
-
-
-    # generic master server:
-    #   - verify up
-    #   - copy build over
-    #   - (shut down - optional?)
-    # generic snapshot:
-    #   - take snapshot of build volume
-    # generic new server:
-    #   - create new server based on generic server image (ami/vhd)
-    # loop on creation until up
-    # generic uptime tasks:
-    #   - IIS bindings
-    #   - service start
-    #   - bootstrapping
-    # generic DNS
-    #   - create DNS A record
-
-
-class SaltClient:
-    def __init__(self):
-        self.client = salt.client.LocalClient()
-
-    def powershell(self, target, cmd, target_type='glob', timeout=120):
-        return self.client.cmd(target, 'cmd.run', cmd, timeout=timeout, expr_form=target_type, shell='powershell')
-
-    def cmd(self, target, cmd, args, target_type='glob', timeout=60):
-        return self.client.cmd(target, cmd, args, timeout=timeout, expr_form=target_type)
-
-    def ping(self, target):
-        return

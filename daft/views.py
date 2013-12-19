@@ -22,7 +22,7 @@ logger.setLevel(logging.DEBUG)
 class GenericView:
     def __init__(self, context, request, app_name="_global", permissionless=False, allow_pw_auth=False, is_action=False):
         self.required_params = {"GET": [], "PUT": [], "POST": [], "DELETE": []}  # { reqverb: [ params ] }
-        logging.debug("{}: {} ; {}".format(self.__class__.__name__, type(context), request.subpath))
+        logging.debug("{}: {} ; {}".format(self.__class__.__name__, context.__class__.__name__, request.subpath))
         self.req = request
         self.db = request.db
         self.datasvc = request.datasvc
@@ -203,9 +203,8 @@ class ActionContainerView(GenericView):
         GenericView.__init__(self, context, request)
 
     def GET(self):
-        return {"application": self.context.app_name,
-                "created_datetime": self.get_created_datetime_text(),
-                "data": self.context.keys()}
+        return {"application": self.context.parent,
+                "actions": self.datasvc.GetAllActions(self.context.parent)}
 
 class ActionView(GenericView):
     def __init__(self, context, request):
@@ -389,7 +388,7 @@ class UserContainerView(GenericView):
         try:
             perms_attribs = self.req.json_body
         except:
-            return self.Error("invalid user attributes object (problem deserializing)")
+            return self.Error("invalid user attributes object (problem deserializing, bad JSON?)")
         if "permissions" in perms_attribs:
             perms = perms_attribs['permissions']
             attribs = perms_attribs['attributes'] if 'attributes' in perms_attribs else dict()
@@ -398,7 +397,7 @@ class UserContainerView(GenericView):
                 return self.status_ok({"user_created": {"username": name, "password": "(hidden)",
                                                         "permissions": perms, "attributes": attribs}})
             else:
-                return self.Error("invalid permissions object")
+                return self.Error("invalid permissions object (valid JSON but semantically incorrect)")
         else:
             return self.Error("invalid user attributes object (missing permissions)")
 
@@ -436,6 +435,10 @@ class UserView(GenericView):
         self.context.attributes = attribs
         self.datasvc.SaveUser(self.context)
 
+    def change_permissions(self, perms):
+        self.context.permissions = perms
+        self.datasvc.SaveUser(self.context)
+
     def GET(self):  # return active
         if 'password' in self.req.params:
             if not self.context.validate_password(self.req.params['password']):
@@ -451,23 +454,34 @@ class UserView(GenericView):
         if 'password' in self.req.params:
             if not self.context.validate_password(self.req.params['password']):
                 return self.Error("incorrect password")
-        request = self.req.params['request'] if 'request' in self.req.params else 'token'
-        if request == "token":
+        update = self.req.params['update'] if 'update' in self.req.params else 'token'
+        if update == "token":
             self.datasvc.NewToken(self.context.name)
             return self.status_ok_with_token(self.context.name)
-        elif request == "password":
+        elif update == "password":
             if "new_password" in self.req.params:
                 self.change_password(self.req.params['new_password'])
                 return self.status_ok("password changed")
             else:
                 return self.Error("parameter new_password required")
-        elif request == "attributes":
+        elif update == "attributes":
             try:
                 attribs = self.req.json_body
             except:
                 return self.Error("problem deserializing attributes object")
             self.change_attributes(attribs)
             return self.status_ok({"new_attributes": attribs})
+        elif update == "permissions":
+            try:
+                perms = self.req.json_body
+            except:
+                return self.Error("problem deserializing permissions object (bad JSON?)")
+            perms = perms['permissions'] if 'permissions' in perms else perms
+            if auth.ValidatePermissionsObject(perms).run():
+                self.change_permissions(perms)
+                return self.status_ok({"new_permissions": perms})
+            else:
+                return self.Error("invalid permissions object (valid JSON but semantically incorrect)")
         else:
             return self.Error("incorrect request type '{}'".format(self.req.params['request']))
 
@@ -522,13 +536,16 @@ def Action(context, request):
     logging.debug("REQUEST: params: {}".format(request.params))
 
     pp = pprint.PrettyPrinter(indent=4)
-    logging.debug("REQUEST: context.doc: {}".format(pp.pformat(context.doc)))
-
-    cname = context.doc['_class']
+    if context.__class__.__name__ == 'Action':
+        logging.debug("REQUEST: action")
+        mobj = context
+        cname = "Action"
+    else:
+        logging.debug("REQUEST: context.doc: {}".format(pp.pformat(context.doc)))
+        cname = context.doc['_class']
+        mobj = request.datasvc.PopulateObject(context.doc, models.__dict__[cname])
 
     logging.debug("Model class: {}".format(cname))
-
-    mobj = request.datasvc.PopulateObject(context.doc, models.__dict__[cname])
 
     view_class = globals()[cname + "View"]
 

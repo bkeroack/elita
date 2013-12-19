@@ -292,6 +292,10 @@ class Mongodb_1007:
                 "app_name": aobj.app_name
             })
             self.root_tree['app'][aobj.app_name] = {"_doc": bson.DBRef("applications", id)}
+            self.root_tree['app'][aobj.app_name]['action'] = dict()
+            self.root_tree['app'][aobj.app_name]['action']['_doc'] = self.save_container(class_name="ActionContainer",
+                                                                                         parent=aobj.app_name,
+                                                                                         name="action")
         self.root_tree['app']["_doc"] = self.save_container(class_name="AppContainer", parent="", name="app")
         util.debugLog(self, "...{} applications".format(i))
 

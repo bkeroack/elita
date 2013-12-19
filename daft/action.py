@@ -1,5 +1,4 @@
 import scorebig
-import models
 import util
 
 __author__ = 'bkeroack'

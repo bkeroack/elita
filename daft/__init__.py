@@ -8,7 +8,7 @@ import models
 
 def DataStore(request):
     mdb_info = daft_config.cfg.get_mongo_server()
-    client = pymongo.MongoClient(mdb_info['host'], mdb_info['port'])
+    client = pymongo.MongoClient(mdb_info['host'], mdb_info['port'], tz_aware=True)
     return client[mdb_info['db']]
 
 def RootService(request):
@@ -20,6 +20,8 @@ def DataService(request):
     return models.DataService(request.db, request.root)
 
 def root_factory(request):
+    #initialize request objects
+    foo = request.db, request.datasvc
     return request.root
 
 

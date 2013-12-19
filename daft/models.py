@@ -29,14 +29,9 @@ class DataService:
         self.root = root
         self.actionsvc = daft_action.ActionService(self)   # potential reference cycle
 
-        self.ListAllActions()  # debugging
-
-    def ListAllActions(self):
-        for a in self.root['app']:
-            if a[0] != '_':
-                util.debugLog(self, "ListAllActions: {}".format(a))
-                if 'action' in self.root['app'][a]:
-                    util.debugLog(self, "...actions: {}".format(self.root['app'][a]['action']))
+    def GetAllActions(self, app_name):
+        if 'action' in self.root['app'][app_name]:
+            return [action for action in self.root['app'][app_name]['action'] if action[0] != '_']
 
     def NewContainer(self, class_name, name, parent):
         cdoc = self.db['containers'].insert({'_class': class_name,
@@ -45,17 +40,16 @@ class DataService:
         return bson.DBRef('containers', cdoc['_id'])
 
     def GetBuilds(self, app_name):
-        return self.root['app'][app_name]['builds'].keys()
+        return [k for k in self.root['app'][app_name]['builds'].keys() if k[0] != '_']
 
     def Applications(self):
         return self.root['app'].keys()
 
+
     def NewAction(self, app_name, action_name, params, callable):
         util.debugLog(self, "NewAction: app_name: {}".format(app_name))
         util.debugLog(self, "NewAction: action_name: {}".format(action_name))
-        if 'action' not in self.root['app'][app_name]:
-            self.root['app'][app_name]['action'] = dict()
-        self.root['app'][app_name]['action'][action_name] = Action(app_name, action_name, params, callable)
+        self.root['app'][app_name]['action'][action_name] = Action(app_name, action_name, params, self, callable)
         pp = pprint.PrettyPrinter(indent=4)
         util.debugLog(self, "NewAction: actions: {}".format(pp.pformat(self.root['app'][app_name]['action'])))
 
@@ -117,7 +111,16 @@ class DataService:
     def DeleteUser(self, name):
         self.DeleteObject(self.root['global']['users'], name, "users")
 
+    def DeleteBuildStorage(self, app_name, build_name):
+        dir = daft_config.DaftConfiguration().get_build_dir()
+        path = "{root_dir}/{app}/{build}".format(root_dir=dir, app=app_name, build=build_name)
+        util.debugLog(self, "DeleteBuildStorage: path: {}".format(path))
+        if os.path.isdir(path):
+            util.debugLog(self, "DeleteBuildStorage: remove_build: deleting")
+            shutil.rmtree(path)
+
     def DeleteBuild(self, app_name, build_name):
+        self.DeleteBuildStorage(app_name, build_name)
         self.DeleteObject(self.root['app'][app_name]['builds'], build_name, "builds")
 
     def DeleteToken(self, token):
@@ -147,21 +150,24 @@ class DataService:
         return doc['username']
 
     def GetAllTokens(self):
-        return self.root['global']['tokens'].keys()
+        return [k for k in self.root['global']['tokens'].keys() if k[0] != '_']
 
     def DeleteApplication(self, app_name):
         self.DeleteObject(self.root['app'], app_name, 'applications')
 
     def GetUsers(self):
-        return self.root['global']['users'].keys()
+        return [k for k in self.root['global']['users'].keys() if k[0] != '_']
 
     def GetUser(self, username):
         return self.PopulateObject(self.root['global']['users'][username].doc, User)
 
+    def GetBuild(self, app_name, build_name):
+        return self.PopulateObject(self.root['app'][app_name]['builds'][build_name].doc, Build)
+
     def PopulateObject(self, doc, class_obj):
         #generate model object from mongo doc
-        pp = pprint.PrettyPrinter(indent=4)
-        util.debugLog(self, "PopulateObject: doc: {}".format(pp.pformat(doc)))
+        #pp = pprint.PrettyPrinter(indent=4)
+        #util.debugLog(self, "PopulateObject: doc: {}".format(pp.pformat(doc)))
         args = {k: doc[k] for k in doc if k[0] != u'_'}
         args['created_datetime'] = doc['_id'].generation_time
         return class_obj(**args)
@@ -224,14 +230,15 @@ class SubsystemContainer:
         self.app_name = app_name
 
 class Action:
-    def __init__(self, app_name, action_name, params, callable):
+    def __init__(self, app_name, action_name, params, datasvc, callable):
         self.app_name = app_name
         self.action_name = action_name
         self.params = params
+        self.datasvc = datasvc
         self.callable = callable
 
     def execute(self, params, verb):
-        return self.callable(DataService()).start(params, verb)
+        return self.callable(self.datasvc).start(params, verb)
 
 class Application:
     def __init__(self, app_name, created_datetime):
@@ -295,13 +302,14 @@ class RootTree(collections.MutableMapping):
         self.doc = doc
         self.updater = updater
 
-    def is_application(self, key):
-        return self.doc is not None and self.doc['_class'] == 'Application' and key == 'action'
+    def is_action(self):
+        return self.doc is not None and self.doc['_class'] == 'ActionContainer'
 
     def __getitem__(self, key):
         #util.debugLog(self, "__getitem__: key: {}".format(key))
         key = self.__keytransform__(key)
-        if self.is_application(key):
+        if self.is_action():
+            #util.debugLog(self, "__getitem__: is_application: subtree: {}".format(self.tree[key]))
             return self.tree[key]
         if key in self.tree:
             doc = self.db.dereference(self.tree[key]['_doc'])
@@ -316,7 +324,7 @@ class RootTree(collections.MutableMapping):
 
     def __setitem__(self, key, value):
         self.tree[key] = value
-        if not self.is_application(key):     # dynamically populated each request
+        if not self.is_action():     # dynamically populated each request
             self.updater.update()
 
 
@@ -342,9 +350,14 @@ class RootTreeUpdater:
     def clean_actions(self):
         #actions can't be serialized into mongo
         for a in self.tree['app']:
+            actions = list()
             if a[0] != '_':
                 if "action" in self.tree['app'][a]:
-                    del self.tree['app'][a]['action']
+                    for ac in self.tree['app'][a]['action']:
+                        if ac[0] != '_':
+                            actions.append(ac)
+                    for action in actions:
+                        del self.tree['app'][a]['action'][action]
 
     def update(self):
         self.clean_actions()
