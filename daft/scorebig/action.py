@@ -85,15 +85,14 @@ class CleanupOldBuilds:
         except:
             return {"CleanupOldBuilds": {"status": "error", "result": "incorrect days parameter (must be integer)"}}
         cutoff = self.now - datetime.timedelta(days=days)
-        debugLog(self, "days: {}".format(params['days']))
+        debugLog(self, "days: {}; cutoff: {}".format(params['days'], cutoff))
         builds = self.datasvc.GetBuilds("scorebig")
         i = len(builds)
         dlist = list()
         for b in builds:
-            debugLog(self, "build: {}".format(b))
             buildobj = self.datasvc.GetBuild("scorebig", b)
-            #if it doesn't have timestamp it's super old
-            if (not hasattr(buildobj, "created_datetime")) or buildobj.created_datetime < cutoff:
+            debugLog(self, "build: {}; created: {}".format(b, buildobj.created_datetime))
+            if buildobj.created_datetime < cutoff:
                 debugLog(self, "...removing build: {}".format(buildobj.build_name))
                 dlist.append(buildobj.build_name)
         d = 0
