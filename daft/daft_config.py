@@ -15,3 +15,10 @@ class DaftConfiguration:
 
     def get_build_dir(self):
         return self.config.get('builds', 'dir')
+
+    def get_mongo_server(self):
+        return {
+            'host': self.config.get('mongo', 'host'),
+            'port': int(self.config.get('mongo', 'port')),
+            'db': self.config.get('mongo', 'db')
+        }
