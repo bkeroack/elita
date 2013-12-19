@@ -1,4 +1,4 @@
 #!/bin/bash
 
-/usr/local/bin/python ./setup.py install
+python ./setup.py develop
 pserve ./development.ini
