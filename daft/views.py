@@ -3,6 +3,7 @@ import pyramid.exceptions
 import pyramid.response
 import logging
 import urllib2
+import pprint
 
 import models
 import daft_config
@@ -21,8 +22,10 @@ logger.setLevel(logging.DEBUG)
 class GenericView:
     def __init__(self, context, request, app_name="_global", permissionless=False, allow_pw_auth=False, is_action=False):
         self.required_params = {"GET": [], "PUT": [], "POST": [], "DELETE": []}  # { reqverb: [ params ] }
-        logging.debug("{}: {} ; {}".format(self.__class__.__name__, type(context), request.subpath))
+        logging.debug("{}: {} ; {}".format(self.__class__.__name__, context.__class__.__name__, request.subpath))
         self.req = request
+        self.db = request.db
+        self.datasvc = request.datasvc
         self.context = context
         if 'pretty' in self.req.params:
             if self.req.params['pretty'] in ("true", "True", "yes", "si"):
@@ -31,7 +34,6 @@ class GenericView:
         self.is_action = is_action
         self.allow_pw_auth = allow_pw_auth
         self.setup_permissions(app_name)
-        self.datasvc = models.DataService()
 
     def get_created_datetime_text(self):
         return self.context.created_datetime.isoformat(' ') if hasattr(self.context, 'created_datetime') else None
@@ -97,10 +99,10 @@ class GenericView:
         if 'auth_token' in self.req.params:
             token = self.req.params['auth_token']
             if self.is_action:
-                self.permissions = auth.UserPermissions(token).get_action_permissions(app_name,
+                self.permissions = auth.UserPermissions(self.datasvc, token).get_action_permissions(app_name,
                                                                                       self.context.action_name)
             else:
-                self.permissions = auth.UserPermissions(token).get_app_permissions(app_name)
+                self.permissions = auth.UserPermissions(self.datasvc, token).get_app_permissions(app_name)
         else:
             self.permissions = None
 
@@ -139,10 +141,6 @@ class GenericView:
     def UNKNOWN_VERB(self):
         return self.Error("unknown or unimplemented HTTP verb")
 
-
-@view_config(context=models.RootApplication, renderer='templates/mytemplate.pt')
-def root_view(request):
-    return {'project': 'daft'}
 
 
 @view_config(context=pyramid.exceptions.HTTPNotFound, renderer='json')
@@ -197,16 +195,16 @@ class ApplicationView(GenericView):
         self.set_params({"GET": [], "PUT": [], "POST": ["app_name"], "DELETE": []})
 
     def GET(self):
-        return {"application": self.context.app_name, "data": self.context.keys()}
+        return {"application": self.context.app_name,
+                "created": self.get_created_datetime_text()}
 
 class ActionContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request)
 
     def GET(self):
-        return {"application": self.context.app_name,
-                "created_datetime": self.get_created_datetime_text(),
-                "data": self.context.keys()}
+        return {"application": self.context.parent,
+                "actions": self.datasvc.GetAllActions(self.context.parent)}
 
 class ActionView(GenericView):
     def __init__(self, context, request):
@@ -238,17 +236,17 @@ class EnvironmentView(GenericView):
 
 class BuildContainerView(GenericView):
     def __init__(self, context, request):
-        self.app_name = context.app_name
+        self.app_name = context.parent
         GenericView.__init__(self, context, request, app_name=self.app_name)
         self.set_params({"GET": [], "PUT": ["build_name"], "POST": ["build_name"], "DELETE": ["build_name"]})
 
 
     def validate_build_name(self, build_name):
-        return build_name in self.context.keys()
+        return build_name in self.datasvc.GetBuilds(self.app_name)
 
     def GET(self):
         return {"application": self.app_name,
-                "builds": self.context.keys()}
+                "builds": self.datasvc.GetBuilds(self.app_name)}
 
     def PUT(self):
         msg = list()
@@ -256,7 +254,7 @@ class BuildContainerView(GenericView):
         if '/' in build_name:
             build_name = str(build_name).replace('/', '-')
             msg.append("warning: forward slash in build name replaced by hyphen")
-        if build_name in self.context:
+        if build_name in self.datasvc.GetBuilds(self.app_name):
             msg.append("build exists")
         subsys = self.req.params["subsys"] if "sybsys" in self.req.params else []
         try:
@@ -282,28 +280,15 @@ class BuildContainerView(GenericView):
         return self.return_action_status({"delete_build": {"application": self.app_name, "build_name": build_name}})
 
 
-class BuildDetailView(GenericView):
-    def __init__(self, context, request):
-        self.app_name = context.buildobj.app_name
-        GenericView.__init__(self, context, request, app_name=self.app_name)
-
-    def GET(self):
-        return {'application': self.context.buildobj.app_name, 'build': self.context.buildobj.build_name,
-                'stored': self.context.buildobj.stored, 'packages': self.context.buildobj.packages,
-                'files': self.context.buildobj.files,
-                'created_datetime': self.get_created_datetime_text(),
-                'attributes': self.context.buildobj.attributes}
-
-
 class BuildView(GenericView):
     def __init__(self, context, request):
         self.app_name = context.app_name
         GenericView.__init__(self, context, request, app_name=self.app_name)
-        self.set_params({"GET": ["package"], "PUT": [], "POST": ["file_type"], "DELETE": ["file_name"]})
+        self.set_params({"GET": [], "PUT": [], "POST": ["file_type"], "DELETE": ["file_name"]})
         self.build_name = None
 
     def upload_success_action(self):
-        return daft_action.actionsvc.hooks.run_hook(self.app_name, 'BUILD_UPLOAD_SUCCESS', build_name=self.build_name)
+        return self.datasvc.actionsvc.hooks.run_hook(self.app_name, 'BUILD_UPLOAD_SUCCESS', build_name=self.build_name)
 
     def store_build(self, input_file, ftype):
         bs_obj = builds.BuildStorage(self.app_name, self.build_name, file_type=ftype, fd=input_file)
@@ -323,8 +308,9 @@ class BuildView(GenericView):
         for k in self.context.packages:
             fname = self.context.packages[k]['filename']
             ftype = self.context.packages[k]['file_type']
-            self.context.files[fname] = ftype
+            self.context.files.append({"file_type": ftype, "path": fname})
         self.context.stored = True
+        self.datasvc.UpdateBuild(self.context)
 
         action_res = "ok" if self.upload_success_action() else "error"
 
@@ -360,10 +346,18 @@ class BuildView(GenericView):
             return self.direct_upload()
 
     def GET(self):
-        pkg = self.req.params['package']
-        if pkg not in self.context.packages:
-            return self.Error("package type '{}' not found".format(pkg))
-        return pyramid.response.FileResponse(self.context.packages[pkg]['filename'], request=self.req, cache_max_age=0)
+        if "package" in self.req.params:
+            pkg = self.req.params['package']
+            if pkg not in self.context.packages:
+                return self.Error("package type '{}' not found".format(pkg))
+            return pyramid.response.FileResponse(self.context.packages[pkg]['filename'], request=self.req,
+                                                 cache_max_age=0)
+        else:
+            return {'application': self.context.app_name, 'build': self.context.build_name,
+                'stored': self.context.stored, 'packages': self.context.packages,
+                'files': self.context.files,
+                'created_datetime': self.get_created_datetime_text(),
+                'attributes': self.context.attributes}
 
 
 class ServerView(GenericView):
@@ -379,7 +373,7 @@ class GlobalContainerView(GenericView):
         GenericView.__init__(self, context, request, permissionless=True)
 
     def GET(self):
-        return {"global": self.context.keys()}
+        return {"global": ["users", "tokens"]}
 
 
 class UserContainerView(GenericView):
@@ -394,29 +388,29 @@ class UserContainerView(GenericView):
         try:
             perms_attribs = self.req.json_body
         except:
-            return self.Error("invalid user attributes object (problem deserializing)")
+            return self.Error("invalid user attributes object (problem deserializing, bad JSON?)")
         if "permissions" in perms_attribs:
             perms = perms_attribs['permissions']
             attribs = perms_attribs['attributes'] if 'attributes' in perms_attribs else dict()
             if auth.ValidatePermissionsObject(perms).run():
-                self.context[name] = models.User(name, pw, perms, self.context.salt, attribs)
+                self.datasvc.NewUser(name, pw, perms, attribs)
                 return self.status_ok({"user_created": {"username": name, "password": "(hidden)",
                                                         "permissions": perms, "attributes": attribs}})
             else:
-                return self.Error("invalid permissions object")
+                return self.Error("invalid permissions object (valid JSON but semantically incorrect)")
         else:
             return self.Error("invalid user attributes object (missing permissions)")
 
     def GET(self):
-        return {"users": self.context.keys()}
+        return {"users": self.datasvc.GetUsers()}
 
     def POST(self):
         return self.PUT()
 
     def DELETE(self):
         name = self.req.params['username']
-        if name in self.context:
-            del self.context[name]
+        if name in self.datasvc.GetUsers():
+            self.datasvc.DeleteUser(name)
             return self.status_ok({"user_deleted": {"username": name}})
         else:
             return self.Error("unknown user")
@@ -427,20 +421,23 @@ class UserView(GenericView):
         GenericView.__init__(self, context, request, allow_pw_auth=True)  # allow both pw and auth_token auth
         self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
 
-    def create_new_token(self, username):
-        if models.root['app_root']['global']['tokens'].new_token(username) is None:
-            return self.Error('error creating token')
-
-    def get_token_strings(self, username):
-        return [t.token for t in models.root['app_root']['global']['tokens'].get_tokens_by_username(username)]
 
     def status_ok_with_token(self, username):
         return self.status_ok({"username": username, "permissions": self.context.permissions,
                                "attributes": self.context.attributes,
-                               "auth_token": self.get_token_strings(username)})
+                               "auth_token": self.datasvc.GetUserTokens(username)})
 
     def change_password(self, new_pw):
         self.context.change_password(new_pw)
+        self.datasvc.SaveUser(self.context)
+
+    def change_attributes(self, attribs):
+        self.context.attributes = attribs
+        self.datasvc.SaveUser(self.context)
+
+    def change_permissions(self, perms):
+        self.context.permissions = perms
+        self.datasvc.SaveUser(self.context)
 
     def GET(self):  # return active
         if 'password' in self.req.params:
@@ -449,33 +446,45 @@ class UserView(GenericView):
         elif 'auth_token' not in self.req.params:
             return self.Error("password or auth token required")
         name = self.context.name
-        if name not in models.root['app_root']['global']['tokens'].usermap:
-            self.create_new_token(name)
+        if len(self.datasvc.GetUserTokens(name)) == 0:
+            self.datasvc.NewToken(name)
         return self.status_ok_with_token(name)
 
     def POST(self):
         if 'password' in self.req.params:
             if not self.context.validate_password(self.req.params['password']):
                 return self.Error("incorrect password")
-        request = self.req.params['request'] if 'request' in self.req.params else 'token'
-        if request == "token":
-            self.create_new_token(self.context.name)
+        update = self.req.params['update'] if 'update' in self.req.params else 'token'
+        if update == "token":
+            self.datasvc.NewToken(self.context.name)
             return self.status_ok_with_token(self.context.name)
-        elif request == "password":
+        elif update == "password":
             if "new_password" in self.req.params:
                 self.change_password(self.req.params['new_password'])
                 return self.status_ok("password changed")
             else:
                 return self.Error("parameter new_password required")
-        elif request == "attributes":
+        elif update == "attributes":
             try:
                 attribs = self.req.json_body
             except:
                 return self.Error("problem deserializing attributes object")
-            self.context.attributes = attribs
+            self.change_attributes(attribs)
             return self.status_ok({"new_attributes": attribs})
+        elif update == "permissions":
+            try:
+                perms = self.req.json_body
+            except:
+                return self.Error("problem deserializing permissions object (bad JSON?)")
+            perms = perms['permissions'] if 'permissions' in perms else perms
+            if auth.ValidatePermissionsObject(perms).run():
+                self.change_permissions(perms)
+                return self.status_ok({"new_permissions": perms})
+            else:
+                return self.Error("invalid permissions object (valid JSON but semantically incorrect)")
         else:
             return self.Error("incorrect request type '{}'".format(self.req.params['request']))
+
 
 class TokenContainerView(GenericView):
     def __init__(self, context, request):
@@ -486,9 +495,10 @@ class TokenContainerView(GenericView):
     def GET(self):
         username = self.req.params['username']
         pw = self.req.params['password']
-        if auth.UserPermissions(None).validate_pw(username, pw):
-            if username in self.context.usermap:
-                return self.status_ok({"username": username, "token": self.context.usermap[username].token})
+        if auth.UserPermissions(self.datasvc, None).validate_pw(username, pw):
+            tokens = self.datasvc.GetUserTokens(username)
+            if len(tokens) > 0:
+                return self.status_ok({"username": username, "token": tokens})
             else:
                 return self.Error("no token found for '{}'".format(username))
         else:
@@ -496,9 +506,9 @@ class TokenContainerView(GenericView):
 
     def DELETE(self):
         token = self.req.params['token']
-        if token in self.context:
-            username = self.context[token].username
-            self.context.remove_token(token)
+        if token in self.datasvc.GetAllTokens():
+            username = self.datasvc.GetUserFromToken(token)
+            self.datasvc.DeleteToken(token)
             return self.status_ok({"token_deleted": {"username": username, "token": token}})
         else:
             return self.Error("unknown token")
@@ -511,6 +521,12 @@ class TokenView(GenericView):
         return {"token": self.context.token, "created": self.get_created_datetime_text(),
                 "username": self.context.username}
 
+    def DELETE(self):
+        token = self.context.token
+        user = self.context.username
+        self.datasvc.DeleteToken(token)
+        return self.status_ok({"token_deleted": {"username": user, "token": token}})
+
 
 @view_config(name="", renderer='json')
 def Action(context, request):
@@ -519,11 +535,21 @@ def Action(context, request):
     logging.debug("REQUEST: method: {}".format(request.method))
     logging.debug("REQUEST: params: {}".format(request.params))
 
-    cname = context.__class__.__name__
-    logging.debug(cname)
+    pp = pprint.PrettyPrinter(indent=4)
+    if context.__class__.__name__ == 'Action':
+        logging.debug("REQUEST: action")
+        mobj = context
+        cname = "Action"
+    else:
+        logging.debug("REQUEST: context.doc: {}".format(pp.pformat(context.doc)))
+        cname = context.doc['_class']
+        mobj = request.datasvc.PopulateObject(context.doc, models.__dict__[cname])
+
+    logging.debug("Model class: {}".format(cname))
+
     view_class = globals()[cname + "View"]
 
-    return view_class(context, request).__call__()
+    return view_class(mobj, request).__call__()
 
 @view_config(name="about", renderer='json')
 def About(request):

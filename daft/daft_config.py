@@ -5,7 +5,7 @@ import ConfigParser
 
 cfg = None
 
-VERSION = "0.38"
+VERSION = "0.60"
 
 
 class DaftConfiguration:

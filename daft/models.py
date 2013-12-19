@@ -1,10 +1,12 @@
-from persistent.mapping import PersistentMapping
-import datetime
+import collections
 import hashlib
 import uuid
 import base64
 import os.path
 import shutil
+import bson
+import pymongo
+import pprint
 
 import util
 import daft_config
@@ -21,82 +23,177 @@ import action as daft_action
 # root/app/{app_name}/environemnt/{env_name}/servers/{server_name}
 
 
-#global handle for the root object, so all views have access
-root = None
-
-class RootService:
-    def __init__(self):
-        self.root = root
-
-    def Application(self, app):
-        return self.root['app_root']['app'][app]
-
-    def ApplicationContainer(self):
-        return self.root['app_root']['app']
-
-    def BuildContainer(self, app):
-        return self.root['app_root']['app'][app]['builds']
-
-    def ActionContainer(self, app):
-        return self.root['app_root']['app'][app]['action']
-
-    def UserContainer(self):
-        return self.root['app_root']['global']['users']
-
-
 class DataService:
-    def __init__(self):
-        self.rs = RootService()
+    def __init__(self, db, root):
+        self.db = db
+        self.root = root
+        self.actionsvc = daft_action.ActionService(self)   # potential reference cycle
 
-    def Builds(self, app_name):
-        return self.rs.BuildContainer(app_name)
+    def GetAllActions(self, app_name):
+        if 'action' in self.root['app'][app_name]:
+            return [action for action in self.root['app'][app_name]['action'] if action[0] != '_']
+
+    def NewContainer(self, class_name, name, parent):
+        cdoc = self.db['containers'].insert({'_class': class_name,
+                                         'name': name,
+                                         'parent': parent})
+        return bson.DBRef('containers', cdoc['_id'])
+
+    def GetBuilds(self, app_name):
+        return [k for k in self.root['app'][app_name]['builds'].keys() if k[0] != '_']
 
     def Applications(self):
-        return self.rs.ApplicationContainer()
+        return self.root['app'].keys()
+
 
     def NewAction(self, app_name, action_name, params, callable):
         util.debugLog(self, "NewAction: app_name: {}".format(app_name))
         util.debugLog(self, "NewAction: action_name: {}".format(action_name))
-        action = Action(app_name, action_name, params, callable)
-        self.rs.ActionContainer(app_name)[action_name] = action
+        self.root['app'][app_name]['action'][action_name] = Action(app_name, action_name, params, self, callable)
+        pp = pprint.PrettyPrinter(indent=4)
+        util.debugLog(self, "NewAction: actions: {}".format(pp.pformat(self.root['app'][app_name]['action'])))
 
     def NewBuild(self, app_name, build_name, attribs, subsys):
-        build = Build(app_name, build_name, attributes=attribs, subsys=subsys)
-        build["info"] = BuildDetail(build)
-        self.rs.BuildContainer(app_name)[build_name] = build
+        buildobj = Build(app_name, build_name, None, attributes=attribs, subsys=subsys)
+        id = self.db['builds'].insert({'_class': "Build",
+                                       'build_name': buildobj.build_name,
+                                       'files': buildobj.files,
+                                       'stored': buildobj.stored,
+                                       'app_name': buildobj.app_name,
+                                       'packages': buildobj.packages,
+                                       'attributes': buildobj.attributes,
+                                       'subsys': buildobj.subsys})
+        self.root['app'][app_name]['builds'][build_name] = {
+            "_doc": bson.DBRef("builds", id)
+        }
+
+    def UpdateBuild(self, buildobj):
+        doc = self.db['builds'].find_one({"build_name": buildobj.build_name})
+        assert doc is not None
+        doc["files"] = buildobj.files
+        doc["stored"] = buildobj.stored
+        doc["packages"] = buildobj.packages
+        doc["master_file"] = buildobj.master_file
+        doc["attributes"] = buildobj.attributes
+        self.db['builds'].update({"_id": doc['_id']}, doc)
+
+    def NewToken(self, username):
+        token = Token(username, None)
+        id = self.db['tokens'].insert({
+            'username': username,
+            'token': token.token,
+            '_class': "Token"
+        })
+        self.root['global']['tokens'][token.token] = {
+            "_doc": bson.DBRef("tokens", id)
+        }
+        return token
+
+    def NewUser(self, name, pw, perms, attribs):
+        userobj = User(name, perms, None, password=pw, attributes=attribs)
+        id = self.db['users'].insert({
+            "_class": "User",
+            "name": userobj.name,
+            "hashed_pw": userobj.hashed_pw,
+            "attributes": userobj.attributes,
+            "salt": userobj.salt,
+            "permissions": userobj.permissions
+        })
+        self.root['global']['users'][userobj.name] = {
+            "_doc": bson.DBRef("users", id)
+        }
+
+    def DeleteObject(self, container, key, collection):
+        id = container[key].doc['_id']
+        self.db[collection].remove({'_id': id})
+        del container[key]
+
+    def DeleteUser(self, name):
+        self.DeleteObject(self.root['global']['users'], name, "users")
+
+    def DeleteBuildStorage(self, app_name, build_name):
+        dir = daft_config.DaftConfiguration().get_build_dir()
+        path = "{root_dir}/{app}/{build}".format(root_dir=dir, app=app_name, build=build_name)
+        util.debugLog(self, "DeleteBuildStorage: path: {}".format(path))
+        if os.path.isdir(path):
+            util.debugLog(self, "DeleteBuildStorage: remove_build: deleting")
+            shutil.rmtree(path)
 
     def DeleteBuild(self, app_name, build_name):
-        self.rs.BuildContainer(app_name).remove_build(build_name)
+        self.DeleteBuildStorage(app_name, build_name)
+        self.DeleteObject(self.root['app'][app_name]['builds'], build_name, "builds")
+
+    def DeleteToken(self, token):
+        self.DeleteObject(self.root['global']['tokens'], token, "tokens")
 
     def NewApplication(self, app_name):
-        app = Application(app_name)
-        app['environments'] = EnvironmentContainer(app_name)
-        app['builds'] = BuildContainer(app_name)
-        app['subsys'] = SubsystemContainer(app_name)
-        app['action'] = ActionContainer(app_name)
-        self.rs.ApplicationContainer()[app_name] = app
+
+        id = self.db['applications'].insert({'_class': "Application", "app_name": app_name})
+
+        self.root['app'][app_name] = {
+            "_doc": bson.DBRef("applications", id),
+            "environments": {"_doc": self.NewContainer("EnvironmentContainer", "evironments", app_name)},
+            "builds": {"_doc": self.NewContainer("BuildContainer", "builds", app_name)},
+            "subsys": {"_doc": self.NewContainer("SubsystemContainer", "subsystems", app_name)},
+            "action": {"_doc": self.NewContainer("ActionContainer", "action", app_name)}
+        }
+
+    def GetUserTokens(self, username):
+        return [d['token'] for d in self.db['tokens'].find({"username": username})]
+
+    def GetUserFromToken(self, token):
+        pp = pprint.PrettyPrinter(indent=4)
+        util.debugLog(self, "GetUserFromToken: token: {}".format(token))
+        tok = self.root['global']['tokens'][token]
+        doc = tok.doc
+        util.debugLog(self, "GetUserFromToken: doc: {}".format(pp.pformat(doc)))
+        return doc['username']
+
+    def GetAllTokens(self):
+        return [k for k in self.root['global']['tokens'].keys() if k[0] != '_']
 
     def DeleteApplication(self, app_name):
-        self.rs.ApplicationContainer().pop(app_name, None)
+        self.DeleteObject(self.root['app'], app_name, 'applications')
 
     def GetUsers(self):
-        return self.rs.UserContainer()
+        return [k for k in self.root['global']['users'].keys() if k[0] != '_']
 
     def GetUser(self, username):
-        return self.rs.UserContainer()[username]
+        return self.PopulateObject(self.root['global']['users'][username].doc, User)
+
+    def GetBuild(self, app_name, build_name):
+        return self.PopulateObject(self.root['app'][app_name]['builds'][build_name].doc, Build)
+
+    def PopulateObject(self, doc, class_obj):
+        #generate model object from mongo doc
+        #pp = pprint.PrettyPrinter(indent=4)
+        #util.debugLog(self, "PopulateObject: doc: {}".format(pp.pformat(doc)))
+        args = {k: doc[k] for k in doc if k[0] != u'_'}
+        args['created_datetime'] = doc['_id'].generation_time
+        return class_obj(**args)
+
+    def SaveUser(self, userobj):
+        #find and update user document
+        doc = self.db['users'].find_one({"name": userobj.name})
+        assert doc is not None
+        doc['hashed_pw'] = userobj.hashed_pw
+        doc['attributes'] = userobj.attributes
+        doc['salt'] = userobj.salt
+        doc['permissions'] = userobj.permissions
+        self.db['users'].update({"_id": doc["_id"]}, doc)
 
 class SupportedFileType:
     TarGz = 'tar.gz'
     TarBz2 = 'tar.bz2'
     Zip = 'zip'
     types = [TarBz2, TarGz, Zip]
-    
 
-class BaseModelObject(PersistentMapping):
-    def __init__(self):
-        PersistentMapping.__init__(self)
-        self.created_datetime = datetime.datetime.now()
 
+class GenericContainer:
+    def __init__(self, name, parent, created_datetime):
+        self.name = name
+        self.parent = parent
+        self.created_datetime = created_datetime
 
 class Server:
     env_name = None
@@ -107,86 +204,61 @@ class Deployment:
 class Environment:
     app_name = None
 
-class EnvironmentContainer(BaseModelObject):
+class EnvironmentContainer:
     def __init__(self, app_name):
-        BaseModelObject.__init__(self)
         self.app_name = app_name
 
-class Build(BaseModelObject):
-    def __init__(self, app_name, build_name, attributes={}, subsys=[]):
-        BaseModelObject.__init__(self)
+class Build:
+    def __init__(self, app_name, build_name, created_datetime, files=list(), master_file=None, packages=dict(),
+                 stored=False, attributes={}, subsys=[]):
         self.app_name = app_name
+        self.created_datetime = created_datetime
         self.build_name = build_name
         self.attributes = attributes
         self.subsys = subsys
-        self.stored = False
-        self.files = dict()  # { filename: filetype }
-        self.master_file = None  # original uploaded file
-        self.packages = dict()  # { package_type: {'filename': filename, 'file_type': file_type}}
+        self.stored = stored
+        self.files = files  # { filename: filetype }
+        self.master_file = master_file  # original uploaded file
+        self.packages = packages  # { package_type: {'filename': filename, 'file_type': file_type}}
 
-class BuildDetail(BaseModelObject):
-    def __init__(self, buildobj):
-        BaseModelObject.__init__(self)
-        self.buildobj = buildobj
-
-class BuildContainer(BaseModelObject):
+class Subsystem:
     def __init__(self, app_name):
-        BaseModelObject.__init__(self)
         self.app_name = app_name
 
-    def remove_build(self, buildname):
-        dir = daft_config.DaftConfiguration().get_build_dir()
-        path = "{root_dir}/{app}/{build}".format(root_dir=dir, app=self.app_name, build=buildname)
-        util.debugLog(self, "remove_build: path: {}".format(path))
-        if os.path.isdir(path):
-            util.debugLog(self, "remove_build: deleting")
-            shutil.rmtree(path)
-        del self[buildname]
-
-class Subsystem(BaseModelObject):
+class SubsystemContainer:
     def __init__(self, app_name):
-        BaseModelObject.__init__(self)
         self.app_name = app_name
 
-class SubsystemContainer(BaseModelObject):
-    def __init__(self, app_name):
-        BaseModelObject.__init__(self)
-        self.app_name = app_name
-
-class Action(BaseModelObject):
-    def __init__(self, app_name, action_name, params, callable):
-        BaseModelObject.__init__(self)
+class Action:
+    def __init__(self, app_name, action_name, params, datasvc, callable):
         self.app_name = app_name
         self.action_name = action_name
         self.params = params
+        self.datasvc = datasvc
         self.callable = callable
 
     def execute(self, params, verb):
-        return self.callable(DataService()).start(params, verb)
+        return self.callable(self.datasvc).start(params, verb)
 
-class ActionContainer(BaseModelObject):
-    def __init__(self, app_name):
-        BaseModelObject.__init__(self)
+class Application:
+    def __init__(self, app_name, created_datetime):
         self.app_name = app_name
+        self.created_datetime = created_datetime
 
-class Application(BaseModelObject):
-    def __init__(self, app_name):
-        BaseModelObject.__init__(self)
-        self.app_name = app_name
-
-class User(BaseModelObject):
-    def __init__(self, name, pw, permissions, salt, attributes={}):
-        BaseModelObject.__init__(self)
-        util.debugLog(self, "user: {}, pw: {}".format(name, pw))
-        self.salt = salt
+class User:
+    def __init__(self, name, permissions, created_datetime, password=None, hashed_pw=None, salt=None, attributes={}):
+        util.debugLog(self, "user: {}".format(name))
+        self.salt = base64.urlsafe_b64encode(uuid.uuid4().bytes) if salt is None else salt
         util.debugLog(self, "got salt: {}".format(self.salt))
         self.name = name
-        self.hashed_pw = self.hash_pw(pw)
+        self.hashed_pw = hashed_pw if hashed_pw is not None else self.hash_pw(password)
         util.debugLog(self, "hashed pw: {}".format(self.hashed_pw))
         self.permissions = permissions
         self.attributes = attributes
+        self.created_datetime = created_datetime
 
     def hash_pw(self, pw):
+        assert pw is not None
         return base64.urlsafe_b64encode(hashlib.sha512(pw + self.salt).hexdigest())
 
     def validate_password(self, pw):
@@ -195,69 +267,100 @@ class User(BaseModelObject):
     def change_password(self, new_pw):
         self.hashed_pw = self.hash_pw(new_pw)
 
-class UserContainer(BaseModelObject):
-    def __init__(self):
-        BaseModelObject.__init__(self)
-        self.salt = base64.urlsafe_b64encode((uuid.uuid4().bytes))
+class Token:
+    def __init__(self, username, created_datetime, token=None):
+        self.username = username
+        self.created_datetime = created_datetime
+        self.token = base64.urlsafe_b64encode(hashlib.sha256(uuid.uuid4().bytes).hexdigest())[:-2] \
+            if token is None else token
 
-class TokenContainer(BaseModelObject):
-    def __init__(self):
-        BaseModelObject.__init__(self)
-        self.usermap = dict()  # for quick token lookup by user
+class BuildContainer(GenericContainer):
+    pass
+
+class ActionContainer(GenericContainer):
+    pass
+
+class UserContainer(GenericContainer):
+    pass
+
+class TokenContainer(GenericContainer):
+    pass
+
+class ApplicationContainer(GenericContainer):
+    pass
+
+class GlobalContainer(GenericContainer):
+    pass
+
+
+
+class RootTree(collections.MutableMapping):
+    def __init__(self, db, updater, tree, doc, *args, **kwargs):
+        self.pp = pprint.PrettyPrinter(indent=4)
+        self.db = db
+        self.tree = tree
+        self.doc = doc
+        self.updater = updater
+
+    def is_action(self):
+        return self.doc is not None and self.doc['_class'] == 'ActionContainer'
+
+    def __getitem__(self, key):
+        #util.debugLog(self, "__getitem__: key: {}".format(key))
+        key = self.__keytransform__(key)
+        if self.is_action():
+            #util.debugLog(self, "__getitem__: is_application: subtree: {}".format(self.tree[key]))
+            return self.tree[key]
+        if key in self.tree:
+            doc = self.db.dereference(self.tree[key]['_doc'])
+            if doc is None:
+                #util.debugLog(self, "__getitem__: doc is none")
+                raise KeyError
+            #util.debugLog(self, "__getitem__: returning subtree")
+            return RootTree(self.db, self.updater, self.tree[key], doc)
+        else:
+            #util.debugLog(self, "__getitem__: key not found in tree ")
+            raise KeyError
 
     def __setitem__(self, key, value):
-        BaseModelObject.__setitem__(self, key, value)
-        if value.username in self.usermap:
-            self.usermap[value.username].append(value)
-        else:
-            self.usermap[value.username] = [value]
-
-    def get_tokens_by_username(self, username):
-        return self.usermap[username] if username in self.usermap else []
-
-    def remove_token(self, token):
-        username = self[token].username
-        for t in self.usermap[username]:
-            if t.token == token:
-                self.usermap[username].remove(t)
-        del self[token]
-
-    def new_token(self, username):
-        tokenobj = Token(username)
-        self[tokenobj.token] = tokenobj
-        return tokenobj.token
-
-class Token(BaseModelObject):
-    def __init__(self, username):
-        BaseModelObject.__init__(self)
-        self.username = username
-        self.token = base64.urlsafe_b64encode(hashlib.sha256(uuid.uuid4().bytes).hexdigest())[:-2]  # strip '=='
-
-class ApplicationContainer(BaseModelObject):
-    pass
-
-class GlobalContainer(BaseModelObject):
-    pass
-
-class RootApplication(BaseModelObject):
-    pass
+        self.tree[key] = value
+        if not self.is_action():     # dynamically populated each request
+            self.updater.update()
 
 
-def appmaker(zodb_root):
-    global root
-    if not 'app_root' in zodb_root:
-        app_root = RootApplication()
-        zodb_root['app_root'] = app_root
-        zodb_root['app_root']['app'] = ApplicationContainer()
-        zodb_root['app_root']['global'] = GlobalContainer()
-        uc = UserContainer()
-        zodb_root['app_root']['global']['users'] = uc
-        zodb_root['app_root']['global']['users']['admin'] = User("admin", "daft", {"_global": "read;write"}, uc.salt)
-        zodb_root['app_root']['global']['tokens'] = TokenContainer()
-        tk = Token('admin')
-        zodb_root['app_root']['global']['tokens'][tk.token] = tk
-        import transaction
-        transaction.commit()
-    root = zodb_root
-    daft_action.actionsvc = daft_action.ActionService()
-    return zodb_root['app_root']
+    def __delitem__(self, key):
+        del self.tree[key]
+        self.updater.update()
+        return
+
+    def __iter__(self):
+        return iter(self.tree)
+
+    def __len__(self):
+        return len(self.tree)
+
+    def __keytransform__(self, key):
+        return key
+
+class RootTreeUpdater:
+    def __init__(self, tree, db):
+        self.tree = tree
+        self.db = db
+
+    def clean_actions(self):
+        #actions can't be serialized into mongo
+        for a in self.tree['app']:
+            actions = list()
+            if a[0] != '_':
+                if "action" in self.tree['app'][a]:
+                    for ac in self.tree['app'][a]['action']:
+                        if ac[0] != '_':
+                            actions.append(ac)
+                    for action in actions:
+                        del self.tree['app'][a]['action'][action]
+
+    def update(self):
+        self.clean_actions()
+        root_tree = self.db['root_tree'].find_one()
+        self.db['root_tree'].update({"_id": root_tree['_id']}, self.tree)
+

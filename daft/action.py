@@ -1,18 +1,16 @@
 import scorebig
-import models
 import util
 
 __author__ = 'bkeroack'
 
 MODULES = [scorebig]
 
-actionsvc = None
-
 class ActionService:
-    def __init__(self):
-        self.hooks = RegisterHooks()
+    def __init__(self, datasvc):
+        self.datasvc = datasvc
+        self.hooks = RegisterHooks(self.datasvc)
         self.hooks.register()
-        self.actions = RegisterActions()
+        self.actions = RegisterActions(self.datasvc)
         self.actions.register()
 
 
@@ -28,7 +26,8 @@ DefaultHookMap = {
 }
 
 class RegisterHooks:
-    def __init__(self):
+    def __init__(self, datasvc):
+        self.datasvc = datasvc
         self.hookmap = dict()
         self.modules = MODULES
 
@@ -43,13 +42,13 @@ class RegisterHooks:
 
     def run_hook(self, app, name, **kwargs):
         util.debugLog(self, "run_hook: app: {}; name: {}; kwargs: {}".format(app, name, kwargs))
-        return self.hookmap[app][name](models.DataService(), **kwargs).go()
+        return self.hookmap[app][name](self.datasvc, **kwargs).go()
 
 
 class RegisterActions:
-    def __init__(self):
+    def __init__(self, datasvc):
+        self.datasvc = datasvc
         self.modules = MODULES
-        self.datasvc = models.DataService()
 
     def register(self):
         util.debugLog(self, "register")
