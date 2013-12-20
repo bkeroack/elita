@@ -37,14 +37,13 @@ class DataService:
         cdoc = self.db['containers'].insert({'_class': class_name,
                                          'name': name,
                                          'parent': parent})
-        return bson.DBRef('containers', cdoc['_id'])
+        return bson.DBRef('containers', cdoc)
 
     def GetBuilds(self, app_name):
         return [k for k in self.root['app'][app_name]['builds'].keys() if k[0] != '_']
 
     def Applications(self):
         return self.root['app'].keys()
-
 
     def NewAction(self, app_name, action_name, params, callable):
         util.debugLog(self, "NewAction: app_name: {}".format(app_name))
@@ -274,6 +273,13 @@ class Token:
         self.token = base64.urlsafe_b64encode(hashlib.sha256(uuid.uuid4().bytes).hexdigest())[:-2] \
             if token is None else token
 
+class Job:
+    def __init__(self, id, created_datetime):
+        self.id = uuid.uuid4() if id is None else id
+        self.created_datetime = created_datetime
+
+
+
 class BuildContainer(GenericContainer):
     pass
 
@@ -290,6 +296,9 @@ class ApplicationContainer(GenericContainer):
     pass
 
 class GlobalContainer(GenericContainer):
+    pass
+
+class JobContainer(GenericContainer):
     pass
 
 
@@ -364,3 +373,51 @@ class RootTreeUpdater:
         root_tree = self.db['root_tree'].find_one()
         self.db['root_tree'].update({"_id": root_tree['_id']}, self.tree)
 
+class DataValidator:
+    '''Independed class to migrate/validate the root tree and potentially all docs
+        Intended to run prior to main application, to migrate schema or fix problems
+    '''
+    def __init__(self, root, db):
+        self.root = root
+        self.db = db
+
+    def run(self):
+        util.debugLog(self, "running")
+        self.check_toplevel()
+        self.check_apps()
+        self.SaveRoot()
+
+    def SaveRoot(self):
+        self.db['root_tree'].update({"_id": self.root['_id']}, self.root)
+
+    def NewContainer(self, class_name, name, parent):
+        cdoc = self.db['containers'].insert({'_class': class_name,
+                                         'name': name,
+                                         'parent': parent})
+        return bson.DBRef('containers', cdoc)
+
+    def check_apps(self):
+        for a in self.root['app']:
+            if a[0] != '_':
+                if 'builds' not in self.root['app'][a]:
+                    util.debugLog(self, "WARNING: 'builds' not found under {}".format(a))
+                    self.root['app'][a]['builds'] = dict()
+                    self.root['app'][a]['builds']['_doc'] = self.NewContainer("BuildContainer", "builds", a)
+                if 'action' not in self.root['app'][a]:
+                    util.debugLog(self, "WARNING: 'action' not found under {}".format(a))
+                    self.root['app'][a]['action'] = dict()
+                    self.root['app'][a]['action']['_doc'] = self.NewContainer("ActionContainer", "action", a)
+
+    def check_toplevel(self):
+        if 'app' not in self.root:
+            util.debugLog(self, "WARNING: 'app' not found under root")
+            self.root['app'] = dict()
+            self.root['app']['_doc'] = self.NewContainer("ApplicationContainer", "app", "")
+        if 'global' not in self.root:
+            util.debugLog(self, "WARNING: 'global' not found under root")
+            self.root['global'] = dict()
+            self.root['global']['_doc'] = self.NewContainer("GlobalContainer", "global", "")
+        if 'job' not in self.root:
+            util.debugLog(self, "WARNING: 'job' not found under root")
+            self.root['job'] = dict()
+            self.root['job']['_doc'] = self.NewContainer("JobContainer", "job", "")

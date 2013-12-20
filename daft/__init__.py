@@ -6,9 +6,12 @@ import pymongo
 import daft_config
 import models
 
-def DataStore(request):
+def GetMongo():
     mdb_info = daft_config.cfg.get_mongo_server()
-    client = pymongo.MongoClient(mdb_info['host'], mdb_info['port'], tz_aware=True)
+    return mdb_info, pymongo.MongoClient(mdb_info['host'], mdb_info['port'], tz_aware=True)
+
+def DataStore(request):
+    mdb_info, client = GetMongo()
     return client[mdb_info['db']]
 
 def RootService(request):
@@ -31,6 +34,14 @@ def main(global_config, **settings):
     daft_config.cfg = daft_config.DaftConfiguration()
     #just to make sure that the config file is found and valid
     daft_config.cfg.get_build_dir()
+
+    #data validator / migrations
+    mdb_info, client = GetMongo()
+    db = client[mdb_info['db']]
+    root = db['root_tree'].find_one()
+    dv = models.DataValidator(root, db)
+    dv.run()
+    client.close()
 
     config = Configurator(root_factory=root_factory, settings=settings)
     config.add_static_view('static', 'static', cache_max_age=3600)
