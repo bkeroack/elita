@@ -78,7 +78,6 @@ class GenericView:
         if not r:
             r = self.Error('insufficient permissions')
 
-        self.persist()
         return r
 
     def check_params(self):

@@ -25,11 +25,11 @@ def RootService(request):
     return models.RootTree(request.db, updater, tree, None)
 
 def DataService(request):
-    return DataService(request.db, request.root)
+    return models.DataService(request.db, request.root)
 
 def root_factory(request):
     #initialize request objects
-    foo = request.db, request.datasvc, request.celery_app
+    foo = request.db, request.datasvc
     return request.root
 
 
