@@ -6,13 +6,13 @@ import celeryinit
 
 __author__ = 'bkeroack'
 
-@celery_app.task(bind=True, name="daft_task_run_job")
+@celeryinit.celery_app.task(bind=True, name="daft_task_run_job")
 def run_job(self, callable, args):
     ''' Generate new dataservice, run callable, store results
     '''
     job_id = self.request.id
-    db, root, client = MongoClientData()
-    datasvc = DataService(db, root)
+    db, root, client = daft.MongoClientData()
+    datasvc = models.DataService(db, root)
     results = callable(datasvc, args)
     datasvc.SaveJobResults(job_id, results)
     client.close()

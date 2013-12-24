@@ -4,8 +4,7 @@ from pyramid.renderers import JSON
 import pymongo
 
 import daft_config
-from models import RootTree, RootTreeUpdater, DataValidator, DataService
-import celeryinit
+import models
 
 def GetMongo():
     mdb_info = daft_config.cfg.get_mongo_server()
@@ -22,14 +21,11 @@ def DataStore(request):
 
 def RootService(request):
     tree = request.db['root_tree'].find_one()
-    updater = RootTreeUpdater(tree, request.db)
-    return RootTree(request.db, updater, tree, None)
+    updater = models.RootTreeUpdater(tree, request.db)
+    return models.RootTree(request.db, updater, tree, None)
 
 def DataService(request):
     return DataService(request.db, request.root)
-
-def CeleryApp(request):
-    return celery_app
 
 def root_factory(request):
     #initialize request objects
@@ -46,7 +42,7 @@ def main(global_config, **settings):
 
     #data validator / migrations
     db, root, client = MongoClientData()
-    dv = DataValidator(root, db)
+    dv = models.DataValidator(root, db)
     dv.run()
     client.close()
 
@@ -58,6 +54,5 @@ def main(global_config, **settings):
     config.add_request_method(DataStore, 'db', reify=True)
     config.add_request_method(RootService, 'root', reify=True)
     config.add_request_method(DataService, 'datasvc', reify=True)
-    config.add_request_method(CeleryApp, 'celery_app', reify=True)
 
     return config.make_wsgi_app()
