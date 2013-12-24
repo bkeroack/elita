@@ -14,7 +14,7 @@ requires = [
     'gunicorn',
     'gevent',
     'pymongo',
-    'pyramid_scheduler'
+    'celery'
     ]
 
 setup(name='daft',
