@@ -8,31 +8,18 @@ import zipfile
 import tarfile
 
 import daft_config
-import packages
-from models import SupportedFileType
+
+
+class SupportedFileType:
+    TarGz = 'tar.gz'
+    TarBz2 = 'tar.bz2'
+    Zip = 'zip'
+    types = [TarBz2, TarGz, Zip]
+
 
 
 class BuildError(Exception):
     pass
-
-
-class BuildPackager:
-    def __init__(self, storage_dir, application, filename, file_type, build_name):
-        self.storage_dir = storage_dir
-        self.application = application
-        self.filename = filename
-        self.file_type = file_type
-        self.build_name = build_name
-
-    def run(self):
-        pkgs = packages.RegisterPackages()
-        pkgs.register()
-        for k in packages.PackageApplicationMap:
-            if k == self.application:
-                po = packages.PackageApplicationMap[k]['PACKAGE'](self.storage_dir, self.filename, self.file_type, self.build_name)
-                pkglist = po.process()
-                po.cleanup()
-                return pkglist
 
 
 class BuildStorage:
@@ -66,7 +53,7 @@ class BuildStorage:
             os.makedirs(build_dir)
         self.storage_dir = build_dir
 
-    def store(self, packages=True):
+    def store(self):
         self.create_storage_dir()
         fname = "{}/{}.{}".format(self.storage_dir, self.name, self.file_type)
         with open(self.temp_file_name, 'rb') as tf:
@@ -74,12 +61,7 @@ class BuildStorage:
                 bf.write(tf.read(-1))
         os.remove(self.temp_file_name)
         self.filename = fname
-        if packages:
-            bp = BuildPackager(self.storage_dir, self.application, self.filename, self.file_type, self.name)
-            pdict = bp.run()
-        else:
-            pdict = {}
-        return self.filename, pdict
+        return self.filename
 
     def validate_file_size(self):
         return os.path.getsize(self.temp_file_name) >= self.size_cutoff

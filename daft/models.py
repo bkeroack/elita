@@ -5,12 +5,11 @@ import base64
 import os.path
 import shutil
 import bson
-import pymongo
 import pprint
 
 import util
 import daft_config
-import action as daft_action
+from action import ActionService
 
 # URL model:
 # root/app/
@@ -27,7 +26,8 @@ class DataService:
     def __init__(self, db, root):
         self.db = db
         self.root = root
-        self.actionsvc = daft_action.ActionService(self)   # potential reference cycle
+        self.actionsvc = ActionService(self)   # potential reference cycle
+
 
     def GetAllActions(self, app_name):
         if 'action' in self.root['app'][app_name]:
@@ -44,6 +44,32 @@ class DataService:
 
     def Applications(self):
         return self.root['app'].keys()
+
+    def NewJob(self, name):
+        job = Job(None, "running", None, attribs={'name': name})
+        jid = self.db['jobs'].insert({
+            '_class': 'Job',
+            'id': job.id,
+            'status': job.status,
+            'attributes': job.attribs
+        })
+        self.root['job'][job.id] = {
+            "_doc": bson.DBRef("jobs", jid)
+        }
+
+    def NewJobData(self, job_id, data):
+        self.db['job_data'].insert({
+            'job_id': job_id,
+            'data': data
+        })
+
+    def GetJobData(self, job_id):
+        return tuple([d for d in self.db['job_data'].find({'job_id': job_id})])
+
+    def SaveJobResults(self, job_id, results):
+        res = self.db['jobs'].update({'job_id': job_id}, {'$set': {'status': "completed"}})
+        util.debugLog(self, "SaveJobResults: update job doc: {}".format(res))
+        self.NewJobData(job_id, {"completed_results": results})
 
     def NewAction(self, app_name, action_name, params, callable):
         util.debugLog(self, "NewAction: app_name: {}".format(app_name))
@@ -65,6 +91,12 @@ class DataService:
         self.root['app'][app_name]['builds'][build_name] = {
             "_doc": bson.DBRef("builds", id)
         }
+
+    def UpdateBuildProperties(self, app, properties):
+        bobj = self.GetBuild(app, properties['build_name'])
+        for p in properties:
+            bobj[p] = properties[p]
+        self.UpdateBuild(bobj)
 
     def UpdateBuild(self, buildobj):
         doc = self.db['builds'].find_one({"build_name": buildobj.build_name})
@@ -229,12 +261,11 @@ class SubsystemContainer:
         self.app_name = app_name
 
 class Action:
-    def __init__(self, app_name, action_name, params, datasvc, callable):
+    def __init__(self, app_name, action_name, params, datasvc):
         self.app_name = app_name
         self.action_name = action_name
         self.params = params
         self.datasvc = datasvc
-        self.callable = callable
 
     def execute(self, params, verb):
         return self.callable(self.datasvc).start(params, verb)
@@ -274,8 +305,10 @@ class Token:
             if token is None else token
 
 class Job:
-    def __init__(self, id, created_datetime):
+    def __init__(self, id, status, created_datetime, attribs=None):
         self.id = uuid.uuid4() if id is None else id
+        self.status = status
+        self.attribs = attribs
         self.created_datetime = created_datetime
 
 

@@ -4,11 +4,17 @@ from pyramid.renderers import JSON
 import pymongo
 
 import daft_config
-import models
+from models import RootTree, RootTreeUpdater, DataValidator, DataService
+import celeryinit
 
 def GetMongo():
     mdb_info = daft_config.cfg.get_mongo_server()
     return mdb_info, pymongo.MongoClient(mdb_info['host'], mdb_info['port'], tz_aware=True)
+
+def MongoClientData():
+    mdb_info, client = GetMongo()
+    db = client[mdb_info['db']]
+    return db, db['root_tree'].find_one(), client
 
 def DataStore(request):
     mdb_info, client = GetMongo()
@@ -16,15 +22,18 @@ def DataStore(request):
 
 def RootService(request):
     tree = request.db['root_tree'].find_one()
-    updater = models.RootTreeUpdater(tree, request.db)
-    return models.RootTree(request.db, updater, tree, None)
+    updater = RootTreeUpdater(tree, request.db)
+    return RootTree(request.db, updater, tree, None)
 
 def DataService(request):
-    return models.DataService(request.db, request.root)
+    return DataService(request.db, request.root)
+
+def CeleryApp(request):
+    return celery_app
 
 def root_factory(request):
     #initialize request objects
-    foo = request.db, request.datasvc
+    foo = request.db, request.datasvc, request.celery_app
     return request.root
 
 
@@ -36,10 +45,8 @@ def main(global_config, **settings):
     daft_config.cfg.get_build_dir()
 
     #data validator / migrations
-    mdb_info, client = GetMongo()
-    db = client[mdb_info['db']]
-    root = db['root_tree'].find_one()
-    dv = models.DataValidator(root, db)
+    db, root, client = MongoClientData()
+    dv = DataValidator(root, db)
     dv.run()
     client.close()
 
@@ -51,5 +58,6 @@ def main(global_config, **settings):
     config.add_request_method(DataStore, 'db', reify=True)
     config.add_request_method(RootService, 'root', reify=True)
     config.add_request_method(DataService, 'datasvc', reify=True)
+    config.add_request_method(CeleryApp, 'celery_app', reify=True)
 
     return config.make_wsgi_app()
