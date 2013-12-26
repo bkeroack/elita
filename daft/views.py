@@ -321,18 +321,21 @@ class BuildView(GenericView):
         for k in self.context.packages:
             fname = self.context.packages[k]['filename']
             ftype = self.context.packages[k]['file_type']
-            self.context.files.append({"file_type": ftype, "path": fname})
+            found = False
+            for f in self.context.files:
+                if f['path'] == fname:
+                    found = True
+            if not found:
+                self.context.files.append({"file_type": ftype, "path": fname})
         self.context.stored = True
         self.datasvc.UpdateBuild(self.context)
         self.ftype = ftype
-
-        action_res = "ok" if self.upload_success_action() else "error"
 
         return self.return_action_status({
             "build_stored": {
                 "application": self.app_name,
                 "build_name": self.build_name,
-                "actions_result": action_res}
+                "actions_result": self.upload_success_action()}
         })
 
     def direct_upload(self):
@@ -435,16 +438,15 @@ class JobView(GenericView):
         self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
 
     def GET(self):
-        with_data = self.req.params['with_data'] if 'with_data' in self.req.params else 'false'
-        job_data = self.datasvc.GetJobData(self.context.id) if with_data in AFFIRMATIVE_SYNONYMS \
-            else "not requested"
-        return {
+        ret = {
             'job_id': str(self.context.id),
             'created_datetime': self.get_created_datetime_text(),
             'status': self.context.status,
-            'with_data': with_data,
-            'data': job_data
         }
+        if 'results' in self.req.params:
+            if self.req.params['results'] in AFFIRMATIVE_SYNONYMS:
+                ret['results'] = self.datasvc.GetJobData(self.context.id)
+        return ret
 
 class JobContainerView(GenericView):
     def __init__(self, context, request):
@@ -452,8 +454,8 @@ class JobContainerView(GenericView):
         self.set_params({"GET": ["active"], "PUT": [], "POST": [], "DELETE": []})
 
     def GET(self):
-        active = self.req.params['active']
-        return {"jobs": { "active": active, "list": self.datasvc.GetJobs(active=active)}}
+        active = self.req.params['active'] in AFFIRMATIVE_SYNONYMS
+        return {"jobs": { "active": active, "job_ids": self.datasvc.GetJobs(active=active)}}
 
 
 class UserView(GenericView):

@@ -41,15 +41,8 @@ class ActionService:
         return {"action": action_name, "job_id": job_id, "status": "async/running"}
 
 
-class HookStub:
-    def __init__(self):
-        pass
-
-    def go(self):
-        return True
-
 DefaultHookMap = {
-    'BUILD_UPLOAD_SUCCESS': HookStub
+    'BUILD_UPLOAD_SUCCESS': None
 }
 
 class RegisterHooks:
@@ -67,9 +60,21 @@ class RegisterHooks:
             util.debugLog(self, "HookMap: {}".format(self.hookmap))
 
     def run_hook(self, app, name, args):
+        hook = self.hookmap[app][name]
+        if hook is None:
+            return "none"
         job = self.datasvc.NewJob("hook: {} (app: {})".format(name, app))
+        job_id = str(job.id)
         util.debugLog(self, "run_hook: job_id: {}; app: {}; name: {}; args: {}".format(job.id, app, name, args))
-        run_job.apply_async((self.hookmap[app][name], args), task_id=job.id)
+        run_job.apply_async((daft_config.cfg.get_mongo_server(), hook, args), task_id=job_id)
+        return {
+            "hook": {
+                name: {
+                    "status": "async/running",
+                    "job_id": job_id
+                }
+            }
+        }
 
 
 

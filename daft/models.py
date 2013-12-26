@@ -5,7 +5,6 @@ import base64
 import os.path
 import shutil
 import bson
-from bson import json_util
 import pprint
 
 import util
@@ -47,7 +46,7 @@ class DataService:
         return self.root['app'].keys()
 
     def NewJob(self, name):
-        job = Job(None, "running", None, attribs={'name': name})
+        job = Job(None, "running", None, attributes={'name': name})
         jid = self.db['jobs'].insert({
             '_class': 'Job',
             'job_id': str(job.id),
@@ -65,8 +64,12 @@ class DataService:
             'data': data
         })
 
+    def GetJobs(self, active):
+        return [d['job_id'] for d in self.db['jobs'].find({'status': 'running'} if active else {})]
+
     def GetJobData(self, job_id):
-        return tuple([json_util.dumps(d) for d in self.db['job_data'].find({'job_id': job_id})])
+        return sorted([{'created_datetime': d['_id'].generation_time.isoformat(' '), 'data': d['data']} for
+                       d in self.db['job_data'].find({'job_id': job_id})], key=lambda k: k['created_datetime'])
 
     def SaveJobResults(self, job_id, results):
         res = self.db['jobs'].update({'job_id': job_id}, {'$set': {'status': "completed"}})
@@ -101,7 +104,7 @@ class DataService:
     def UpdateBuildProperties(self, app, properties):
         bobj = self.GetBuild(app, properties['build_name'])
         for p in properties:
-            bobj[p] = properties[p]
+            setattr(bobj, p, properties[p])
         self.UpdateBuild(bobj)
 
     def UpdateBuild(self, buildobj):
