@@ -23,7 +23,8 @@ from action import ActionService
 
 
 class DataService:
-    def __init__(self, db, root):
+    def __init__(self, mdbinfo, db, root):
+        self.mdbinfo = mdbinfo
         self.db = db
         self.root = root
         self.actionsvc = ActionService(self)   # potential reference cycle

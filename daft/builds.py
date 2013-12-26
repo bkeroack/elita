@@ -7,8 +7,6 @@ import tempfile
 import zipfile
 import tarfile
 
-import daft_config
-
 
 class SupportedFileType:
     TarGz = 'tar.gz'
@@ -23,7 +21,8 @@ class BuildError(Exception):
 
 
 class BuildStorage:
-    def __init__(self, application=None, name=None, file_type=None, fd=None, size_cutoff=10000000):
+    def __init__(self, builds_toplevel_dir=None, application=None, name=None, file_type=None, fd=None, size_cutoff=10000000):
+        self.builds_toplevel_dir = builds_toplevel_dir
         self.name = name
         self.application = application
         self.file_type = file_type
@@ -47,8 +46,7 @@ class BuildStorage:
         self.temp_file = open(self.temp_file_name, 'rb')
 
     def create_storage_dir(self):
-        storage_dir = daft_config.cfg.get_build_dir()
-        build_dir = "{}{}/{}".format(storage_dir, self.application, self.name)
+        build_dir = "{}{}/{}".format(self.builds_toplevel_dir, self.application, self.name)
         if not os.path.exists(build_dir):
             os.makedirs(build_dir)
         self.storage_dir = build_dir

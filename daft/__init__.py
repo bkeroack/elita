@@ -3,21 +3,16 @@ from pyramid.renderers import JSON
 
 import pymongo
 
-import daft_config
 import models
 
-def GetMongo():
-    mdb_info = daft_config.cfg.get_mongo_server()
-    return mdb_info, pymongo.MongoClient(mdb_info['host'], mdb_info['port'], tz_aware=True)
-
-def MongoClientData():
-    mdb_info, client = GetMongo()
-    db = client[mdb_info['db']]
+def GetMongoClient(settings):
+    client = pymongo.MongoClient(settings['daft.mongo.host'], int(settings['daft.mongo.port']))
+    db = client[settings['daft.mongo.db']]
     return db, db['root_tree'].find_one(), client
 
 def DataStore(request):
-    mdb_info, client = GetMongo()
-    return client[mdb_info['db']]
+    db, root, client = GetMongoClient(request.registry.settings)
+    return db
 
 def RootService(request):
     tree = request.db['root_tree'].find_one()
@@ -25,7 +20,11 @@ def RootService(request):
     return models.RootTree(request.db, updater, tree, None)
 
 def DataService(request):
-    return models.DataService(request.db, request.root)
+    return models.DataService({
+        "host": request.registry.settings['daft.mongo.host'],
+        "port": int(request.registry.settings['daft.mongo.port']),
+        "db": request.registry.settings['daft.mongo.db']
+    }, request.db, request.root)
 
 def root_factory(request):
     #initialize request objects
@@ -37,12 +36,8 @@ def main(global_config, **settings):
     """ This function returns a Pyramid WSGI application.
     """
 
-    daft_config.cfg = daft_config.DaftConfiguration()
-    #just to make sure that the config file is found and valid
-    daft_config.cfg.get_build_dir()
-
     #data validator / migrations
-    db, root, client = MongoClientData()
+    db, root, client = GetMongoClient(settings)
     dv = models.DataValidator(root, db)
     dv.run()
     client.close()

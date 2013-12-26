@@ -7,7 +7,6 @@ import pprint
 import sys
 
 import models
-import daft_config
 import builds
 import auth
 
@@ -306,7 +305,8 @@ class BuildView(GenericView):
         return self.datasvc.actionsvc.hooks.run_hook(self.app_name, 'BUILD_UPLOAD_SUCCESS', args)
 
     def store_build(self, input_file, ftype):
-        self.bs_obj = builds.BuildStorage(self.app_name, self.build_name, file_type=ftype, fd=input_file)
+        self.bs_obj = builds.BuildStorage(self.req.registry.settings['daft.builds.dir'],
+                                          self.app_name, self.build_name, file_type=ftype, fd=input_file)
         if not self.bs_obj.validate():
             return self.Error("Invalid file type or corrupted file--check log")
 
@@ -593,9 +593,10 @@ def Action(context, request):
 
     return view_class(mobj, request).__call__()
 
+import pkg_resources
 @view_config(name="about", renderer='json')
 def About(request):
-    return {'about': {'name': 'daft', 'version': daft_config.VERSION}}
+    return {'about': {'name': 'daft', 'version': pkg_resources.require("daft")[0].version}}
 
 
 
