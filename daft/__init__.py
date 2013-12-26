@@ -36,6 +36,7 @@ def root_factory(request):
 def main(global_config, **settings):
     """ This function returns a Pyramid WSGI application.
     """
+
     daft_config.cfg = daft_config.DaftConfiguration()
     #just to make sure that the config file is found and valid
     daft_config.cfg.get_build_dir()

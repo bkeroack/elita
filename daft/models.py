@@ -5,6 +5,7 @@ import base64
 import os.path
 import shutil
 import bson
+from bson import json_util
 import pprint
 
 import util
@@ -49,13 +50,14 @@ class DataService:
         job = Job(None, "running", None, attribs={'name': name})
         jid = self.db['jobs'].insert({
             '_class': 'Job',
-            'id': job.id,
+            'job_id': str(job.id),
             'status': job.status,
             'attributes': job.attribs
         })
-        self.root['job'][job.id] = {
+        self.root['job'][str(job.id)] = {
             "_doc": bson.DBRef("jobs", jid)
         }
+        return job
 
     def NewJobData(self, job_id, data):
         self.db['job_data'].insert({
@@ -64,19 +66,23 @@ class DataService:
         })
 
     def GetJobData(self, job_id):
-        return tuple([d for d in self.db['job_data'].find({'job_id': job_id})])
+        return tuple([json_util.dumps(d) for d in self.db['job_data'].find({'job_id': job_id})])
 
     def SaveJobResults(self, job_id, results):
         res = self.db['jobs'].update({'job_id': job_id}, {'$set': {'status': "completed"}})
+        print(res)
         util.debugLog(self, "SaveJobResults: update job doc: {}".format(res))
         self.NewJobData(job_id, {"completed_results": results})
 
-    def NewAction(self, app_name, action_name, params, callable):
+    def NewAction(self, app_name, action_name, params):
         util.debugLog(self, "NewAction: app_name: {}".format(app_name))
         util.debugLog(self, "NewAction: action_name: {}".format(action_name))
-        self.root['app'][app_name]['action'][action_name] = Action(app_name, action_name, params, self, callable)
+        self.root['app'][app_name]['action'][action_name] = Action(app_name, action_name, params, self)
         pp = pprint.PrettyPrinter(indent=4)
         util.debugLog(self, "NewAction: actions: {}".format(pp.pformat(self.root['app'][app_name]['action'])))
+
+    def ExecuteAction(self, app_name, action_name, params, verb):
+        return self.actionsvc.async(app_name, action_name, params, verb)
 
     def NewBuild(self, app_name, build_name, attribs, subsys):
         buildobj = Build(app_name, build_name, None, attributes=attribs, subsys=subsys)
@@ -268,7 +274,7 @@ class Action:
         self.datasvc = datasvc
 
     def execute(self, params, verb):
-        return self.callable(self.datasvc).start(params, verb)
+        return self.datasvc.ExecuteAction(self.app_name, self.action_name, params, verb)
 
 class Application:
     def __init__(self, app_name, created_datetime):
@@ -305,10 +311,10 @@ class Token:
             if token is None else token
 
 class Job:
-    def __init__(self, id, status, created_datetime, attribs=None):
-        self.id = uuid.uuid4() if id is None else id
+    def __init__(self, job_id, status, created_datetime, attributes=None):
+        self.id = uuid.uuid4() if job_id is None else job_id
         self.status = status
-        self.attribs = attribs
+        self.attribs = attributes
         self.created_datetime = created_datetime
 
 
@@ -418,6 +424,7 @@ class DataValidator:
         util.debugLog(self, "running")
         self.check_toplevel()
         self.check_apps()
+        self.check_jobs()
         self.SaveRoot()
 
     def SaveRoot(self):
@@ -428,6 +435,16 @@ class DataValidator:
                                          'name': name,
                                          'parent': parent})
         return bson.DBRef('containers', cdoc)
+
+    def check_jobs(self):
+        djs = list()
+        for j in self.root['job']:
+            if j[0] != '_':
+                if self.db.dereference(self.root['job'][j]['_doc']) is None:
+                    util.debugLog(self, "WARNING: found dangling job ref in root tree: {}; deleting".format(j))
+                    djs.append(j)
+        for j in djs:
+            del self.root['job'][j]
 
     def check_apps(self):
         for a in self.root['app']:

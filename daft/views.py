@@ -15,9 +15,9 @@ import auth
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
-lh = logging.StreamHandler(sys.stdout)
-lh.setLevel(logging.DEBUG)
-logger.addHandler(lh)
+#lh = logging.StreamHandler(sys.stdout)
+#lh.setLevel(logging.DEBUG)
+#logger.addHandler(lh)
 
 AFFIRMATIVE_SYNONYMS = ("true", "True", "TRUE", "yup", "yep", "yut", "yes", "yea", "aye", "please", "si", "sim")
 
@@ -218,7 +218,10 @@ class ActionView(GenericView):
     def execute(self):
         if self.req.method not in self.context.params:
             return self.Error("not implemented")
-        return self.status_ok(self.context.execute(self.req.params, self.req.method))
+        params = dict() #we need a plain dict so we can serialize to celery
+        for p in self.req.params:
+            params[p] = self.req.params[p]
+        return self.status_ok(self.context.execute(params, self.req.method))
 
     def GET(self):
         return self.execute()
@@ -429,14 +432,14 @@ class UserContainerView(GenericView):
 class JobView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request)
-        self.set_params({"GET": ["with_data"], "PUT": [], "POST": [], "DELETE": []})
+        self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
 
     def GET(self):
-        with_data = self.req.params['with_data']
-        job_data = self.datasvc.GetJobData(self.context.id) if AFFIRMATIVE_SYNONYMS in with_data \
+        with_data = self.req.params['with_data'] if 'with_data' in self.req.params else 'false'
+        job_data = self.datasvc.GetJobData(self.context.id) if with_data in AFFIRMATIVE_SYNONYMS \
             else "not requested"
         return {
-            'job_id': self.context.id,
+            'job_id': str(self.context.id),
             'created_datetime': self.get_created_datetime_text(),
             'status': self.context.status,
             'with_data': with_data,

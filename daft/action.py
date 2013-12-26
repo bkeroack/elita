@@ -1,19 +1,25 @@
 import util
 from pkg_resources import iter_entry_points
-import daft
+import daft_config
 import models
 import celeryinit
+import pymongo
+import daft
 
 __author__ = 'bkeroack'
 
-@celeryinit.celery_app.task(bind=True, name="daft_task_run_job")
-def run_job(self, callable, args):
+@celeryinit.celery.task(bind=True, name="daft_task_run_job")
+def run_job(self, mdb_info, callable, args):
     ''' Generate new dataservice, run callable, store results
     '''
     job_id = self.request.id
-    db, root, client = daft.MongoClientData()
+    client = pymongo.MongoClient(mdb_info['host'], mdb_info['port'])
+    db = client[mdb_info['db']]
+    tree = db['root_tree'].find_one()
+    updater = models.RootTreeUpdater(tree, db)
+    root = models.RootTree(db, updater, tree, None)
     datasvc = models.DataService(db, root)
-    results = callable(datasvc, args)
+    results = callable(datasvc, **args)
     datasvc.SaveJobResults(job_id, results)
     client.close()
 
@@ -28,9 +34,11 @@ class ActionService:
 
     def async(self, app, action_name, params, verb):
         action = self.actions.actionmap[app][action_name]['callable']
+        util.debugLog(self, "action: {}, params: {}, verb: {}".format(action, params, verb))
         job = self.datasvc.NewJob(action_name)
-        run_job.apply_async((action, {'params': params, 'verb': verb}), task_id=job.id)
-        return {"action": action_name, "job_id": job.id, "status": "async/running"}
+        job_id = str(job.id)
+        run_job.apply_async((daft_config.cfg.get_mongo_server(), action, {'params': params, 'verb': verb}), task_id=job_id)
+        return {"action": action_name, "job_id": job_id, "status": "async/running"}
 
 
 class HookStub:
@@ -51,7 +59,7 @@ class RegisterHooks:
 
     def register(self):
         for obj in iter_entry_points(group="daft.modules", name="register_hooks"):
-            hooks = obj()  # returns: { app: { "HOOK_NAME": <callable> } }
+            hooks = (obj.load())()  # returns: { app: { "HOOK_NAME": <callable> } }
             for app in hooks:
                 for a in hooks[app]:
                     self.hookmap[app] = DefaultHookMap
@@ -73,14 +81,14 @@ class RegisterActions:
     def register(self):
         util.debugLog(self, "register")
         for obj in iter_entry_points(group="daft.modules", name="register_actions"):
-            actions = obj()
+            util.debugLog(self, "register: found obj: {}".format(obj))
+            actions = (obj.load())()
             util.debugLog(self, "actions: {}".format(actions))
             for app in actions:
                 if app not in self.actionmap:
                     self.actionmap[app] = dict()
                 for a in actions[app]:
-                    action_name = a.__name__
-                    params = a.params()
-                    self.actionmap[app][action_name] = {"callable": a, "params": params}
-                    util.debugLog(self, "NewAction: app: {}; action_name: {}; params: {}".format(app, action_name, params))
-                    self.datasvc.NewAction(app, action_name, params)
+                    action_name = a['callable'].__name__
+                    self.actionmap[app][action_name] = a
+                    util.debugLog(self, "NewAction: app: {}; action_name: {}; params: {}".format(app, action_name, a['params']))
+                    self.datasvc.NewAction(app, action_name, a['params'])
