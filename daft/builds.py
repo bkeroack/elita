@@ -1,6 +1,5 @@
 __author__ = 'bkeroack'
 
-import os.path
 import os
 import logging
 import tempfile

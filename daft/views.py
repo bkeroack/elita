@@ -4,7 +4,6 @@ import pyramid.response
 import logging
 import urllib2
 import pprint
-import sys
 
 import models
 import builds
@@ -443,6 +442,10 @@ class JobView(GenericView):
             'created_datetime': self.get_created_datetime_text(),
             'status': self.context.status,
         }
+        if self.context.completed_datetime is not None:
+            ret['completed_datetime'] = self.context.completed_datetime.isoformat(' ')
+        if self.context.duration_in_seconds is not None:
+            ret['duration_in_seconds'] = self.context.duration_in_seconds
         if 'results' in self.req.params:
             if self.req.params['results'] in AFFIRMATIVE_SYNONYMS:
                 ret['results'] = self.datasvc.GetJobData(self.context.id)
@@ -455,7 +458,7 @@ class JobContainerView(GenericView):
 
     def GET(self):
         active = self.req.params['active'] in AFFIRMATIVE_SYNONYMS
-        return {"jobs": { "active": active, "job_ids": self.datasvc.GetJobs(active=active)}}
+        return {"jobs": {"active": active, "job_ids": self.datasvc.GetJobs(active=active)}}
 
 
 class UserView(GenericView):

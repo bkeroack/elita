@@ -6,9 +6,10 @@ import os.path
 import shutil
 import bson
 import pprint
+import datetime
+import pytz
 
 import util
-import daft_config
 from action import ActionService
 
 # URL model:
@@ -73,8 +74,12 @@ class DataService:
                        d in self.db['job_data'].find({'job_id': job_id})], key=lambda k: k['created_datetime'])
 
     def SaveJobResults(self, job_id, results):
-        res = self.db['jobs'].update({'job_id': job_id}, {'$set': {'status': "completed"}})
-        print(res)
+        now = datetime.datetime.now(tz=pytz.utc)
+        doc = self.db['jobs'].find_one({'job_id': job_id})
+        diff = (now - doc['_id'].generation_time).total_seconds()
+        res = self.db['jobs'].update({'job_id': job_id}, {'$set': {'status': "completed",
+                                                                   'completed_datetime': now,
+                                                                   'duration_in_seconds': diff}})
         util.debugLog(self, "SaveJobResults: update job doc: {}".format(res))
         self.NewJobData(job_id, {"completed_results": results})
 
@@ -315,11 +320,13 @@ class Token:
             if token is None else token
 
 class Job:
-    def __init__(self, job_id, status, created_datetime, attributes=None):
+    def __init__(self, job_id, status, created_datetime, attributes=None, completed_datetime=None, duration_in_seconds=None):
         self.id = uuid.uuid4() if job_id is None else job_id
         self.status = status
         self.attribs = attributes
         self.created_datetime = created_datetime
+        self.completed_datetime = completed_datetime
+        self.duration_in_seconds = duration_in_seconds
 
 
 

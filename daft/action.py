@@ -3,7 +3,6 @@ from pkg_resources import iter_entry_points
 import models
 import celeryinit
 import pymongo
-import daft
 
 __author__ = 'bkeroack'
 
