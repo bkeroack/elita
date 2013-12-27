@@ -24,8 +24,8 @@ from action import ActionService
 
 
 class DataService:
-    def __init__(self, mdbinfo, db, root):
-        self.mdbinfo = mdbinfo
+    def __init__(self, settings, db, root):
+        self.settings = settings
         self.db = db
         self.root = root
         self.actionsvc = ActionService(self)   # potential reference cycle
@@ -158,7 +158,7 @@ class DataService:
         self.DeleteObject(self.root['global']['users'], name, "users")
 
     def DeleteBuildStorage(self, app_name, build_name):
-        dir = daft_config.DaftConfiguration().get_build_dir()
+        dir = self.settings['daft.builds.dir']
         path = "{root_dir}/{app}/{build}".format(root_dir=dir, app=app_name, build=build_name)
         util.debugLog(self, "DeleteBuildStorage: path: {}".format(path))
         if os.path.isdir(path):

@@ -7,16 +7,16 @@ import pymongo
 __author__ = 'bkeroack'
 
 @celeryinit.celery.task(bind=True, name="daft_task_run_job")
-def run_job(self, mdb_info, callable, args):
+def run_job(self, settings, callable, args):
     ''' Generate new dataservice, run callable, store results
     '''
     job_id = self.request.id
-    client = pymongo.MongoClient(mdb_info['host'], mdb_info['port'])
-    db = client[mdb_info['db']]
+    client = pymongo.MongoClient(settings['daft.mongo.host'], int(settings['daft.mongo.port']))
+    db = client[settings['daft.mongo.db']]
     tree = db['root_tree'].find_one()
     updater = models.RootTreeUpdater(tree, db)
     root = models.RootTree(db, updater, tree, None)
-    datasvc = models.DataService(mdb_info, db, root)
+    datasvc = models.DataService(settings, db, root)
     results = callable(datasvc, **args)
     datasvc.SaveJobResults(job_id, results)
     client.close()
@@ -35,7 +35,7 @@ class ActionService:
         util.debugLog(self, "action: {}, params: {}, verb: {}".format(action, params, verb))
         job = self.datasvc.NewJob(action_name)
         job_id = str(job.id)
-        run_job.apply_async((self.datasvc.mdbinfo, action, {'params': params, 'verb': verb}), task_id=job_id)
+        run_job.apply_async((self.datasvc.settings, action, {'params': params, 'verb': verb}), task_id=job_id)
         return {"action": action_name, "job_id": job_id, "status": "async/running"}
 
 
@@ -64,7 +64,7 @@ class RegisterHooks:
         job = self.datasvc.NewJob("hook: {} (app: {})".format(name, app))
         job_id = str(job.id)
         util.debugLog(self, "run_hook: job_id: {}; app: {}; name: {}; args: {}".format(job.id, app, name, args))
-        run_job.apply_async((self.datasvc.mdbinfo, hook, args), task_id=job_id)
+        run_job.apply_async((self.datasvc.settings, hook, args), task_id=job_id)
         return {
             "hook": {
                 name: {

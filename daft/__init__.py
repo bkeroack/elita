@@ -20,11 +20,7 @@ def RootService(request):
     return models.RootTree(request.db, updater, tree, None)
 
 def DataService(request):
-    return models.DataService({
-        "host": request.registry.settings['daft.mongo.host'],
-        "port": int(request.registry.settings['daft.mongo.port']),
-        "db": request.registry.settings['daft.mongo.db']
-    }, request.db, request.root)
+    return models.DataService(request.registry.settings, request.db, request.root)
 
 def root_factory(request):
     #initialize request objects
