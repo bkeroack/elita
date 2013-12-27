@@ -1,7 +1,9 @@
 import os
 
+from ez_setup import use_setuptools
+use_setuptools()
+
 from setuptools import setup, find_packages
-from daft import daft_config
 
 here = os.path.abspath(os.path.dirname(__file__))
 README = open(os.path.join(here, 'README.txt')).read()
@@ -9,13 +11,14 @@ CHANGES = open(os.path.join(here, 'CHANGES.txt')).read()
 
 requires = [
     'pyramid',
-    'pyramid_tm',
-    'pyramid_debugtoolbar',
     'gunicorn',
+    'gevent',
+    'pymongo',
+    'celery'
     ]
 
 setup(name='daft',
-      version=daft_config.VERSION,
+      version="0.60",
       description='daft',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[
@@ -24,10 +27,10 @@ setup(name='daft',
         "Topic :: Internet :: WWW/HTTP",
         "Topic :: Internet :: WWW/HTTP :: WSGI :: Application",
         ],
-      author='',
-      author_email='',
+      author='B. Keroack',
+      author_email='bkeroack@gmail.com',
       url='',
-      keywords='web pylons pyramid',
+      keywords='web pylons pyramid deployment automation',
       packages=find_packages(),
       include_package_data=True,
       zip_safe=False,

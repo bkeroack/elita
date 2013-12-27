@@ -6,29 +6,31 @@ import urllib2
 import pprint
 
 import models
-import daft_config
 import builds
-import action as daft_action
 import auth
-import util
 
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
+#lh = logging.StreamHandler(sys.stdout)
+#lh.setLevel(logging.DEBUG)
+#logger.addHandler(lh)
+
+AFFIRMATIVE_SYNONYMS = ("true", "True", "TRUE", "yup", "yep", "yut", "yes", "yea", "aye", "please", "si", "sim")
 
 
 
 class GenericView:
     def __init__(self, context, request, app_name="_global", permissionless=False, allow_pw_auth=False, is_action=False):
         self.required_params = {"GET": [], "PUT": [], "POST": [], "DELETE": []}  # { reqverb: [ params ] }
-        logging.debug("{}: {} ; {}".format(self.__class__.__name__, context.__class__.__name__, request.subpath))
+        logger.debug("{}: {} ; {}".format(self.__class__.__name__, context.__class__.__name__, request.subpath))
         self.req = request
         self.db = request.db
         self.datasvc = request.datasvc
         self.context = context
         if 'pretty' in self.req.params:
-            if self.req.params['pretty'] in ("true", "True", "yes", "si"):
+            if self.req.params['pretty'] in AFFIRMATIVE_SYNONYMS:
                 self.req.override_renderer = "prettyjson"
         self.permissionless = permissionless
         self.is_action = is_action
@@ -74,7 +76,6 @@ class GenericView:
         if not r:
             r = self.Error('insufficient permissions')
 
-        self.persist()
         return r
 
     def check_params(self):
@@ -113,9 +114,6 @@ class GenericView:
     def return_action_status(self, action):
         return {"status": "ok", "action": action}
 
-    def persist(self):
-        import transaction
-        transaction.commit()
 
     def status_ok(self, msg):
         return {'status': 'ok', 'message': msg}
@@ -218,7 +216,10 @@ class ActionView(GenericView):
     def execute(self):
         if self.req.method not in self.context.params:
             return self.Error("not implemented")
-        return self.status_ok(self.context.execute(self.req.params, self.req.method))
+        params = dict() #we need a plain dict so we can serialize to celery
+        for p in self.req.params:
+            params[p] = self.req.params[p]
+        return self.status_ok(self.context.execute(params, self.req.method))
 
     def GET(self):
         return self.execute()
@@ -288,50 +289,65 @@ class BuildView(GenericView):
         self.build_name = None
 
     def upload_success_action(self):
-        return self.datasvc.actionsvc.hooks.run_hook(self.app_name, 'BUILD_UPLOAD_SUCCESS', build_name=self.build_name)
+        args = {
+            'hook_parameters':
+                {
+                    'build_name': self.build_name,
+                    'build_storage_info':
+                        {
+                          'storage_dir': self.bs_obj.storage_dir,
+                          'filename': self.context.master_file,
+                          'file_type': self.ftype
+                        }
+                }
+        }
+        return self.datasvc.actionsvc.hooks.run_hook(self.app_name, 'BUILD_UPLOAD_SUCCESS', args)
 
     def store_build(self, input_file, ftype):
-        bs_obj = builds.BuildStorage(self.app_name, self.build_name, file_type=ftype, fd=input_file)
-        if not bs_obj.validate():
+        self.bs_obj = builds.BuildStorage(self.req.registry.settings['daft.builds.dir'],
+                                          self.app_name, self.build_name, file_type=ftype, fd=input_file)
+        if not self.bs_obj.validate():
             return self.Error("Invalid file type or corrupted file--check log")
 
         #try:
-        bs_results = bs_obj.store(packages=True)
+        fname = self.bs_obj.store()
         #except:
         #    return self.Error("error storing build or creating packages (see log)")
-        logging.debug("BuildView: bs_results: {}".format(bs_results))
-        self.context.master_file = bs_results[0]
-        for k in bs_results[1]:
-            self.context.packages[k] = bs_results[1][k]
-        self.context.packages['master'] = {'filename': bs_results[0], 'file_type': ftype}
-        logging.debug("BuildView: context.packages: {}".format(self.context.packages))
+        logger.debug("BuildView: bs_results: {}".format(fname))
+        self.context.master_file = fname
+        self.context.packages['master'] = {'filename': fname, 'file_type': ftype}
+        logger.debug("BuildView: context.packages: {}".format(self.context.packages))
         for k in self.context.packages:
             fname = self.context.packages[k]['filename']
             ftype = self.context.packages[k]['file_type']
-            self.context.files.append({"file_type": ftype, "path": fname})
+            found = False
+            for f in self.context.files:
+                if f['path'] == fname:
+                    found = True
+            if not found:
+                self.context.files.append({"file_type": ftype, "path": fname})
         self.context.stored = True
         self.datasvc.UpdateBuild(self.context)
-
-        action_res = "ok" if self.upload_success_action() else "error"
+        self.ftype = ftype
 
         return self.return_action_status({
             "build_stored": {
                 "application": self.app_name,
                 "build_name": self.build_name,
-                "actions_result": action_res}
+                "actions_result": self.upload_success_action()}
         })
 
     def direct_upload(self):
-        logging.debug("BuildView: direct_upload")
+        logger.debug("BuildView: direct_upload")
         if 'build' in self.req.POST:
             fname = self.req.POST['build'].filename
-            logging.debug("BuildContainer: PUT: filename: {}".format(fname))
+            logger.debug("BuildContainer: PUT: filename: {}".format(fname))
             return self.store_build(self.req.POST['build'].file, self.req.params["file_type"])
         else:
             return self.Error("build data not found in POST body")
 
     def indirect_upload(self):
-        logging.debug("BuildView: indirect_upload: downloading from {}".format(self.req.params['indirect_url']))
+        logger.debug("BuildView: indirect_upload: downloading from {}".format(self.req.params['indirect_url']))
         r = urllib2.urlopen(self.req.params['indirect_url'])
         return self.store_build(r, self.req.params["file_type"])
 
@@ -414,6 +430,35 @@ class UserContainerView(GenericView):
             return self.status_ok({"user_deleted": {"username": name}})
         else:
             return self.Error("unknown user")
+
+class JobView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request)
+        self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
+
+    def GET(self):
+        ret = {
+            'job_id': str(self.context.id),
+            'created_datetime': self.get_created_datetime_text(),
+            'status': self.context.status,
+        }
+        if self.context.completed_datetime is not None:
+            ret['completed_datetime'] = self.context.completed_datetime.isoformat(' ')
+        if self.context.duration_in_seconds is not None:
+            ret['duration_in_seconds'] = self.context.duration_in_seconds
+        if 'results' in self.req.params:
+            if self.req.params['results'] in AFFIRMATIVE_SYNONYMS:
+                ret['results'] = self.datasvc.GetJobData(self.context.id)
+        return ret
+
+class JobContainerView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request)
+        self.set_params({"GET": ["active"], "PUT": [], "POST": [], "DELETE": []})
+
+    def GET(self):
+        active = self.req.params['active'] in AFFIRMATIVE_SYNONYMS
+        return {"jobs": {"active": active, "job_ids": self.datasvc.GetJobs(active=active)}}
 
 
 class UserView(GenericView):
@@ -530,30 +575,31 @@ class TokenView(GenericView):
 
 @view_config(name="", renderer='json')
 def Action(context, request):
-    logging.debug("REQUEST: url: {}".format(request.url))
-    logging.debug("REQUEST: context: {}".format(context.__class__.__name__))
-    logging.debug("REQUEST: method: {}".format(request.method))
-    logging.debug("REQUEST: params: {}".format(request.params))
+    logger.debug("REQUEST: url: {}".format(request.url))
+    logger.debug("REQUEST: context: {}".format(context.__class__.__name__))
+    logger.debug("REQUEST: method: {}".format(request.method))
+    logger.debug("REQUEST: params: {}".format(request.params))
 
     pp = pprint.PrettyPrinter(indent=4)
     if context.__class__.__name__ == 'Action':
-        logging.debug("REQUEST: action")
+        logger.debug("REQUEST: action")
         mobj = context
         cname = "Action"
     else:
-        logging.debug("REQUEST: context.doc: {}".format(pp.pformat(context.doc)))
+        logger.debug("REQUEST: context.doc: {}".format(pp.pformat(context.doc)))
         cname = context.doc['_class']
         mobj = request.datasvc.PopulateObject(context.doc, models.__dict__[cname])
 
-    logging.debug("Model class: {}".format(cname))
+    logger.debug("Model class: {}".format(cname))
 
     view_class = globals()[cname + "View"]
 
     return view_class(mobj, request).__call__()
 
+import pkg_resources
 @view_config(name="about", renderer='json')
 def About(request):
-    return {'about': {'name': 'daft', 'version': daft_config.VERSION}}
+    return {'about': {'name': 'daft', 'version': pkg_resources.require("daft")[0].version}}
 
 
 

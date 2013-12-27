@@ -5,12 +5,12 @@ import base64
 import os.path
 import shutil
 import bson
-import pymongo
 import pprint
+import datetime
+import pytz
 
 import util
-import daft_config
-import action as daft_action
+from action import ActionService
 
 # URL model:
 # root/app/
@@ -24,10 +24,12 @@ import action as daft_action
 
 
 class DataService:
-    def __init__(self, db, root):
+    def __init__(self, settings, db, root):
+        self.settings = settings
         self.db = db
         self.root = root
-        self.actionsvc = daft_action.ActionService(self)   # potential reference cycle
+        self.actionsvc = ActionService(self)   # potential reference cycle
+
 
     def GetAllActions(self, app_name):
         if 'action' in self.root['app'][app_name]:
@@ -37,7 +39,7 @@ class DataService:
         cdoc = self.db['containers'].insert({'_class': class_name,
                                          'name': name,
                                          'parent': parent})
-        return bson.DBRef('containers', cdoc['_id'])
+        return bson.DBRef('containers', cdoc)
 
     def GetBuilds(self, app_name):
         return [k for k in self.root['app'][app_name]['builds'].keys() if k[0] != '_']
@@ -45,13 +47,51 @@ class DataService:
     def Applications(self):
         return self.root['app'].keys()
 
+    def NewJob(self, name):
+        job = Job(None, "running", None, attributes={'name': name})
+        jid = self.db['jobs'].insert({
+            '_class': 'Job',
+            'job_id': str(job.id),
+            'status': job.status,
+            'attributes': job.attribs
+        })
+        self.root['job'][str(job.id)] = {
+            "_doc": bson.DBRef("jobs", jid)
+        }
+        return job
 
-    def NewAction(self, app_name, action_name, params, callable):
+    def NewJobData(self, job_id, data):
+        self.db['job_data'].insert({
+            'job_id': job_id,
+            'data': data
+        })
+
+    def GetJobs(self, active):
+        return [d['job_id'] for d in self.db['jobs'].find({'status': 'running'} if active else {})]
+
+    def GetJobData(self, job_id):
+        return sorted([{'created_datetime': d['_id'].generation_time.isoformat(' '), 'data': d['data']} for
+                       d in self.db['job_data'].find({'job_id': job_id})], key=lambda k: k['created_datetime'])
+
+    def SaveJobResults(self, job_id, results):
+        now = datetime.datetime.now(tz=pytz.utc)
+        doc = self.db['jobs'].find_one({'job_id': job_id})
+        diff = (now - doc['_id'].generation_time).total_seconds()
+        res = self.db['jobs'].update({'job_id': job_id}, {'$set': {'status': "completed",
+                                                                   'completed_datetime': now,
+                                                                   'duration_in_seconds': diff}})
+        util.debugLog(self, "SaveJobResults: update job doc: {}".format(res))
+        self.NewJobData(job_id, {"completed_results": results})
+
+    def NewAction(self, app_name, action_name, params):
         util.debugLog(self, "NewAction: app_name: {}".format(app_name))
         util.debugLog(self, "NewAction: action_name: {}".format(action_name))
-        self.root['app'][app_name]['action'][action_name] = Action(app_name, action_name, params, self, callable)
+        self.root['app'][app_name]['action'][action_name] = Action(app_name, action_name, params, self)
         pp = pprint.PrettyPrinter(indent=4)
         util.debugLog(self, "NewAction: actions: {}".format(pp.pformat(self.root['app'][app_name]['action'])))
+
+    def ExecuteAction(self, app_name, action_name, params, verb):
+        return self.actionsvc.async(app_name, action_name, params, verb)
 
     def NewBuild(self, app_name, build_name, attribs, subsys):
         buildobj = Build(app_name, build_name, None, attributes=attribs, subsys=subsys)
@@ -66,6 +106,12 @@ class DataService:
         self.root['app'][app_name]['builds'][build_name] = {
             "_doc": bson.DBRef("builds", id)
         }
+
+    def UpdateBuildProperties(self, app, properties):
+        bobj = self.GetBuild(app, properties['build_name'])
+        for p in properties:
+            setattr(bobj, p, properties[p])
+        self.UpdateBuild(bobj)
 
     def UpdateBuild(self, buildobj):
         doc = self.db['builds'].find_one({"build_name": buildobj.build_name})
@@ -112,7 +158,7 @@ class DataService:
         self.DeleteObject(self.root['global']['users'], name, "users")
 
     def DeleteBuildStorage(self, app_name, build_name):
-        dir = daft_config.DaftConfiguration().get_build_dir()
+        dir = self.settings['daft.builds.dir']
         path = "{root_dir}/{app}/{build}".format(root_dir=dir, app=app_name, build=build_name)
         util.debugLog(self, "DeleteBuildStorage: path: {}".format(path))
         if os.path.isdir(path):
@@ -230,15 +276,14 @@ class SubsystemContainer:
         self.app_name = app_name
 
 class Action:
-    def __init__(self, app_name, action_name, params, datasvc, callable):
+    def __init__(self, app_name, action_name, params, datasvc):
         self.app_name = app_name
         self.action_name = action_name
         self.params = params
         self.datasvc = datasvc
-        self.callable = callable
 
     def execute(self, params, verb):
-        return self.callable(self.datasvc).start(params, verb)
+        return self.datasvc.ExecuteAction(self.app_name, self.action_name, params, verb)
 
 class Application:
     def __init__(self, app_name, created_datetime):
@@ -274,6 +319,17 @@ class Token:
         self.token = base64.urlsafe_b64encode(hashlib.sha256(uuid.uuid4().bytes).hexdigest())[:-2] \
             if token is None else token
 
+class Job:
+    def __init__(self, job_id, status, created_datetime, attributes=None, completed_datetime=None, duration_in_seconds=None):
+        self.id = uuid.uuid4() if job_id is None else job_id
+        self.status = status
+        self.attribs = attributes
+        self.created_datetime = created_datetime
+        self.completed_datetime = completed_datetime
+        self.duration_in_seconds = duration_in_seconds
+
+
+
 class BuildContainer(GenericContainer):
     pass
 
@@ -290,6 +346,9 @@ class ApplicationContainer(GenericContainer):
     pass
 
 class GlobalContainer(GenericContainer):
+    pass
+
+class JobContainer(GenericContainer):
     pass
 
 
@@ -364,3 +423,62 @@ class RootTreeUpdater:
         root_tree = self.db['root_tree'].find_one()
         self.db['root_tree'].update({"_id": root_tree['_id']}, self.tree)
 
+class DataValidator:
+    '''Independed class to migrate/validate the root tree and potentially all docs
+        Intended to run prior to main application, to migrate schema or fix problems
+    '''
+    def __init__(self, root, db):
+        self.root = root
+        self.db = db
+
+    def run(self):
+        util.debugLog(self, "running")
+        self.check_toplevel()
+        self.check_apps()
+        self.check_jobs()
+        self.SaveRoot()
+
+    def SaveRoot(self):
+        self.db['root_tree'].update({"_id": self.root['_id']}, self.root)
+
+    def NewContainer(self, class_name, name, parent):
+        cdoc = self.db['containers'].insert({'_class': class_name,
+                                         'name': name,
+                                         'parent': parent})
+        return bson.DBRef('containers', cdoc)
+
+    def check_jobs(self):
+        djs = list()
+        for j in self.root['job']:
+            if j[0] != '_':
+                if self.db.dereference(self.root['job'][j]['_doc']) is None:
+                    util.debugLog(self, "WARNING: found dangling job ref in root tree: {}; deleting".format(j))
+                    djs.append(j)
+        for j in djs:
+            del self.root['job'][j]
+
+    def check_apps(self):
+        for a in self.root['app']:
+            if a[0] != '_':
+                if 'builds' not in self.root['app'][a]:
+                    util.debugLog(self, "WARNING: 'builds' not found under {}".format(a))
+                    self.root['app'][a]['builds'] = dict()
+                    self.root['app'][a]['builds']['_doc'] = self.NewContainer("BuildContainer", "builds", a)
+                if 'action' not in self.root['app'][a]:
+                    util.debugLog(self, "WARNING: 'action' not found under {}".format(a))
+                    self.root['app'][a]['action'] = dict()
+                    self.root['app'][a]['action']['_doc'] = self.NewContainer("ActionContainer", "action", a)
+
+    def check_toplevel(self):
+        if 'app' not in self.root:
+            util.debugLog(self, "WARNING: 'app' not found under root")
+            self.root['app'] = dict()
+            self.root['app']['_doc'] = self.NewContainer("ApplicationContainer", "app", "")
+        if 'global' not in self.root:
+            util.debugLog(self, "WARNING: 'global' not found under root")
+            self.root['global'] = dict()
+            self.root['global']['_doc'] = self.NewContainer("GlobalContainer", "global", "")
+        if 'job' not in self.root:
+            util.debugLog(self, "WARNING: 'job' not found under root")
+            self.root['job'] = dict()
+            self.root['job']['_doc'] = self.NewContainer("JobContainer", "job", "")

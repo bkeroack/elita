@@ -3,13 +3,16 @@ from pyramid.renderers import JSON
 
 import pymongo
 
-import daft_config
 import models
 
+def GetMongoClient(settings):
+    client = pymongo.MongoClient(settings['daft.mongo.host'], int(settings['daft.mongo.port']))
+    db = client[settings['daft.mongo.db']]
+    return db, db['root_tree'].find_one(), client
+
 def DataStore(request):
-    mdb_info = daft_config.cfg.get_mongo_server()
-    client = pymongo.MongoClient(mdb_info['host'], mdb_info['port'], tz_aware=True)
-    return client[mdb_info['db']]
+    db, root, client = GetMongoClient(request.registry.settings)
+    return db
 
 def RootService(request):
     tree = request.db['root_tree'].find_one()
@@ -17,7 +20,7 @@ def RootService(request):
     return models.RootTree(request.db, updater, tree, None)
 
 def DataService(request):
-    return models.DataService(request.db, request.root)
+    return models.DataService(request.registry.settings, request.db, request.root)
 
 def root_factory(request):
     #initialize request objects
@@ -28,9 +31,12 @@ def root_factory(request):
 def main(global_config, **settings):
     """ This function returns a Pyramid WSGI application.
     """
-    daft_config.cfg = daft_config.DaftConfiguration()
-    #just to make sure that the config file is found and valid
-    daft_config.cfg.get_build_dir()
+
+    #data validator / migrations
+    db, root, client = GetMongoClient(settings)
+    dv = models.DataValidator(root, db)
+    dv.run()
+    client.close()
 
     config = Configurator(root_factory=root_factory, settings=settings)
     config.add_static_view('static', 'static', cache_max_age=3600)
