@@ -18,7 +18,7 @@ requires = [
     ]
 
 setup(name='daft',
-      version="0.60",
+      version="0.66",
       description='daft',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[

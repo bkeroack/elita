@@ -433,6 +433,7 @@ class DataValidator:
 
     def run(self):
         util.debugLog(self, "running")
+        self.check_root()
         self.check_toplevel()
         self.check_apps()
         self.check_jobs()
@@ -482,3 +483,6 @@ class DataValidator:
             util.debugLog(self, "WARNING: 'job' not found under root")
             self.root['job'] = dict()
             self.root['job']['_doc'] = self.NewContainer("JobContainer", "job", "")
+
+    def check_root(self):
+        self.root = dict() if self.root is None else self.root
