@@ -100,10 +100,10 @@ class GenericView:
         if 'auth_token' in self.req.params:
             token = self.req.params['auth_token']
             if self.is_action:
-                self.permissions = auth.UserPermissions(self.datasvc, token).get_action_permissions(app_name,
+                self.permissions = auth.UserPermissions(self.datasvc.usersvc, token).get_action_permissions(app_name,
                                                                                       self.context.action_name)
             else:
-                self.permissions = auth.UserPermissions(self.datasvc, token).get_app_permissions(app_name)
+                self.permissions = auth.UserPermissions(self.datasvc.usersvc, token).get_app_permissions(app_name)
         else:
             self.permissions = None
 
@@ -169,22 +169,22 @@ class ApplicationContainerView(GenericView):
         self.set_params({"GET": [], "PUT": param, "POST": param, "DELETE": param})
 
     def validate_app_name(self, name):
-        return name in self.context.keys()
+        return name in self.datasvc.appsvc.GetApplications()
 
     def PUT(self):
         app_name = self.req.params["app_name"]
-        self.datasvc.NewApplication(app_name)
+        self.datasvc.appsvc.NewApplication(app_name)
         return self.return_action_status({"new_application": {"name": app_name}})
 
     def DELETE(self):
         app_name = self.req.params["app_name"]
         if not self.validate_app_name(app_name):
             return self.Error("app name '{}' not found".format(app_name))
-        self.datasvc.DeleteApplication(app_name)
+        self.datasvc.appsvc.DeleteApplication(app_name)
         return self.return_action_status({"delete_application": app_name})
 
     def GET(self):
-        return {"applications": self.context.keys()}
+        return {"applications": self.datasvc.appsvc.GetApplications()}
 
 
 class ApplicationView(GenericView):
@@ -202,7 +202,7 @@ class ActionContainerView(GenericView):
 
     def GET(self):
         return {"application": self.context.parent,
-                "actions": self.datasvc.GetAllActions(self.context.parent)}
+                "actions": self.datasvc.jobsvc.GetAllActions(self.context.parent)}
 
 class ActionView(GenericView):
     def __init__(self, context, request):
@@ -231,9 +231,6 @@ class ActionView(GenericView):
         return self.execute()
 
 
-class EnvironmentView(GenericView):
-    pass
-
 
 class BuildContainerView(GenericView):
     def __init__(self, context, request):
@@ -243,11 +240,11 @@ class BuildContainerView(GenericView):
 
 
     def validate_build_name(self, build_name):
-        return build_name in self.datasvc.GetBuilds(self.app_name)
+        return build_name in self.datasvc.buildsvc.GetBuilds(self.app_name)
 
     def GET(self):
         return {"application": self.app_name,
-                "builds": self.datasvc.GetBuilds(self.app_name)}
+                "builds": self.datasvc.buildsvc.GetBuilds(self.app_name)}
 
     def PUT(self):
         msg = list()
@@ -255,14 +252,14 @@ class BuildContainerView(GenericView):
         if '/' in build_name:
             build_name = str(build_name).replace('/', '-')
             msg.append("warning: forward slash in build name replaced by hyphen")
-        if build_name in self.datasvc.GetBuilds(self.app_name):
+        if build_name in self.datasvc.buildsvc.GetBuilds(self.app_name):
             msg.append("build exists")
         subsys = self.req.params["subsys"] if "sybsys" in self.req.params else []
         try:
             attribs = self.req.json_body
         except:
             attribs = dict()
-        self.datasvc.NewBuild(self.app_name, build_name, attribs, subsys)
+        self.datasvc.buildsvc.NewBuild(self.app_name, build_name, attribs, subsys)
         return self.return_action_status({"new_build": {"application": self.app_name, "build_name": build_name,
                                                         "attributes": attribs, "messages": msg}})
 
@@ -277,7 +274,7 @@ class BuildContainerView(GenericView):
         build_name = self.req.params["build_name"]
         if not self.validate_build_name(build_name):
             return self.Error("build name '{}' not found".format(build_name))
-        self.datasvc.DeleteBuild(self.app_name, build_name)
+        self.datasvc.buildsvc.DeleteBuild(self.app_name, build_name)
         return self.return_action_status({"delete_build": {"application": self.app_name, "build_name": build_name}})
 
 
@@ -327,7 +324,7 @@ class BuildView(GenericView):
             if not found:
                 self.context.files.append({"file_type": ftype, "path": fname})
         self.context.stored = True
-        self.datasvc.UpdateBuild(self.context)
+        self.datasvc.buildsvc.UpdateBuild(self.context)
         self.ftype = ftype
 
         return self.return_action_status({
@@ -376,13 +373,56 @@ class BuildView(GenericView):
                 'attributes': self.context.attributes}
 
 
+class ServerContainerView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request)
+        self.set_params({"GET": [], "PUT": ['name'], "POST": [], "DELETE": ['name']})
+
+    def GET(self):
+        return {
+            'servers': self.datasvc.serversvc.GetServers()
+        }
+
+    def PUT(self):
+        name = self.req.params['name']
+        if 'attributes' in self.req.params and self.req.params['attributes'] in AFFIRMATIVE_SYNONYMS:
+            try:
+                attribs = self.req.json_body
+            except:
+                return self.Error("invalid attributes object (problem deserializing, bad JSON?)")
+        else:
+            attribs = None
+        self.datasvc.serversvc.NewServer(name, attribs)
+        return self.status_ok({
+            "new_server": {
+                "server_name": name,
+                "attributes": attribs
+            }
+        })
+
+    def DELETE(self):
+        name = self.req.params['name']
+        self.datasvc.serversvc.DeleteServer(name)
+        return self.status_ok({
+            "server_deleted": {
+                "server_name": name
+            }
+        })
+
 class ServerView(GenericView):
     pass
 
+class DeploymentContainerView(GenericView):
+    pass
 
 class DeploymentView(GenericView):
     pass
 
+class GitDeployContainerView(GenericView):
+    pass
+
+class GitDeployView(GenericView):
+    pass
 
 class GlobalContainerView(GenericView):
     def __init__(self, context, request):
@@ -409,7 +449,7 @@ class UserContainerView(GenericView):
             perms = perms_attribs['permissions']
             attribs = perms_attribs['attributes'] if 'attributes' in perms_attribs else dict()
             if auth.ValidatePermissionsObject(perms).run():
-                self.datasvc.NewUser(name, pw, perms, attribs)
+                self.datasvc.usersvc.NewUser(name, pw, perms, attribs)
                 return self.status_ok({"user_created": {"username": name, "password": "(hidden)",
                                                         "permissions": perms, "attributes": attribs}})
             else:
@@ -418,15 +458,15 @@ class UserContainerView(GenericView):
             return self.Error("invalid user attributes object (missing permissions)")
 
     def GET(self):
-        return {"users": self.datasvc.GetUsers()}
+        return {"users": self.datasvc.usersvc.GetUsers()}
 
     def POST(self):
         return self.PUT()
 
     def DELETE(self):
         name = self.req.params['username']
-        if name in self.datasvc.GetUsers():
-            self.datasvc.DeleteUser(name)
+        if name in self.datasvc.usersvc.GetUsers():
+            self.datasvc.usersvc.DeleteUser(name)
             return self.status_ok({"user_deleted": {"username": name}})
         else:
             return self.Error("unknown user")
@@ -448,7 +488,7 @@ class JobView(GenericView):
             ret['duration_in_seconds'] = self.context.duration_in_seconds
         if 'results' in self.req.params:
             if self.req.params['results'] in AFFIRMATIVE_SYNONYMS:
-                ret['results'] = self.datasvc.GetJobData(self.context.id)
+                ret['results'] = self.datasvc.jobsvc.GetJobData(self.context.id)
         return ret
 
 class JobContainerView(GenericView):
@@ -458,7 +498,7 @@ class JobContainerView(GenericView):
 
     def GET(self):
         active = self.req.params['active'] in AFFIRMATIVE_SYNONYMS
-        return {"jobs": {"active": active, "job_ids": self.datasvc.GetJobs(active=active)}}
+        return {"jobs": {"active": active, "job_ids": self.datasvc.jobsvc.GetJobs(active=active)}}
 
 
 class UserView(GenericView):
@@ -470,19 +510,19 @@ class UserView(GenericView):
     def status_ok_with_token(self, username):
         return self.status_ok({"username": username, "permissions": self.context.permissions,
                                "attributes": self.context.attributes,
-                               "auth_token": self.datasvc.GetUserTokens(username)})
+                               "auth_token": self.datasvc.usersvc.GetUserTokens(username)})
 
     def change_password(self, new_pw):
         self.context.change_password(new_pw)
-        self.datasvc.SaveUser(self.context)
+        self.datasvc.usersvc.SaveUser(self.context)
 
     def change_attributes(self, attribs):
         self.context.attributes = attribs
-        self.datasvc.SaveUser(self.context)
+        self.datasvc.usersvc.SaveUser(self.context)
 
     def change_permissions(self, perms):
         self.context.permissions = perms
-        self.datasvc.SaveUser(self.context)
+        self.datasvc.usersvc.SaveUser(self.context)
 
     def GET(self):  # return active
         if 'password' in self.req.params:
@@ -491,8 +531,8 @@ class UserView(GenericView):
         elif 'auth_token' not in self.req.params:
             return self.Error("password or auth token required")
         name = self.context.name
-        if len(self.datasvc.GetUserTokens(name)) == 0:
-            self.datasvc.NewToken(name)
+        if len(self.datasvc.usersvc.GetUserTokens(name)) == 0:
+            self.datasvc.usersvc.NewToken(name)
         return self.status_ok_with_token(name)
 
     def POST(self):
@@ -501,7 +541,7 @@ class UserView(GenericView):
                 return self.Error("incorrect password")
         update = self.req.params['update'] if 'update' in self.req.params else 'token'
         if update == "token":
-            self.datasvc.NewToken(self.context.name)
+            self.datasvc.usersvc.NewToken(self.context.name)
             return self.status_ok_with_token(self.context.name)
         elif update == "password":
             if "new_password" in self.req.params:
@@ -540,8 +580,8 @@ class TokenContainerView(GenericView):
     def GET(self):
         username = self.req.params['username']
         pw = self.req.params['password']
-        if auth.UserPermissions(self.datasvc, None).validate_pw(username, pw):
-            tokens = self.datasvc.GetUserTokens(username)
+        if auth.UserPermissions(self.datasvc.usersvc, None).validate_pw(username, pw):
+            tokens = self.datasvc.usersvc.GetUserTokens(username)
             if len(tokens) > 0:
                 return self.status_ok({"username": username, "token": tokens})
             else:
@@ -551,9 +591,9 @@ class TokenContainerView(GenericView):
 
     def DELETE(self):
         token = self.req.params['token']
-        if token in self.datasvc.GetAllTokens():
-            username = self.datasvc.GetUserFromToken(token)
-            self.datasvc.DeleteToken(token)
+        if token in self.datasvc.usersvc.GetAllTokens():
+            username = self.datasvc.usersvc.GetUserFromToken(token)
+            self.datasvc.usersvc.DeleteToken(token)
             return self.status_ok({"token_deleted": {"username": username, "token": token}})
         else:
             return self.Error("unknown token")
@@ -569,7 +609,7 @@ class TokenView(GenericView):
     def DELETE(self):
         token = self.context.token
         user = self.context.username
-        self.datasvc.DeleteToken(token)
+        self.datasvc.usersvc.DeleteToken(token)
         return self.status_ok({"token_deleted": {"username": user, "token": token}})
 
 
