@@ -40,6 +40,16 @@ class GenericView:
     def get_created_datetime_text(self):
         return self.context.created_datetime.isoformat(' ') if hasattr(self.context, 'created_datetime') else None
 
+    def deserialize_attributes(self):
+        if 'attributes' in self.req.params and self.req.params['attributes'] in AFFIRMATIVE_SYNONYMS:
+            try:
+                attribs = self.req.json_body
+            except:
+                return False, self.Error("invalid attributes object (problem deserializing, bad JSON?)")
+            return True, attribs
+        else:
+            return True, {}
+
     def call_action(self):
         g, p = self.check_params()
         if not g:
@@ -254,12 +264,12 @@ class BuildContainerView(GenericView):
             msg.append("warning: forward slash in build name replaced by hyphen")
         if build_name in self.datasvc.buildsvc.GetBuilds(self.app_name):
             msg.append("build exists")
-        subsys = self.req.params["subsys"] if "sybsys" in self.req.params else []
-        try:
-            attribs = self.req.json_body
-        except:
-            attribs = dict()
-        self.datasvc.buildsvc.NewBuild(self.app_name, build_name, attribs, subsys)
+        attribs = self.deserialize_attributes()
+        if not attribs[0]:
+            return attribs[1]
+        else:
+            attribs = attribs[1]
+        self.datasvc.buildsvc.NewBuild(self.app_name, build_name, attribs)
         return self.return_action_status({"new_build": {"application": self.app_name, "build_name": build_name,
                                                         "attributes": attribs, "messages": msg}})
 
@@ -385,13 +395,11 @@ class ServerContainerView(GenericView):
 
     def PUT(self):
         name = self.req.params['name']
-        if 'attributes' in self.req.params and self.req.params['attributes'] in AFFIRMATIVE_SYNONYMS:
-            try:
-                attribs = self.req.json_body
-            except:
-                return self.Error("invalid attributes object (problem deserializing, bad JSON?)")
+        attribs = self.deserialize_attributes()
+        if not attribs[0]:
+            return attribs[1]
         else:
-            attribs = None
+            attribs = attribs[1]
         self.datasvc.serversvc.NewServer(name, attribs)
         return self.status_ok({
             "new_server": {
@@ -410,7 +418,17 @@ class ServerContainerView(GenericView):
         })
 
 class ServerView(GenericView):
-    pass
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request)
+        self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
+
+    def GET(self):
+        return {
+            'server_name': self.context.name,
+            'created_datetime': self.get_created_datetime_text(),
+            'attributes': self.context.attributes,
+            'gitdeploys': self.datasvc.serversvc.GetGitDeploys()
+        }
 
 class DeploymentContainerView(GenericView):
     pass
@@ -419,7 +437,27 @@ class DeploymentView(GenericView):
     pass
 
 class GitDeployContainerView(GenericView):
-    pass
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request)
+        self.set_params({"GET": [], "PUT": ['name', 'application'], "POST": ['attributes'], "DELETE": []})
+        self.server_name = context.parent
+
+    def PUT(self):
+        name = self.req.params['name']
+        app = self.req.params['application']
+        try:
+            location_attribs = self.req.json_body
+        except:
+            return self.Error("invalid location/attributes object (problem deserializing, bad JSON?)")
+        attribs = location_attribs['attributes'] if 'attributes' in location_attribs else {}
+        if 'location' in location_attribs:
+            location = location_attribs['location']
+        else:
+            return self.Error("invalid location object (valid JSON, 'location' key not found)")
+        self.datasvc.gitdeploysvc.NewGitDeploy(name, app, self.server_name, location, attribs)
+
+
+
 
 class GitDeployView(GenericView):
     pass
@@ -613,6 +651,7 @@ class TokenView(GenericView):
         return self.status_ok({"token_deleted": {"username": user, "token": token}})
 
 
+#this is the default 'root' view that gets called for every request
 @view_config(name="", renderer='json')
 def Action(context, request):
     logger.debug("REQUEST: url: {}".format(request.url))
@@ -628,7 +667,7 @@ def Action(context, request):
     else:
         logger.debug("REQUEST: context.doc: {}".format(pp.pformat(context.doc)))
         cname = context.doc['_class']
-        mobj = request.datasvc.PopulateObject(context.doc, models.__dict__[cname])
+        mobj = models.__dict__[cname](context.doc)
 
     logger.debug("Model class: {}".format(cname))
 

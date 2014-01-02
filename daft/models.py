@@ -34,8 +34,12 @@ class BuildDataService(GenericChildDataService):
     def GetBuilds(self, app_name):
         return [k for k in self.root['app'][app_name]['builds'].keys() if k[0] != '_']
 
-    def NewBuild(self, app_name, build_name, attribs, subsys):
-        buildobj = Build(app_name, build_name, None, attributes=attribs)
+    def NewBuild(self, app_name, build_name, attribs):
+        buildobj = Build({
+            'app_name': app_name,
+            'build_name': build_name,
+            'attributes': attribs
+        })
         id = self.db['builds'].insert({'_class': "Build",
                                        'build_name': buildobj.build_name,
                                        'files': buildobj.files,
@@ -76,11 +80,16 @@ class BuildDataService(GenericChildDataService):
         self.parent.DeleteObject(self.root['app'][app_name]['builds'], build_name, "builds")
 
     def GetBuild(self, app_name, build_name):
-        return self.parent.PopulateObject(self.root['app'][app_name]['builds'][build_name].doc, Build)
+        return Build(self.root['app'][app_name]['builds'][build_name].doc)
 
 class UserDataService(GenericChildDataService):
     def NewUser(self, name, pw, perms, attribs):
-        userobj = User(name, perms, None, password=pw, attributes=attribs)
+        userobj = User({
+            'name': name,
+            'permissions': perms,
+            'password': pw,
+            'attributes': attribs
+        })
         id = self.db['users'].insert({
             "_class": "User",
             "name": userobj.name,
@@ -118,7 +127,9 @@ class UserDataService(GenericChildDataService):
         return [k for k in self.root['global']['tokens'].keys() if k[0] != '_']
 
     def NewToken(self, username):
-        token = Token(username, None)
+        token = Token({
+            'username': username
+        })
         id = self.db['tokens'].insert({
             'username': username,
             'token': token.token,
@@ -133,7 +144,7 @@ class UserDataService(GenericChildDataService):
         return [k for k in self.root['global']['users'].keys() if k[0] != '_']
 
     def GetUser(self, username):
-        return self.parent.PopulateObject(self.root['global']['users'][username].doc, User)
+        return User(self.root['global']['users'][username].doc)
 
     def DeleteUser(self, name):
         self.parent.DeleteObject(self.root['global']['users'], name, "users")
@@ -151,9 +162,7 @@ class ApplicationDataService(GenericChildDataService):
 
         self.root['app'][app_name] = {
             "_doc": bson.DBRef("applications", id),
-            "environments": {"_doc": self.parent.NewContainer("EnvironmentContainer", "evironments", app_name)},
             "builds": {"_doc": self.parent.NewContainer("BuildContainer", "builds", app_name)},
-            "subsys": {"_doc": self.parent.NewContainer("SubsystemContainer", "subsystems", app_name)},
             "action": {"_doc": self.parent.NewContainer("ActionContainer", "action", app_name)}
         }
 
@@ -166,14 +175,19 @@ class JobDataService(GenericChildDataService):
             return [action for action in self.root['app'][app_name]['action'] if action[0] != '_']
 
     def NewJob(self, name):
-        job = Job(None, "running", None, attributes={'name': name})
+        job = Job({
+            'status': "running",
+            'attributes': {
+                'name': name
+            }
+        })
         jid = self.db['jobs'].insert({
             '_class': 'Job',
-            'job_id': str(job.id),
+            'job_id': str(job.job_id),
             'status': job.status,
             'attributes': job.attribs
         })
-        self.root['job'][str(job.id)] = {
+        self.root['job'][str(job.job_id)] = {
             "_doc": bson.DBRef("jobs", jid)
         }
         return job
@@ -216,14 +230,18 @@ class ServerDataService(GenericChildDataService):
         return self.root['server'].keys()
 
     def NewServer(self, name, attribs):
-        server = Server(name, None, None, attribs)
+        server = Server({
+            'name': name,
+            'attribues': attribs
+        })
         sid = self.db['servers'].insert({
             'name': server.name,
             'gitdeploys': [],
             'attributes': server.attributes
         })
         self.root['server'][name] = {
-            '_doc': bson.DBRef('servers', sid)
+            '_doc': bson.DBRef('servers', sid),
+            'gitdeploys': {"_doc": self.parent.NewContainer("GitDeployContainer", "gitdeploys", name)}
         }
 
     def DeleteServer(self, name):
@@ -231,6 +249,29 @@ class ServerDataService(GenericChildDataService):
 
     def AddGitDeploy(self, server_name, gitdeploy_dbref):
         pass
+
+    def GetGitDeploys(self, server_name):
+        return self.root['server'][server_name]['gitdeploys'].keys()
+
+class GitDeployDataService(GenericChildDataService):
+    def NewGitDeploy(self, name, app_name, server_name, location, attributes):
+        sid = self.db['servers'].find_one({'name': server_name})
+        assert id is not None
+        gd = GitDeploy({
+            'name': name,
+            'application': app_name,
+            'server': bson.DBRef('servers', sid),
+            'location': location,
+            'attributes': attributes
+        })
+        gdid = self.db['gitdeploys'].insert({
+            'name': gd.name,
+            'applicadtion': gd.application,
+            'server': gd.server,
+            'attributes': gd.attributes,
+            'location': gd.location
+        })
+        self.root['server'][server_name]['gitdeploys'][name] = {'_doc': bson.DBRef('gitdeploys', gdid)}
 
 class DataService:
     def __init__(self, settings, db, root):
@@ -243,6 +284,7 @@ class DataService:
         self.appsvc = ApplicationDataService(self)
         self.jobsvc = JobDataService(self)
         self.serversvc = ServerDataService(self)
+        self.gitdeploysvc = GitDeployDataService(self)
 
     def NewContainer(self, class_name, name, parent):
         cdoc = self.db['containers'].insert({'_class': class_name,
@@ -255,14 +297,6 @@ class DataService:
         self.db[collection].remove({'_id': id})
         del container[key]
 
-    def PopulateObject(self, doc, class_obj):
-        #generate model object from mongo doc
-        #pp = pprint.PrettyPrinter(indent=4)
-        #util.debugLog(self, "PopulateObject: doc: {}".format(pp.pformat(doc)))
-        args = {k: doc[k] for k in doc if k[0] != u'_'}
-        args['created_datetime'] = doc['_id'].generation_time
-        return class_obj(**args)
-
 class SupportedFileType:
     TarGz = 'tar.gz'
     TarBz2 = 'tar.bz2'
@@ -270,69 +304,66 @@ class SupportedFileType:
     types = [TarBz2, TarGz, Zip]
 
 
-class GenericContainer:
-    def __init__(self, name, parent, created_datetime):
-        self.name = name
-        self.parent = parent
-        self.created_datetime = created_datetime
-
 class GenericDataModel:
+    default_values = {}
+
     def __init__(self, doc):
+        self.set_defaults()
         if doc is not None:
             for k in doc:
                 if k == '_id':
                     self.created_datetime = doc['_id'].generation_time
-                else:
-                    setattr(self, k, doc[k])
-        else:
-            self.init_data()
+                elif k[0] != '_':
+                    self.set_data(k, doc[k])
+        self.process_values()
 
-    def init_data(self):
+    def process_values(self):
         pass
 
-class KeyPair:
-    def __init__(self, attributes, key_type, private_key, public_key, created_datetime):
-        self.attributes = attributes
-        self.key_type = key_type
-        self.private_key = private_key
-        self.public_key = public_key
-        self.created_datetime = created_datetime
+    def set_defaults(self):
+        for k in self.default_values:
+            if not hasattr(self, k):
+                setattr(self, k, self.default_values[k])
 
-class Server:
-    def __init__(self, name, gitdeploys, created_datetime, attributes):
-        self.name = name
-        self.gitdeploys = gitdeploys
-        self.created_datetime = created_datetime
-        self.attributes = attributes
+    def set_data(self, key, value):
+        self._set_data(key, value)
 
-class GitDeploy:
-    def __init__(self, server, app, location, created_datetime, attributes):
-        self.server = server
-        self.app = app
-        self.location = location
-        self.created_datetime = created_datetime
-        self.attributes = attributes
+    def _set_data(self, key, value):
+        setattr(self, key, value)
 
-class Deployment:
-    def __init__(self, criteria, other_jobs, gitdeploys, created_datetime, attributes):
-        self.criteria = criteria
-        self.other_jobs = other_jobs
-        self.gitdeploys = gitdeploys
-        self.created_datetime = created_datetime
-        self.attributes = attributes
+class KeyPair(GenericDataModel):
+    pass
+
+class Server(GenericDataModel):
+    pass
+
+class GitDeploy(GenericDataModel):
+    default_values = {
+        'name': None,
+        'application': None,
+        'server': bson.DBRef(None, None),
+        'attributes': dict(),
+        'location': {
+            'path': None,
+            'git_repo': bson.DBRef(None, None),
+            'default_branch': None,
+            'current_branch': None,
+            'current_rev': None
+        }
+    }
+
+class Deployment(GenericDataModel):
+    pass
 
 
-class Build:
-    def __init__(self, app_name, build_name, created_datetime, files=list(), master_file=None, packages=dict(),
-                 stored=False, attributes={}):
-        self.app_name = app_name
-        self.created_datetime = created_datetime
-        self.build_name = build_name
-        self.attributes = attributes
-        self.stored = stored
-        self.files = files  # { filename: filetype }
-        self.master_file = master_file  # original uploaded file
-        self.packages = packages  # { package_type: {'filename': filename, 'file_type': file_type}}
+class Build(GenericDataModel):
+    default_values = {
+        'files': list(),
+        'stored': False,
+        'master_file': None,
+        'packages': dict(),
+        'attributes': dict()
+    }
 
 
 class Action:
@@ -345,22 +376,22 @@ class Action:
     def execute(self, params, verb):
         return self.datasvc.ExecuteAction(self.app_name, self.action_name, params, verb)
 
-class Application:
-    def __init__(self, app_name, created_datetime):
-        self.app_name = app_name
-        self.created_datetime = created_datetime
+class Application(GenericDataModel):
+    pass
 
-class User:
-    def __init__(self, name, permissions, created_datetime, password=None, hashed_pw=None, salt=None, attributes={}):
-        util.debugLog(self, "user: {}".format(name))
-        self.salt = base64.urlsafe_b64encode(uuid.uuid4().bytes) if salt is None else salt
-        util.debugLog(self, "got salt: {}".format(self.salt))
-        self.name = name
-        self.hashed_pw = hashed_pw if hashed_pw is not None else self.hash_pw(password)
-        util.debugLog(self, "hashed pw: {}".format(self.hashed_pw))
-        self.permissions = permissions
-        self.attributes = attributes
-        self.created_datetime = created_datetime
+class User(GenericDataModel):
+    default_values = {
+        'password': None,
+        'hashed_pw': None,
+        'salt': None,
+        'attributes': dict()
+    }
+
+    def process_values(self):
+        assert self.hashed_pw is not None or self.password is not None
+        self.salt = base64.urlsafe_b64encode(uuid.uuid4().bytes) if self.salt is None else self.salt
+        self.hashed_pw = self.hash_pw(self.password) if self.hashed_pw is None else self.hashed_pw
+        self.password = None
 
     def hash_pw(self, pw):
         assert pw is not None
@@ -372,23 +403,34 @@ class User:
     def change_password(self, new_pw):
         self.hashed_pw = self.hash_pw(new_pw)
 
-class Token:
-    def __init__(self, username, created_datetime, token=None):
-        self.username = username
-        self.created_datetime = created_datetime
+class Token(GenericDataModel):
+    default_values = {
+        'username': None,
+        'token': None
+    }
+
+    def process_values(self):
         self.token = base64.urlsafe_b64encode(hashlib.sha256(uuid.uuid4().bytes).hexdigest())[:-2] \
-            if token is None else token
+            if self.token is None else self.token
 
-class Job:
-    def __init__(self, job_id, status, created_datetime, attributes=None, completed_datetime=None, duration_in_seconds=None):
-        self.id = uuid.uuid4() if job_id is None else job_id
-        self.status = status
-        self.attribs = attributes
+class Job(GenericDataModel):
+    default_values = {
+        'status': 'running',
+        'completed_datetime': None,
+        'duration_in_seconds': None,
+        'attributes': None,
+        'job_id': None
+    }
+
+    def process_values(self):
+        self.job_id = uuid.uuid4() if self.job_id is None else self.job_id
+
+
+class GenericContainer:
+    def __init__(self, name, parent, created_datetime):
+        self.name = name
+        self.parent = parent
         self.created_datetime = created_datetime
-        self.completed_datetime = completed_datetime
-        self.duration_in_seconds = duration_in_seconds
-
-
 
 class BuildContainer(GenericContainer):
     pass
@@ -509,6 +551,8 @@ class DataValidator:
         self.check_toplevel()
         self.check_apps()
         self.check_jobs()
+        self.check_servers()
+        self.check_deployments()
         self.SaveRoot()
 
     def SaveRoot(self):
@@ -542,6 +586,19 @@ class DataValidator:
                     self.root['app'][a]['action'] = dict()
                     self.root['app'][a]['action']['_doc'] = self.NewContainer("ActionContainer", "action", a)
 
+    def check_servers(self):
+        for s in self.root['server']:
+            if s[0] != '_':
+                if 'gitdeploys' not in self.root['server'][s]:
+                    util.debugLog(self, "WARNING: 'gitdeploys' not found under server {}".format(s))
+                    self.root['server'][s]['gitdeploy'] = dict()
+                    self.root['server'][s]['gitdeploy']['_doc'] = self.NewContainer("GitDeployContainer",
+                                                                                    "gitdeploys", s)
+    def check_deployments(self):
+        for d in self.root['deployment']:
+            if d[0] != '_':
+                pass
+
     def check_toplevel(self):
         top_levels = {
             'app': {
@@ -555,9 +612,6 @@ class DataValidator:
             },
             'server': {
                 'class': 'ServerContainer'
-            },
-            'gitdeploy': {
-                'class': 'GitDeployContainer'
             },
             'deployment': {
                 'class': 'DeploymentContainer'
