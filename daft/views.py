@@ -436,6 +436,54 @@ class DeploymentContainerView(GenericView):
 class DeploymentView(GenericView):
     pass
 
+class GitProviderContainerView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request)
+        self.set_params({"GET": [], "PUT": ['name', 'type'], "POST": ['name', 'type'], "DELETE": []})
+
+    def GET(self):
+        return {
+            'gitproviders': self.datasvc.gitsvc.GetGitProviders()
+        }
+
+    def PUT(self):
+        name = self.req.params['name']
+        gp_type = self.req.params['type']
+        if gp_type not in ('bitbucket', 'github'):
+            return self.Error("gitprovider type not supported")
+        try:
+            auth = self.req.json_body
+        except:
+            return self.Error("invalid gitprovider auth object (problem deserializing, bad JSON?)")
+        self.datasvc.gitsvc.NewGitProvider(name, gp_type, auth)
+        return self.status_ok({
+            'new_gitprovider': {
+                'name': name,
+                'type': type
+            }
+        })
+
+    def POST(self):
+        return self.PUT()
+
+class GitProviderView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request)
+        self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
+
+    def GET(self):
+        return {
+            'gitprovider': {
+                'name': self.context.name,
+                'type': self.context.type,
+            }
+        }
+
+    def POST(self):
+        new_doc = dict()
+        if 'type' in self.req.params
+
+
 class GitDeployContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request)
@@ -459,7 +507,7 @@ class GitDeployContainerView(GenericView):
 
 class GitDeployView(GenericView):
     def __init__(self, context, request):
-        GenericView.__init__(self, context, request)
+        GenericView.__init__(self, context, request, app_name=self.context.application)
         self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
 
     def GET(self):

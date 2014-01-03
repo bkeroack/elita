@@ -253,7 +253,7 @@ class ServerDataService(GenericChildDataService):
     def GetGitDeploys(self, server_name):
         return self.root['server'][server_name]['gitdeploys'].keys()
 
-class GitDeployDataService(GenericChildDataService):
+class GitDataService(GenericChildDataService):
     def NewGitDeploy(self, name, app_name, server_name, location, attributes):
         sid = self.db['servers'].find_one({'name': server_name})
         assert id is not None
@@ -273,6 +273,38 @@ class GitDeployDataService(GenericChildDataService):
         })
         self.root['server'][server_name]['gitdeploys'][name] = {'_doc': bson.DBRef('gitdeploys', gdid)}
 
+    def GetGitProviders(self, objs=False):
+        if objs:
+            return [GitProvider(gp.doc) for gp in self.root['global']['gitproviders']]
+        return self.root['global']['gitproviders'].keys()
+
+    def NewGitProvider(self, name, type, auth):
+        if name in self.root['global']['gitproviders']:
+            self.db['gitproviders'].remove({'name': name})
+        gpobj = GitProvider({
+            'name': name,
+            'type': type,
+            'auth': auth
+        })
+        gpid = self.db['gitproviders'].insert({
+            'name': gpobj.name,
+            'type': gpobj.type,
+            'auth': gpobj.auth
+        })
+        self.root['global']['gitproviders'][gpobj.name] = {'_doc': bson.DBRef('gitproviders', gpid)}
+
+    def UpdateGitProvider(self, name, doc):
+        gp_doc = self.db['gitproviders'].find_one({'name': name})
+        if gp_doc:
+            gpobj = GitProvider(gp_doc)
+            gpobj.update_values(doc)
+            new_doc = gpobj.get_doc()
+            new_doc['_id'] = gp_doc['_id']
+            self.db['gitproviders'].save(new_doc)
+
+
+
+
 class DataService:
     def __init__(self, settings, db, root):
         self.settings = settings
@@ -284,7 +316,7 @@ class DataService:
         self.appsvc = ApplicationDataService(self)
         self.jobsvc = JobDataService(self)
         self.serversvc = ServerDataService(self)
-        self.gitdeploysvc = GitDeployDataService(self)
+        self.gitsvc = GitDataService(self)
 
     def NewContainer(self, class_name, name, parent):
         cdoc = self.db['containers'].insert({'_class': class_name,
@@ -331,6 +363,15 @@ class GenericDataModel:
     def _set_data(self, key, value):
         setattr(self, key, value)
 
+    def update_values(self, doc):
+        for k in doc:
+            if hasattr(self, k):
+                setattr(self, k, doc[k])
+
+    def get_doc(self):
+        return {k: getattr(self, k) for k in self.default_values}
+
+
 class KeyPair(GenericDataModel):
     pass
 
@@ -358,6 +399,8 @@ class Deployment(GenericDataModel):
 
 class Build(GenericDataModel):
     default_values = {
+        'build_name': None,
+        'app_name': None,
         'files': list(),
         'stored': False,
         'master_file': None,
@@ -374,7 +417,7 @@ class Action:
         self.datasvc = datasvc
 
     def execute(self, params, verb):
-        return self.datasvc.ExecuteAction(self.app_name, self.action_name, params, verb)
+        return self.datasvc.jobsvc.ExecuteAction(self.app_name, self.action_name, params, verb)
 
 class Application(GenericDataModel):
     pass
@@ -426,6 +469,16 @@ class Job(GenericDataModel):
         self.job_id = uuid.uuid4() if self.job_id is None else self.job_id
 
 
+class GitProvider(GenericDataModel):
+    default_values = {
+        'name': None,
+        'type': None,
+        'auth': {
+            'username': None,
+            'password': None
+        }
+    }
+
 class GenericContainer:
     def __init__(self, name, parent, created_datetime):
         self.name = name
@@ -465,6 +518,8 @@ class DeploymentContainer(GenericContainer):
 class KeyPairContainer(GenericContainer):
     pass
 
+class GitProviderContainer(GenericContainer):
+    pass
 
 
 class RootTree(collections.MutableMapping):
@@ -549,6 +604,7 @@ class DataValidator:
         util.debugLog(self, "running")
         self.check_root()
         self.check_toplevel()
+        self.check_global()
         self.check_apps()
         self.check_jobs()
         self.check_servers()
@@ -563,6 +619,24 @@ class DataValidator:
                                          'name': name,
                                          'parent': parent})
         return bson.DBRef('containers', cdoc)
+
+    def check_global(self):
+        global_levels = {
+            'users': {
+                'class': "UserContainer"
+            },
+            'tokens': {
+                'class': "TokenContainer"
+            },
+            'gitproviders': {
+                'class': "GitProviderContainer"
+            }
+        }
+        for l in global_levels:
+            if l not in self.root['global']:
+                util.debugLog(self, "WARNING: '{}' not found under global".format(l))
+                self.root['global'][l] = dict()
+                self.root['global'][l]['_doc'] = self.NewContainer(global_levels[l]['class'], l, "")
 
     def check_jobs(self):
         djs = list()
