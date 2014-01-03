@@ -341,11 +341,11 @@ class GitDeploy(GenericDataModel):
     default_values = {
         'name': None,
         'application': None,
-        'server': bson.DBRef(None, None),
+        'server': bson.DBRef("", None),
         'attributes': dict(),
         'location': {
             'path': None,
-            'git_repo': bson.DBRef(None, None),
+            'git_repo': bson.DBRef("", None),
             'default_branch': None,
             'current_branch': None,
             'current_rev': None

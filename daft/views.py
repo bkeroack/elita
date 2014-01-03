@@ -457,10 +457,19 @@ class GitDeployContainerView(GenericView):
         self.datasvc.gitdeploysvc.NewGitDeploy(name, app, self.server_name, location, attribs)
 
 
-
-
 class GitDeployView(GenericView):
-    pass
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request)
+        self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
+
+    def GET(self):
+        return {
+            'name': self.context.name,
+            'server': self.context.server,
+            'application': self.context.application,
+            'attributes': self.context.attributes,
+            'location': self.context.location
+        }
 
 class GlobalContainerView(GenericView):
     def __init__(self, context, request):
