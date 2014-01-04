@@ -11,6 +11,7 @@ import pytz
 
 import util
 from action import ActionService
+import daft
 
 # URL model:
 # root/app/
@@ -22,14 +23,24 @@ from action import ActionService
 # root/app/{app_name}/environments/{env_name}/servers
 # root/app/{app_name}/environemnt/{env_name}/servers/{server_name}
 
+#dummy class to pass to RootService
+class Request:
+    db = None
 
 class DataService:
-    def __init__(self, settings, db, root):
+    def __init__(self, settings, db, root, actions_init=True):
         self.settings = settings
         self.db = db
         self.root = root
-        self.actionsvc = ActionService(self)   # potential reference cycle
+        if actions_init:
+            self.actionsvc = ActionService(self)   # potential reference cycle
 
+    def refresh_root(self):
+        # when running long async actions the root tree passed to constructor may be stale by the time we try to update
+        # so just prior to altering it, we refresh from the DB
+        req = Request()
+        req.db = self.db
+        self.root = daft.RootService(req)
 
     def GetAllActions(self, app_name):
         if 'action' in self.root['app'][app_name]:
@@ -55,6 +66,7 @@ class DataService:
             'status': job.status,
             'attributes': job.attribs
         })
+        self.refresh_root()
         self.root['job'][str(job.id)] = {
             "_doc": bson.DBRef("jobs", jid)
         }
@@ -86,9 +98,8 @@ class DataService:
     def NewAction(self, app_name, action_name, params):
         util.debugLog(self, "NewAction: app_name: {}".format(app_name))
         util.debugLog(self, "NewAction: action_name: {}".format(action_name))
+        self.refresh_root()
         self.root['app'][app_name]['action'][action_name] = Action(app_name, action_name, params, self)
-        pp = pprint.PrettyPrinter(indent=4)
-        util.debugLog(self, "NewAction: actions: {}".format(pp.pformat(self.root['app'][app_name]['action'])))
 
     def ExecuteAction(self, app_name, action_name, params, verb):
         return self.actionsvc.async(app_name, action_name, params, verb)
@@ -103,9 +114,11 @@ class DataService:
                                        'packages': buildobj.packages,
                                        'attributes': buildobj.attributes,
                                        'subsys': buildobj.subsys})
+        self.refresh_root()
         self.root['app'][app_name]['builds'][build_name] = {
             "_doc": bson.DBRef("builds", id)
         }
+
 
     def UpdateBuildProperties(self, app, properties):
         bobj = self.GetBuild(app, properties['build_name'])
@@ -130,6 +143,7 @@ class DataService:
             'token': token.token,
             '_class': "Token"
         })
+        self.refresh_root()
         self.root['global']['tokens'][token.token] = {
             "_doc": bson.DBRef("tokens", id)
         }
@@ -145,6 +159,7 @@ class DataService:
             "salt": userobj.salt,
             "permissions": userobj.permissions
         })
+        self.refresh_root()
         self.root['global']['users'][userobj.name] = {
             "_doc": bson.DBRef("users", id)
         }
@@ -155,6 +170,7 @@ class DataService:
         del container[key]
 
     def DeleteUser(self, name):
+        self.refresh_root()
         self.DeleteObject(self.root['global']['users'], name, "users")
 
     def DeleteBuildStorage(self, app_name, build_name):
@@ -167,21 +183,23 @@ class DataService:
 
     def DeleteBuild(self, app_name, build_name):
         self.DeleteBuildStorage(app_name, build_name)
+        self.refresh_root()
         self.DeleteObject(self.root['app'][app_name]['builds'], build_name, "builds")
 
     def DeleteToken(self, token):
+        self.refresh_root()
         self.DeleteObject(self.root['global']['tokens'], token, "tokens")
 
     def NewApplication(self, app_name):
-
         id = self.db['applications'].insert({'_class': "Application", "app_name": app_name})
 
+        self.refresh_root()
         self.root['app'][app_name] = {
-            "_doc": bson.DBRef("applications", id),
-            "environments": {"_doc": self.NewContainer("EnvironmentContainer", "evironments", app_name)},
-            "builds": {"_doc": self.NewContainer("BuildContainer", "builds", app_name)},
-            "subsys": {"_doc": self.NewContainer("SubsystemContainer", "subsystems", app_name)},
-            "action": {"_doc": self.NewContainer("ActionContainer", "action", app_name)}
+           "_doc": bson.DBRef("applications", id),
+           "environments": {"_doc": self.NewContainer("EnvironmentContainer", "evironments", app_name)},
+           "builds": {"_doc": self.NewContainer("BuildContainer", "builds", app_name)},
+           "subsys": {"_doc": self.NewContainer("SubsystemContainer", "subsystems", app_name)},
+           "action": {"_doc": self.NewContainer("ActionContainer", "action", app_name)}
         }
 
     def GetUserTokens(self, username):
@@ -199,6 +217,7 @@ class DataService:
         return [k for k in self.root['global']['tokens'].keys() if k[0] != '_']
 
     def DeleteApplication(self, app_name):
+        self.refresh_root()
         self.DeleteObject(self.root['app'], app_name, 'applications')
 
     def GetUsers(self):
@@ -371,6 +390,8 @@ class RootTree(collections.MutableMapping):
             #util.debugLog(self, "__getitem__: is_application: subtree: {}".format(self.tree[key]))
             return self.tree[key]
         if key in self.tree:
+            if key == '_doc':
+                return self.tree[key]
             doc = self.db.dereference(self.tree[key]['_doc'])
             if doc is None:
                 #util.debugLog(self, "__getitem__: doc is none")
@@ -385,7 +406,6 @@ class RootTree(collections.MutableMapping):
         self.tree[key] = value
         if not self.is_action():     # dynamically populated each request
             self.updater.update()
-
 
     def __delitem__(self, key):
         del self.tree[key]
@@ -419,12 +439,14 @@ class RootTreeUpdater:
                         del self.tree['app'][a]['action'][action]
 
     def update(self):
+        #pp = pprint.PrettyPrinter(indent=4)
+        #util.debugLog(self, "self.tree: {}".format(pp.pformat(self.tree)))
         self.clean_actions()
         root_tree = self.db['root_tree'].find_one()
         self.db['root_tree'].update({"_id": root_tree['_id']}, self.tree)
 
 class DataValidator:
-    '''Independed class to migrate/validate the root tree and potentially all docs
+    '''Independent class to migrate/validate the root tree and potentially all docs
         Intended to run prior to main application, to migrate schema or fix problems
     '''
     def __init__(self, root, db):
@@ -457,16 +479,25 @@ class DataValidator:
                     djs.append(j)
         for j in djs:
             del self.root['job'][j]
+        for doc in self.db['jobs'].find():
+            if doc['job_id'] not in self.root['job']:
+                job_id = doc['job_id']
+                util.debugLog(self, "WARNING: found orphan job: {}; adding to root tree".format(doc['job_id']))
+                self.root['job'][job_id] = {'_doc': bson.DBRef('jobs', doc['_id'])}
 
     def check_apps(self):
         for a in self.root['app']:
             if a[0] != '_':
-                if 'builds' not in self.root['app'][a]:
+                if 'builds' not in self.root['app'][a] or \
+                        '_doc' not in self.root['app'][a]['builds']:
                     util.debugLog(self, "WARNING: 'builds' not found under {}".format(a))
+                    self.db['containers'].remove({'name': 'builds'})
                     self.root['app'][a]['builds'] = dict()
                     self.root['app'][a]['builds']['_doc'] = self.NewContainer("BuildContainer", "builds", a)
-                if 'action' not in self.root['app'][a]:
+                if 'action' not in self.root['app'][a] or \
+                        '_doc' not in self.root['app'][a]['action']:
                     util.debugLog(self, "WARNING: 'action' not found under {}".format(a))
+                    self.db['containers'].remove({'name': 'action'})
                     self.root['app'][a]['action'] = dict()
                     self.root['app'][a]['action']['_doc'] = self.NewContainer("ActionContainer", "action", a)
 

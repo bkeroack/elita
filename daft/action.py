@@ -16,7 +16,7 @@ def run_job(self, settings, callable, args):
     tree = db['root_tree'].find_one()
     updater = models.RootTreeUpdater(tree, db)
     root = models.RootTree(db, updater, tree, None)
-    datasvc = models.DataService(settings, db, root)
+    datasvc = models.DataService(settings, db, root, actions_init=False)
     results = callable(datasvc, **args)
     datasvc.SaveJobResults(job_id, results)
     client.close()
