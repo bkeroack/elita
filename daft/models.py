@@ -195,11 +195,11 @@ class DataService:
 
         self.refresh_root()
         self.root['app'][app_name] = {
-           "_doc": bson.DBRef("applications", id),
-           "environments": {"_doc": self.NewContainer("EnvironmentContainer", "evironments", app_name)},
-           "builds": {"_doc": self.NewContainer("BuildContainer", "builds", app_name)},
-           "subsys": {"_doc": self.NewContainer("SubsystemContainer", "subsystems", app_name)},
-           "action": {"_doc": self.NewContainer("ActionContainer", "action", app_name)}
+            "_doc": bson.DBRef("applications", id),
+            "environments": {"_doc": self.NewContainer("EnvironmentContainer", "evironments", app_name)},
+            "builds": {"_doc": self.NewContainer("BuildContainer", "builds", app_name)},
+            "subsys": {"_doc": self.NewContainer("SubsystemContainer", "subsystems", app_name)},
+            "action": {"_doc": self.NewContainer("ActionContainer", "action", app_name)}
         }
 
     def GetUserTokens(self, username):
