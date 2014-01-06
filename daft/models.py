@@ -310,13 +310,14 @@ class DataService:
         self.settings = settings
         self.db = db
         self.root = root
-        self.actionsvc = ActionService(self)   # potential reference cycles
+        # potential reference cycles
         self.buildsvc = BuildDataService(self)
         self.usersvc = UserDataService(self)
         self.appsvc = ApplicationDataService(self)
         self.jobsvc = JobDataService(self)
         self.serversvc = ServerDataService(self)
         self.gitsvc = GitDataService(self)
+        self.actionsvc = ActionService(self)
 
     def NewContainer(self, class_name, name, parent):
         cdoc = self.db['containers'].insert({'_class': class_name,

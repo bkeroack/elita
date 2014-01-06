@@ -4,6 +4,8 @@ import pyramid.response
 import logging
 import urllib2
 import pprint
+import traceback
+import sys
 
 import models
 import builds
@@ -167,10 +169,15 @@ class NotFoundView(GenericView):
         return self.notfound()
 
 
-#@view_config(context=Exception, renderer='json')
-#def ExceptionView(exc, request):
-#    return {"unhandled exception": exc}
-
+@view_config(context=Exception, renderer='json')
+def ExceptionView(exc, request):
+    exc_type, exc_obj, tb = sys.exc_info()
+    logger.exception("")
+    return {
+        "fatal_application_error": {
+            "unhandled_exception": traceback.format_exception(exc_type, exc_obj, tb)
+        }
+    }
 
 class ApplicationContainerView(GenericView):
     def __init__(self, context, request):
@@ -481,7 +488,8 @@ class GitProviderView(GenericView):
 
     def POST(self):
         new_doc = dict()
-        if 'type' in self.req.params
+        if 'type' in self.req.params:
+            pass
 
 
 class GitDeployContainerView(GenericView):
