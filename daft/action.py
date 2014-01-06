@@ -6,20 +6,31 @@ import pymongo
 
 __author__ = 'bkeroack'
 
-@celeryinit.celery.task(bind=True, name="daft_task_run_job")
-def run_job(self, settings, callable, args):
-    ''' Generate new dataservice, run callable, store results
-    '''
-    job_id = self.request.id
+def regen_datasvc(settings):
     client = pymongo.MongoClient(settings['daft.mongo.host'], int(settings['daft.mongo.port']))
     db = client[settings['daft.mongo.db']]
     tree = db['root_tree'].find_one()
     updater = models.RootTreeUpdater(tree, db)
     root = models.RootTree(db, updater, tree, None)
-    datasvc = models.DataService(settings, db, root)
+    return client, models.DataService(settings, db, root)
+
+@celeryinit.celery.task(bind=True, name="daft_task_run_job")
+def run_job(self, settings, callable, args):
+    ''' Generate new dataservice, run callable, store results
+    '''
+    job_id = self.request.id
+    client, datasvc = regen_datasvc(settings)
     results = callable(datasvc, **args)
     datasvc.SaveJobResults(job_id, results)
     client.close()
+
+#generic interface to run code async (not explicit named actions/hooks)
+def run_async(datasvc, name, callable, args):
+    util.debugLog("run_async", "create new async task: {}; args: {}".format(callable, args))
+    job = datasvc.NewJob("run_async: {}".format(name))
+    job_id = str(job.job_id)
+    run_job.apply_async((datasvc.settings, callable, args), task_id=job_id)
+    return job_id
 
 
 class ActionService:
@@ -34,7 +45,7 @@ class ActionService:
         action = self.actions.actionmap[app][action_name]['callable']
         util.debugLog(self, "action: {}, params: {}, verb: {}".format(action, params, verb))
         job = self.datasvc.NewJob(action_name)
-        job_id = str(job.id)
+        job_id = str(job.job_id)
         run_job.apply_async((self.datasvc.settings, action, {'params': params, 'verb': verb}), task_id=job_id)
         return {"action": action_name, "job_id": job_id, "status": "async/running"}
 

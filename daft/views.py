@@ -446,7 +446,7 @@ class DeploymentView(GenericView):
 class GitProviderContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request)
-        self.set_params({"GET": [], "PUT": ['name', 'type'], "POST": ['name', 'type'], "DELETE": []})
+        self.set_params({"GET": [], "PUT": ['name'], "POST": ['name'], "DELETE": []})
 
     def GET(self):
         return {
@@ -455,18 +455,22 @@ class GitProviderContainerView(GenericView):
 
     def PUT(self):
         name = self.req.params['name']
-        gp_type = self.req.params['type']
+        try:
+            info = self.req.json_body
+        except:
+            return self.Error("invalid gitprovider info object (problem deserializing, bad JSON?)")
+        if 'auth' not in info or 'type' not in info or 'base_url' not in info:
+            return self.Error("invalid gitprovider info object (valid JSON but missing one or more of: auth, type, base_url )")
+        gp_type = info['type']
+        auth = info['auth']
+        base_url = info['base_url']
         if gp_type not in ('bitbucket', 'github'):
             return self.Error("gitprovider type not supported")
-        try:
-            auth = self.req.json_body
-        except:
-            return self.Error("invalid gitprovider auth object (problem deserializing, bad JSON?)")
         self.datasvc.gitsvc.NewGitProvider(name, gp_type, auth)
         return self.status_ok({
             'new_gitprovider': {
                 'name': name,
-                'type': type
+                'type': gp_type
             }
         })
 
@@ -490,6 +494,67 @@ class GitProviderView(GenericView):
         new_doc = dict()
         if 'type' in self.req.params:
             pass
+
+    def DELETE(self):
+        self.datasvc.gitsvc.DeleteGitProvider(self.context.name)
+        return self.status_ok({
+            'delete_gitprovider': {
+                'name': self.context.name
+            }
+        })
+
+class GitRepoContainerView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request, app_name=context.parent)
+        self.set_params({"GET": [], "PUT": ['name'], "POST": ['name'], "DELETE": []})
+
+    def GET(self):
+        return {
+            'gitrepos': self.datasvc.gitsvc.GetGitRepos()
+        }
+
+    def PUT(self):
+        name = self.req.params['name']
+        try:
+            gitrepo_info = self.req.json_body
+        except:
+            return self.Error("invalid gitrepo object (problem deserializing, bad JSON?)")
+        if 'path' not in gitrepo_info:
+            return self.Error("gitrepo path not found in JSON body")
+        path = gitrepo_info['path']
+        if 'gitprovider' in self.req.params:
+            gitprovider = self.req.params['gitprovider']
+        elif 'gitprovider' in gitrepo_info:
+            gitprovider = gitrepo_info['gitprovider']
+        else:
+            return self.Error("No gitprovider given; specify in URL params or JSON body")
+        ret = self.datasvc.gitsvc.NewGitRepo(self.context.parent, name, path, gitprovider)
+        if ret['NewGitRepo'] != 'ok':
+            return self.Error(ret)
+        else:
+            return self.status_ok({
+                'new_gitrepo': ret
+            })
+
+    def POST(self):
+        return self.PUT()
+
+class GitRepoView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request, app_name=context.application)
+        self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
+
+    def GET(self):
+        gp_doc = self.datasvc.Dereference(self.context.gitprovider)
+        gp_doc = {k: gp_doc[k] for k in gp_doc if k[0] != '_'}
+        return {
+            'gitrepo': {
+                'name': self.context.name,
+                'application': self.context.pa,
+                'path': self.context.path,
+                'gitprovider': gp_doc
+            }
+        }
 
 
 class GitDeployContainerView(GenericView):

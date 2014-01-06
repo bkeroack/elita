@@ -163,7 +163,8 @@ class ApplicationDataService(GenericChildDataService):
         self.root['app'][app_name] = {
             "_doc": bson.DBRef("applications", id),
             "builds": {"_doc": self.parent.NewContainer("BuildContainer", "builds", app_name)},
-            "action": {"_doc": self.parent.NewContainer("ActionContainer", "action", app_name)}
+            "action": {"_doc": self.parent.NewContainer("ActionContainer", "action", app_name)},
+            "gitrepos": {"_doc": self.parent.NewContainer("GitRepoContainer", "gitrepos", app_name)}
         }
 
     def DeleteApplication(self, app_name):
@@ -232,9 +233,10 @@ class ServerDataService(GenericChildDataService):
     def NewServer(self, name, attribs):
         server = Server({
             'name': name,
-            'attribues': attribs
+            'attributes': attribs
         })
         sid = self.db['servers'].insert({
+            '_class': "Server",
             'name': server.name,
             'gitdeploys': [],
             'attributes': server.attributes
@@ -265,6 +267,7 @@ class GitDataService(GenericChildDataService):
             'attributes': attributes
         })
         gdid = self.db['gitdeploys'].insert({
+            '_class': "GitDeploy",
             'name': gd.name,
             'applicadtion': gd.application,
             'server': gd.server,
@@ -276,19 +279,22 @@ class GitDataService(GenericChildDataService):
     def GetGitProviders(self, objs=False):
         if objs:
             return [GitProvider(gp.doc) for gp in self.root['global']['gitproviders']]
-        return self.root['global']['gitproviders'].keys()
+        return [k for k in self.root['global']['gitproviders'].keys() if k[0] != '_']
 
-    def NewGitProvider(self, name, type, auth):
+    def NewGitProvider(self, name, type, base_url, auth):
         if name in self.root['global']['gitproviders']:
             self.db['gitproviders'].remove({'name': name})
         gpobj = GitProvider({
             'name': name,
             'type': type,
+            'base_url': base_url,
             'auth': auth
         })
         gpid = self.db['gitproviders'].insert({
+            '_class': "GitProvider",
             'name': gpobj.name,
             'type': gpobj.type,
+            'base_url': gpobj.base_url,
             'auth': gpobj.auth
         })
         self.root['global']['gitproviders'][gpobj.name] = {'_doc': bson.DBRef('gitproviders', gpid)}
@@ -300,10 +306,37 @@ class GitDataService(GenericChildDataService):
             gpobj.update_values(doc)
             new_doc = gpobj.get_doc()
             new_doc['_id'] = gp_doc['_id']
+            new_doc['_class'] = "GitProvider"
             self.db['gitproviders'].save(new_doc)
 
+    def DeleteGitProvider(self, name):
+        self.db['gitproviders'].remove({'name': name})
+        del self.root['global']['gitproviders'][name]
 
+    def GetGitRepos(self, app):
+        return [k for k in self.root['app'][app]['gitrepos'].keys() if k[0] != '_']
 
+    def NewGitRepo(self, app, name, path, gitprovider):
+        gp_doc = self.db['gitproviders'].find_one({'name': gitprovider})
+        if gp_doc is None:
+            return {'NewGitRepo': "gitprovider '{}' is unknown".format(gitprovider)}
+        gr_obj = GitRepo({
+            'name': name,
+            'application': app,
+            'path': path,
+            'gitprovider': bson.DBRef("gitproviders", gp_doc['_id'])
+        })
+        gr_id = self.db['gitrepos'].insert({
+            '_class': "GitRepo",
+            'name': gr_obj.name,
+            'application': gr_obj.application,
+            'path': gr_obj.path,
+            'gitprovider': gr_obj.gitprovider
+        })
+        self.root['app'][app]['gitrepos'][name] = {
+            '_doc': bson.DBRef('gitrepos', gr_id)
+        }
+        return {'NewGitRepo': 'ok'}
 
 class DataService:
     def __init__(self, settings, db, root):
@@ -329,6 +362,9 @@ class DataService:
         id = container[key].doc['_id']
         self.db[collection].remove({'_id': id})
         del container[key]
+
+    def Dereference(self, dbref):
+        return self.db.dereference(dbref)
 
 class SupportedFileType:
     TarGz = 'tar.gz'
@@ -379,6 +415,25 @@ class KeyPair(GenericDataModel):
 class Server(GenericDataModel):
     pass
 
+class GitProvider(GenericDataModel):
+    default_values = {
+        'name': None,
+        'type': None,
+        'base_url': None,
+        'auth': {
+            'username': None,
+            'password': None
+        }
+    }
+
+class GitRepo(GenericDataModel):
+    default_values = {
+        'name': None,
+        'application': None,
+        'path': None,
+        'gitprovider': None
+    }
+
 class GitDeploy(GenericDataModel):
     default_values = {
         'name': None,
@@ -421,10 +476,13 @@ class Action:
         return self.datasvc.jobsvc.ExecuteAction(self.app_name, self.action_name, params, verb)
 
 class Application(GenericDataModel):
-    pass
+    default_values = {
+        'app_name': None
+    }
 
 class User(GenericDataModel):
     default_values = {
+        'username': None,
         'password': None,
         'hashed_pw': None,
         'salt': None,
@@ -469,22 +527,12 @@ class Job(GenericDataModel):
     def process_values(self):
         self.job_id = uuid.uuid4() if self.job_id is None else self.job_id
 
-
-class GitProvider(GenericDataModel):
-    default_values = {
-        'name': None,
-        'type': None,
-        'auth': {
-            'username': None,
-            'password': None
-        }
-    }
-
 class GenericContainer:
-    def __init__(self, name, parent, created_datetime):
-        self.name = name
-        self.parent = parent
-        self.created_datetime = created_datetime
+    def __init__(self, doc):
+        self.name = doc['name']
+        self.parent = doc['parent']
+        self.created_datetime = doc['_id'].generation_time if '_id' in doc else None
+
 
 class BuildContainer(GenericContainer):
     pass
@@ -510,6 +558,12 @@ class JobContainer(GenericContainer):
 class ServerContainer(GenericContainer):
     pass
 
+class GitProviderContainer(GenericContainer):
+    pass
+
+class GitRepoContainer(GenericContainer):
+    pass
+
 class GitDeployContainer(GenericContainer):
     pass
 
@@ -517,9 +571,6 @@ class DeploymentContainer(GenericContainer):
     pass
 
 class KeyPairContainer(GenericContainer):
-    pass
-
-class GitProviderContainer(GenericContainer):
     pass
 
 
@@ -604,6 +655,7 @@ class DataValidator:
     def run(self):
         util.debugLog(self, "running")
         self.check_root()
+        self.check_doc_consistency()
         self.check_toplevel()
         self.check_global()
         self.check_apps()
@@ -620,6 +672,59 @@ class DataValidator:
                                          'name': name,
                                          'parent': parent})
         return bson.DBRef('containers', cdoc)
+
+    def check_doc_consistency(self):
+        #enforce collection rules and verify connectivity b/w objects and root tree
+        collects = [
+            'applications',
+            'builds',
+            'gitproviders',
+            'gitrepos',
+            'gitdeploys',
+            'jobs',
+            'tokens',
+            'users'
+        ]
+        for c in collects:
+            for d in self.db[c].find():
+                if '_class' not in d:
+                    util.debugLog(self, "WARNING: class specification not found in object {} from collection {}"
+                    .format(d['_id'], c))
+                    util.debugLog(self, "...deleting malformed object")
+                    self.db[c].remove({'_id': d['_id']})
+                if c == 'applications':
+                    if d['app_name'] not in self.root['app']:
+                        util.debugLog(self, "WARNING: orphan application object: '{}', adding to root tree".format(d['app_name']))
+                        self.root['app'][d['app_name']] = {'_doc': bson.DBRef('applications', d['_id'])}
+                if c == 'builds':
+                    if d['build_name'] not in self.root['app'][d['app_name']]['builds']:
+                        util.debugLog(self, "WARNING: orphan build object: '{}/{}', adding to root tree".format(d['app_name'], d['build_name']))
+                        self.root['app'][d['app_name']]['builds'][d['build_name']] = {'_doc': bson.DBRef('builds', d['_id'])}
+                if c == 'gitproviders':
+                    if d['name'] not in self.root['global']['gitproviders']:
+                        util.debugLog(self, "WARNING: orphan gitprovider object: '{}', adding to root tree".format(d['name']))
+                        self.root['global']['gitproviders'][d['name']] = {'_doc': bson.DBRef('gitproviders', d['_id'])}
+                if c == 'gitrepos':
+                    if d['name'] not in self.root['app'][d['application']]['gitrepos']:
+                        util.debugLog(self, "WARNING: orphan gitrepo object: '{}/{}', adding to root tree".format(d['application'], d['name']))
+                        self.root['app'][d['application']]['gitrepo'][d['name']] = {'_doc': bson.DBRef('gitrepos', d['_id'])}
+                if c == 'gitdeploys':
+                    if d['name'] not in self.root['app'][d['application']]['gitdeploys']:
+                        util.debugLog(self, "WARNING: orphan gitdeploy object: '{}/{}', adding to root tree".format(d['application'], d['name']))
+                        self.root['app'][d['application']]['gitdeploys'][d['name']] = {'_doc': bson.DBRef('gitdeploys', d['_id'])}
+                if c == 'jobs':
+                    if d['job_id'] not in self.root['job']:
+                        util.debugLog(self, "WARNING: orphan job object: '{}', adding to root tree".format(d['job_id']))
+                        self.root['job'][d['job_id']] = {'_doc': bson.DBRef('jobs', d['_id'])}
+                if c == 'tokens':
+                    if d['token'] not in self.root['global']['tokens']:
+                        util.debugLog(self, "WARNING: orphan token object: '{}', adding to root tree".format(d['token']))
+                        self.root['global']['tokens'][d['token']] = {'_doc': bson.DBRef('tokens', d['_id'])}
+                if c == 'users':
+                    if d['name'] not in self.root['global']['users']:
+                        util.debugLog(self, "WARNING: orphan user object: '{}', adding to root tree".format(d['name']))
+                        self.root['global']['users'][d['name']] = {'_doc': bson.DBRef('users', d['_id'])}
+
 
     def check_global(self):
         global_levels = {
@@ -650,16 +755,24 @@ class DataValidator:
             del self.root['job'][j]
 
     def check_apps(self):
+        app_sublevels = {
+            'builds': {
+                'class': "BuildContainer"
+            },
+            'action': {
+                'class': "ActionContainer"
+            },
+            'gitrepos': {
+                'class': "GitRepoContainer"
+            }
+        }
         for a in self.root['app']:
             if a[0] != '_':
-                if 'builds' not in self.root['app'][a]:
-                    util.debugLog(self, "WARNING: 'builds' not found under {}".format(a))
-                    self.root['app'][a]['builds'] = dict()
-                    self.root['app'][a]['builds']['_doc'] = self.NewContainer("BuildContainer", "builds", a)
-                if 'action' not in self.root['app'][a]:
-                    util.debugLog(self, "WARNING: 'action' not found under {}".format(a))
-                    self.root['app'][a]['action'] = dict()
-                    self.root['app'][a]['action']['_doc'] = self.NewContainer("ActionContainer", "action", a)
+                for sl in app_sublevels:
+                    if sl not in self.root['app'][a]:
+                        util.debugLog(self, "WARNING: '{}' not found under {}".format(sl, a))
+                        self.root['app'][a][sl] = dict()
+                        self.root['app'][a][sl]['_doc'] = self.NewContainer(app_sublevels[sl]['class'], sl, a)
 
     def check_servers(self):
         for s in self.root['server']:
