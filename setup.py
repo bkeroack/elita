@@ -14,7 +14,9 @@ requires = [
     'gunicorn',
     'gevent',
     'pymongo',
-    'celery'
+    'celery',
+    'requests',
+    'python-slugify'
     ]
 
 setup(name='daft',

@@ -281,6 +281,10 @@ class GitDataService(GenericChildDataService):
             return [GitProvider(gp.doc) for gp in self.root['global']['gitproviders']]
         return [k for k in self.root['global']['gitproviders'].keys() if k[0] != '_']
 
+    def GetGitProvider(self, name):
+        doc = self.db['gitproviders'].find_one({'name': name})
+        return {k: doc[k] for k in doc if k[0] != '_'}
+
     def NewGitProvider(self, name, type, base_url, auth):
         if name in self.root['global']['gitproviders']:
             self.db['gitproviders'].remove({'name': name})
@@ -316,7 +320,7 @@ class GitDataService(GenericChildDataService):
     def GetGitRepos(self, app):
         return [k for k in self.root['app'][app]['gitrepos'].keys() if k[0] != '_']
 
-    def NewGitRepo(self, app, name, path, gitprovider):
+    def NewGitRepo(self, app, name, path, gitprovider, existing=False):
         gp_doc = self.db['gitproviders'].find_one({'name': gitprovider})
         if gp_doc is None:
             return {'NewGitRepo': "gitprovider '{}' is unknown".format(gitprovider)}

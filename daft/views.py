@@ -10,7 +10,8 @@ import sys
 import models
 import builds
 import auth
-
+import action
+import gitservice
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
@@ -506,7 +507,7 @@ class GitProviderView(GenericView):
 class GitRepoContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, app_name=context.parent)
-        self.set_params({"GET": [], "PUT": ['name'], "POST": ['name'], "DELETE": []})
+        self.set_params({"GET": [], "PUT": ['name', 'existing'], "POST": ['name', 'existing'], "DELETE": []})
 
     def GET(self):
         return {
@@ -514,6 +515,7 @@ class GitRepoContainerView(GenericView):
         }
 
     def PUT(self):
+        existing = self.req.params['existing'] in AFFIRMATIVE_SYNONYMS
         name = self.req.params['name']
         try:
             gitrepo_info = self.req.json_body
@@ -532,8 +534,27 @@ class GitRepoContainerView(GenericView):
         if ret['NewGitRepo'] != 'ok':
             return self.Error(ret)
         else:
+            if not existing:
+                gp_doc = self.datasvc.gitsvc.GetGitProvider(gitprovider)
+                if gp_doc['type'] == 'bitbucket':
+                    callable = gitservice.create_bitbucket_repo
+                elif gp_doc['type'] == 'github':
+                    callable = gitservice.create_github_repo
+                else:
+                    return self.Error("gitprovider type not supported ({})".format(gp_doc['type']))
+                jid = action.run_async(self.datasvc, "CreateGitRepo", callable, ())
+                msg = {
+                    'task': 'create_repository',
+                    'job_id': jid,
+                    'status': 'async/running'
+                }
+            else:
+                msg = {
+                    'task': 'none'
+                }
             return self.status_ok({
-                'new_gitrepo': ret
+                'new_gitrepo': ret,
+                'message': msg
             })
 
     def POST(self):
