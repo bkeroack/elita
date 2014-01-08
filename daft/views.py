@@ -435,7 +435,7 @@ class ServerView(GenericView):
             'server_name': self.context.name,
             'created_datetime': self.get_created_datetime_text(),
             'attributes': self.context.attributes,
-            'gitdeploys': self.datasvc.serversvc.GetGitDeploys()
+            'gitdeploys': self.datasvc.serversvc.GetGitDeploys(self.context.name)
         }
 
 class DeploymentContainerView(GenericView):
@@ -447,7 +447,7 @@ class DeploymentView(GenericView):
 class GitProviderContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request)
-        self.set_params({"GET": [], "PUT": ['name'], "POST": ['name'], "DELETE": []})
+        self.set_params({"GET": [], "PUT": ['name'], "POST": ['name'], "DELETE": ['name']})
 
     def GET(self):
         return {
@@ -460,12 +460,11 @@ class GitProviderContainerView(GenericView):
             info = self.req.json_body
         except:
             return self.Error("invalid gitprovider info object (problem deserializing, bad JSON?)")
-        if 'auth' not in info or 'type' not in info or 'base_url' not in info:
-            return self.Error("invalid gitprovider info object (valid JSON but missing one or more of: auth, type, base_url )")
+        if 'auth' not in info or 'type' not in info:
+            return self.Error("invalid gitprovider info object (valid JSON but missing one or more of: auth, type)")
         gp_type = info['type']
         auth = info['auth']
-        base_url = info['base_url']
-        if gp_type not in ('bitbucket', 'github'):
+        if gp_type not in gitservice.ValidRepoTypes.type_names:
             return self.Error("gitprovider type not supported")
         self.datasvc.gitsvc.NewGitProvider(name, gp_type, auth)
         return self.status_ok({
@@ -477,6 +476,15 @@ class GitProviderContainerView(GenericView):
 
     def POST(self):
         return self.PUT()
+
+    def DELETE(self):
+        name = self.req.params['name']
+        if name in self.datasvc.gitsvc.GetGitProviders():
+            self.datasvc.gitsvc.DeleteGitProvider(name)
+            return self.status_ok({'delete_gitprovider': {'name': name}})
+        else:
+            return self.Error("gitprovider '{}' not found".format(name))
+
 
 class GitProviderView(GenericView):
     def __init__(self, context, request):
@@ -507,42 +515,28 @@ class GitProviderView(GenericView):
 class GitRepoContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, app_name=context.parent)
-        self.set_params({"GET": [], "PUT": ['name', 'existing'], "POST": ['name', 'existing'], "DELETE": []})
+        self.set_params({"GET": [], "PUT": ['name', 'existing', 'gitprovider'], "POST": ['name', 'existing'], "DELETE": ['name']})
 
     def GET(self):
         return {
-            'gitrepos': self.datasvc.gitsvc.GetGitRepos()
+            'gitrepos': self.datasvc.gitsvc.GetGitRepos(self.context.parent)
         }
 
     def PUT(self):
         existing = self.req.params['existing'] in AFFIRMATIVE_SYNONYMS
+        gitprovider = self.req.params['gitprovider']
         name = self.req.params['name']
-        try:
-            gitrepo_info = self.req.json_body
-        except:
-            return self.Error("invalid gitrepo object (problem deserializing, bad JSON?)")
-        if 'path' not in gitrepo_info:
-            return self.Error("gitrepo path not found in JSON body")
-        path = gitrepo_info['path']
-        if 'gitprovider' in self.req.params:
-            gitprovider = self.req.params['gitprovider']
-        elif 'gitprovider' in gitrepo_info:
-            gitprovider = gitrepo_info['gitprovider']
-        else:
-            return self.Error("No gitprovider given; specify in URL params or JSON body")
-        ret = self.datasvc.gitsvc.NewGitRepo(self.context.parent, name, path, gitprovider)
+        ret = self.datasvc.gitsvc.NewGitRepo(self.context.parent, name, gitprovider)
         if ret['NewGitRepo'] != 'ok':
             return self.Error(ret)
         else:
             if not existing:
                 gp_doc = self.datasvc.gitsvc.GetGitProvider(gitprovider)
-                if gp_doc['type'] == 'bitbucket':
-                    callable = gitservice.create_bitbucket_repo
-                elif gp_doc['type'] == 'github':
-                    callable = gitservice.create_github_repo
-                else:
+                logger.debug("GitRepoContainerView: gp_doc: {}".format(gp_doc))
+                repo_callable = gitservice.callable_from_type(gp_doc['type'])
+                if not repo_callable:
                     return self.Error("gitprovider type not supported ({})".format(gp_doc['type']))
-                jid = action.run_async(self.datasvc, "CreateGitRepo", callable, ())
+                jid = action.run_async(self.datasvc, "CreateGitRepo", repo_callable, {'gitprovider': gp_doc, 'name': name})
                 msg = {
                     'task': 'create_repository',
                     'job_id': jid,
@@ -559,6 +553,14 @@ class GitRepoContainerView(GenericView):
 
     def POST(self):
         return self.PUT()
+
+    def DELETE(self):
+        name = self.req.params['name']
+        if name in self.datasvc.gitsvc.GetGitRepos():
+            self.datasvc.gitsvc.DeleteGitRepo(name)
+            return self.status_ok({'delete_gitrepo': {'name': name}})
+        else:
+            return self.Error("gitrepo '{}' not found".format(name))
 
 class GitRepoView(GenericView):
     def __init__(self, context, request):
@@ -596,7 +598,7 @@ class GitDeployContainerView(GenericView):
             location = location_attribs['location']
         else:
             return self.Error("invalid location object (valid JSON, 'location' key not found)")
-        self.datasvc.gitdeploysvc.NewGitDeploy(name, app, self.server_name, location, attribs)
+        self.datasvc.gitsvc.NewGitDeploy(name, app, self.server_name, location, attribs)
 
 
 class GitDeployView(GenericView):
@@ -667,7 +669,7 @@ class JobView(GenericView):
 
     def GET(self):
         ret = {
-            'job_id': str(self.context.id),
+            'job_id': str(self.context.job_id),
             'created_datetime': self.get_created_datetime_text(),
             'status': self.context.status,
         }
@@ -677,7 +679,7 @@ class JobView(GenericView):
             ret['duration_in_seconds'] = self.context.duration_in_seconds
         if 'results' in self.req.params:
             if self.req.params['results'] in AFFIRMATIVE_SYNONYMS:
-                ret['results'] = self.datasvc.jobsvc.GetJobData(self.context.id)
+                ret['results'] = self.datasvc.jobsvc.GetJobData(self.context.job_id)
         return ret
 
 class JobContainerView(GenericView):

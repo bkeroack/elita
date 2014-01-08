@@ -7,6 +7,7 @@ import pymongo
 __author__ = 'bkeroack'
 
 def regen_datasvc(settings):
+    pass
     client = pymongo.MongoClient(settings['daft.mongo.host'], int(settings['daft.mongo.port']))
     db = client[settings['daft.mongo.db']]
     tree = db['root_tree'].find_one()
@@ -21,13 +22,13 @@ def run_job(self, settings, callable, args):
     job_id = self.request.id
     client, datasvc = regen_datasvc(settings)
     results = callable(datasvc, **args)
-    datasvc.SaveJobResults(job_id, results)
+    datasvc.jobsvc.SaveJobResults(job_id, results)
     client.close()
 
 #generic interface to run code async (not explicit named actions/hooks)
 def run_async(datasvc, name, callable, args):
     util.debugLog("run_async", "create new async task: {}; args: {}".format(callable, args))
-    job = datasvc.NewJob("run_async: {}".format(name))
+    job = datasvc.jobsvc.NewJob("run_async: {}".format(name))
     job_id = str(job.job_id)
     run_job.apply_async((datasvc.settings, callable, args), task_id=job_id)
     return job_id

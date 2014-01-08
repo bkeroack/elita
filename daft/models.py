@@ -186,7 +186,7 @@ class JobDataService(GenericChildDataService):
             '_class': 'Job',
             'job_id': str(job.job_id),
             'status': job.status,
-            'attributes': job.attribs
+            'attributes': job.attributes
         })
         self.root['job'][str(job.job_id)] = {
             "_doc": bson.DBRef("jobs", jid)
@@ -228,7 +228,7 @@ class JobDataService(GenericChildDataService):
 
 class ServerDataService(GenericChildDataService):
     def GetServers(self):
-        return self.root['server'].keys()
+        return [k for k in self.root['server'].keys() if k[0] != '_']
 
     def NewServer(self, name, attribs):
         server = Server({
@@ -253,23 +253,28 @@ class ServerDataService(GenericChildDataService):
         pass
 
     def GetGitDeploys(self, server_name):
-        return self.root['server'][server_name]['gitdeploys'].keys()
+        return [k for k in self.root['server'][server_name]['gitdeploys'].keys() if k[0] != '_']
 
 class GitDataService(GenericChildDataService):
     def NewGitDeploy(self, name, app_name, server_name, location, attributes):
-        sid = self.db['servers'].find_one({'name': server_name})
-        assert id is not None
+        server_doc = self.db['servers'].find_one({'name': server_name})
+        if server_doc is None:
+            return {'NewGitDeploy': "invalid server (not found)"}
+        gitrepo_doc = self.db['gitrepos'].find_one({name: location['gitrepo']})
+        if gitrepo_doc is None:
+            return {'NewGitDeploy': "invalid gitrepo (not found)"}
+        location['gitrepo'] = bson.DBRef("gitrepos", gitrepo_doc['_id'])
         gd = GitDeploy({
             'name': name,
             'application': app_name,
-            'server': bson.DBRef('servers', sid),
+            'server': bson.DBRef('servers', server_doc['_id']),
             'location': location,
             'attributes': attributes
         })
         gdid = self.db['gitdeploys'].insert({
             '_class': "GitDeploy",
             'name': gd.name,
-            'applicadtion': gd.application,
+            'application': gd.application,
             'server': gd.server,
             'attributes': gd.attributes,
             'location': gd.location
@@ -285,13 +290,12 @@ class GitDataService(GenericChildDataService):
         doc = self.db['gitproviders'].find_one({'name': name})
         return {k: doc[k] for k in doc if k[0] != '_'}
 
-    def NewGitProvider(self, name, type, base_url, auth):
+    def NewGitProvider(self, name, type, auth):
         if name in self.root['global']['gitproviders']:
             self.db['gitproviders'].remove({'name': name})
         gpobj = GitProvider({
             'name': name,
             'type': type,
-            'base_url': base_url,
             'auth': auth
         })
         gpid = self.db['gitproviders'].insert({
@@ -320,27 +324,29 @@ class GitDataService(GenericChildDataService):
     def GetGitRepos(self, app):
         return [k for k in self.root['app'][app]['gitrepos'].keys() if k[0] != '_']
 
-    def NewGitRepo(self, app, name, path, gitprovider, existing=False):
+    def NewGitRepo(self, app, name, gitprovider, existing=False):
         gp_doc = self.db['gitproviders'].find_one({'name': gitprovider})
         if gp_doc is None:
             return {'NewGitRepo': "gitprovider '{}' is unknown".format(gitprovider)}
         gr_obj = GitRepo({
             'name': name,
             'application': app,
-            'path': path,
             'gitprovider': bson.DBRef("gitproviders", gp_doc['_id'])
         })
         gr_id = self.db['gitrepos'].insert({
             '_class': "GitRepo",
             'name': gr_obj.name,
             'application': gr_obj.application,
-            'path': gr_obj.path,
             'gitprovider': gr_obj.gitprovider
         })
         self.root['app'][app]['gitrepos'][name] = {
             '_doc': bson.DBRef('gitrepos', gr_id)
         }
         return {'NewGitRepo': 'ok'}
+
+    def DeleteGitRepo(self, name):
+        self.db['gitrepos'].remove({'name': name})
+        del self.root['global']['gitrepos'][name]
 
 class DataService:
     def __init__(self, settings, db, root):
@@ -434,8 +440,7 @@ class GitRepo(GenericDataModel):
     default_values = {
         'name': None,
         'application': None,
-        'path': None,
-        'gitprovider': None
+        'gitprovider': bson.DBRef("", None)
     }
 
 class GitDeploy(GenericDataModel):
