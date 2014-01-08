@@ -16,7 +16,9 @@ requires = [
     'pymongo',
     'celery',
     'requests',
-    'python-slugify'
+    'python-slugify',
+    'salt',
+    'M2Crypto'
     ]
 
 setup(name='daft',

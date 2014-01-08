@@ -12,6 +12,7 @@ import builds
 import auth
 import action
 import gitservice
+import daft_exceptions
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
@@ -394,7 +395,7 @@ class BuildView(GenericView):
 class ServerContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request)
-        self.set_params({"GET": [], "PUT": ['name'], "POST": [], "DELETE": ['name']})
+        self.set_params({"GET": [], "PUT": ['name', 'existing'], "POST": [], "DELETE": ['name']})
 
     def GET(self):
         return {
@@ -404,17 +405,21 @@ class ServerContainerView(GenericView):
     def PUT(self):
         name = self.req.params['name']
         attribs = self.deserialize_attributes()
+        existing = self.req.params['existing'] in AFFIRMATIVE_SYNONYMS
         if not attribs[0]:
             return attribs[1]
         else:
             attribs = attribs[1]
-        self.datasvc.serversvc.NewServer(name, attribs)
-        return self.status_ok({
-            "new_server": {
-                "server_name": name,
-                "attributes": attribs
-            }
-        })
+        res = self.datasvc.serversvc.NewServer(name, attribs)
+        if res['NewServer']['status'] == 'ok':
+            return self.status_ok({
+                "new_server": {
+                    "server_name": name,
+                    "attributes": attribs
+                }
+            })
+        else:
+            return self.Error(res)
 
     def DELETE(self):
         name = self.req.params['name']
@@ -820,7 +825,13 @@ def Action(context, request):
     else:
         logger.debug("REQUEST: context.doc: {}".format(pp.pformat(context.doc)))
         cname = context.doc['_class']
-        mobj = models.__dict__[cname](context.doc)
+        try:
+            mobj = models.__dict__[cname](context.doc)
+        except daft_exceptions.SaltServerNotAccessible:
+            return {
+                'server': context.doc['name'],
+                'error': "Server object not accessible via salt"
+            }
 
     logger.debug("Model class: {}".format(cname))
 

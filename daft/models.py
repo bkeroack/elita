@@ -3,6 +3,7 @@ import hashlib
 import uuid
 import base64
 import os.path
+import sys
 import shutil
 import bson
 import pprint
@@ -10,6 +11,9 @@ import datetime
 import pytz
 
 import util
+import salt_control
+import keypair
+import daft_exceptions
 from action import ActionService
 
 # URL model:
@@ -230,11 +234,19 @@ class ServerDataService(GenericChildDataService):
     def GetServers(self):
         return [k for k in self.root['server'].keys() if k[0] != '_']
 
-    def NewServer(self, name, attribs):
-        server = Server({
-            'name': name,
-            'attributes': attribs
-        })
+    def NewServer(self, name, attribs, existing=False):
+        try:
+            server = Server({
+                'name': name,
+                'attributes': attribs
+            })
+        except SaltServerNotAccessible:
+            return {
+                'NewServer': {
+                    'status': 'error',
+                    'message': "server not accessible via salt"
+                }
+            }
         sid = self.db['servers'].insert({
             '_class': "Server",
             'name': server.name,
@@ -244,6 +256,11 @@ class ServerDataService(GenericChildDataService):
         self.root['server'][name] = {
             '_doc': bson.DBRef('servers', sid),
             'gitdeploys': {"_doc": self.parent.NewContainer("GitDeployContainer", "gitdeploys", name)}
+        }
+        return {
+            'NewServer': {
+                'status': 'ok'
+            }
         }
 
     def DeleteServer(self, name):
@@ -348,6 +365,50 @@ class GitDataService(GenericChildDataService):
         self.db['gitrepos'].remove({'name': name})
         del self.root['global']['gitrepos'][name]
 
+class KeyDataService(GenericChildDataService):
+    def NewKeyPair(self, name, attribs, key_type, private_key, public_key):
+        try:
+            kp_obj = KeyPair({
+                "name": name,
+                "attributes": attribs,
+                "key_type": key_type,
+                "private_key": private_key,
+                "public_key": public_key
+            })
+        except:
+            exc_type, exc_obj, tb = sys.exc_info()
+            if exc_type == daft_exceptions.InvalidPrivateKey:
+                err = "Invalid private key"
+            if exc_type == daft_exceptions.InvalidPublicKey:
+                err = "Invalid public key"
+            else:
+                err = "unknown key error"
+            return {
+                'NewKeyPair': {
+                    'status': "error",
+                    'message': err
+                }
+            }
+        kp_id = self.db['keypairs'].insert({
+            'name': kp_obj.name,
+            'attributes': kp_obj.attributes,
+            'key_type': kp_obj.key_type,
+            'private_key': kp_obj.private_key,
+            'public_key': kp_obj.public_key
+        })
+        self.root['global']['keypairs'][kp_obj.name] = {
+            '_doc': bson.DBRef("keypairs", kp_id)
+        }
+        return {
+            'NewKeyPair': {
+                'status': 'ok'
+            }
+        }
+
+    def DeleteKeyPair(self, name):
+        self.db['keypairs'].remove({'name': name})
+        del self.root['global']['keypairs'][name]
+
 class DataService:
     def __init__(self, settings, db, root):
         self.settings = settings
@@ -360,6 +421,7 @@ class DataService:
         self.jobsvc = JobDataService(self)
         self.serversvc = ServerDataService(self)
         self.gitsvc = GitDataService(self)
+        self.keysvc = KeyDataService(self)
         self.actionsvc = ActionService(self)
 
     def NewContainer(self, class_name, name, parent):
@@ -394,9 +456,9 @@ class GenericDataModel:
                     self.created_datetime = doc['_id'].generation_time
                 elif k[0] != '_':
                     self.set_data(k, doc[k])
-        self.process_values()
+        self.init_hook()
 
-    def process_values(self):
+    def init_hook(self):
         pass
 
     def set_defaults(self):
@@ -420,10 +482,40 @@ class GenericDataModel:
 
 
 class KeyPair(GenericDataModel):
-    pass
+    default_values = {
+        "name": None,
+        "attributes": dict(),
+        "key_type": None,  # git | salt
+        "private_key": None,
+        "public_key": None
+    }
+
+    def init_hook(self):
+        if self.key_type not in ("git", "salt"):
+            raise daft_exceptions.InvalidKeyPairType
+        kp = keypair.KeyPair(self.private_key, self.public_key)
+        try:
+            kp.verify_public()
+        except:
+            raise daft_exceptions.InvalidPublicKey
+        try:
+            kp.verify_private()
+        except:
+            raise daft_exceptions.InvalidPrivateKey
 
 class Server(GenericDataModel):
-    pass
+    default_values = {
+        "name": None,
+        "server_type": None,
+        "attributes": dict(),
+        "gitdeploys": [bson.DBRef("", None)],
+        "salt_key": bson.DBRef("", None)
+    }
+
+    def init_hook(self):
+        sc = salt_control.SaltController(self.name)
+        if not sc.verify_connectivity():
+            raise daft_exceptions.SaltServerNotAccessible
 
 class GitProvider(GenericDataModel):
     default_values = {
@@ -498,7 +590,7 @@ class User(GenericDataModel):
         'attributes': dict()
     }
 
-    def process_values(self):
+    def init_hook(self):
         assert self.hashed_pw is not None or self.password is not None
         self.salt = base64.urlsafe_b64encode(uuid.uuid4().bytes) if self.salt is None else self.salt
         self.hashed_pw = self.hash_pw(self.password) if self.hashed_pw is None else self.hashed_pw
@@ -520,7 +612,7 @@ class Token(GenericDataModel):
         'token': None
     }
 
-    def process_values(self):
+    def init_hook(self):
         self.token = base64.urlsafe_b64encode(hashlib.sha256(uuid.uuid4().bytes).hexdigest())[:-2] \
             if self.token is None else self.token
 
@@ -533,7 +625,7 @@ class Job(GenericDataModel):
         'job_id': None
     }
 
-    def process_values(self):
+    def init_hook(self):
         self.job_id = uuid.uuid4() if self.job_id is None else self.job_id
 
 class GenericContainer:
