@@ -449,6 +449,71 @@ class DeploymentContainerView(GenericView):
 class DeploymentView(GenericView):
     pass
 
+
+class KeyPairContainerView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request)
+        self.set_params({"GET": [], "PUT": ['name', 'key_type'], "POST": ['name', 'key_type'], "DELETE": ['name']})
+
+    def GET(self):
+        return {
+            'keypairs': self.datasvc.keysvc.GetKeyPairs()
+        }
+
+    def PUT(self):
+        name = self.req.params['name']
+        key_type = self.req.params['key_type']
+        try:
+            info = self.req.json_body
+        except:
+            return self.Error("invalid keypair info object (problem deserializing, bad JSON?)")
+        attributes = info['attributes'] if 'attributes' in info else dict()
+        if 'private_key' not in info:
+            return self.Error("private_key missing")
+        else:
+            private_key = info['private_key']
+        if 'public_key' not in info:
+            return self.Error("public_key missing")
+        else:
+            public_key = info['public_key']
+        ret = self.datasvc.keysvc.NewKeyPair(name, attributes, key_type, private_key, public_key)
+        if ret['NewKeyPair']['status'] == 'ok':
+            return self.status_ok({'new_keypair': {'name': name, 'key_type': key_type}})
+        else:
+            return self.Error(ret)
+
+    def POST(self):
+        return self.PUT()
+
+    def DELETE(self):
+        name = self.req.params['name']
+        self.datasvc.keysvc.DeleteKeyPair(name)
+        return self.status_ok({'delete_keypair': {'name': name}})
+
+
+class KeyPairView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request)
+        self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
+
+    def GET(self):
+        return {
+            'keypair': self.datasvc.keysvc.GetKeyPair(self.context.name)
+        }
+
+    def POST(self):
+        try:
+            info = self.req.json_body
+        except:
+            return self.Error("invalid keypair info object (problem deserializing, bad JSON?)")
+        self.datasvc.keysvc.UpdateKeyPair(self.context.name, info)
+        return self.status_ok({'update_keypair': self.datasvc.keysvc.GetKeyPair(self.context.name)})
+
+    def DELETE(self):
+        self.datasvc.keysvc.DeleteKeyPair(self.context.name)
+        return self.status_ok({'delete_keypair': {'name': self.context.name}})
+
+
 class GitProviderContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request)
@@ -520,7 +585,7 @@ class GitProviderView(GenericView):
 class GitRepoContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, app_name=context.parent)
-        self.set_params({"GET": [], "PUT": ['name', 'existing', 'gitprovider'], "POST": ['name', 'existing'], "DELETE": ['name']})
+        self.set_params({"GET": [], "PUT": ['name', 'existing', 'gitprovider', 'keypair'], "POST": ['name', 'existing'], "DELETE": ['name']})
 
     def GET(self):
         return {
@@ -530,8 +595,9 @@ class GitRepoContainerView(GenericView):
     def PUT(self):
         existing = self.req.params['existing'] in AFFIRMATIVE_SYNONYMS
         gitprovider = self.req.params['gitprovider']
+        keypair = self.req.params['keypair']
         name = self.req.params['name']
-        ret = self.datasvc.gitsvc.NewGitRepo(self.context.parent, name, gitprovider)
+        ret = self.datasvc.gitsvc.NewGitRepo(self.context.parent, name, keypair, gitprovider)
         if ret['NewGitRepo'] != 'ok':
             return self.Error(ret)
         else:

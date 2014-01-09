@@ -10,6 +10,7 @@ import pprint
 import datetime
 import pytz
 
+import daft
 import util
 import salt_control
 import keypair
@@ -26,6 +27,8 @@ from action import ActionService
 # root/app/{app_name}/environments/{env_name}/servers
 # root/app/{app_name}/environemnt/{env_name}/servers/{server_name}
 
+class Request:
+    db = None
 
 class GenericChildDataService:
     def __init__(self, parent):
@@ -51,6 +54,7 @@ class BuildDataService(GenericChildDataService):
                                        'app_name': buildobj.app_name,
                                        'packages': buildobj.packages,
                                        'attributes': buildobj.attributes})
+        self.parent.refresh_root()
         self.root['app'][app_name]['builds'][build_name] = {
             "_doc": bson.DBRef("builds", id)
         }
@@ -102,6 +106,7 @@ class UserDataService(GenericChildDataService):
             "salt": userobj.salt,
             "permissions": userobj.permissions
         })
+        self.parent.refresh_root()
         self.root['global']['users'][userobj.name] = {
             "_doc": bson.DBRef("users", id)
         }
@@ -139,6 +144,7 @@ class UserDataService(GenericChildDataService):
             'token': token.token,
             '_class': "Token"
         })
+        self.parent.refresh_root()
         self.root['global']['tokens'][token.token] = {
             "_doc": bson.DBRef("tokens", id)
         }
@@ -159,11 +165,11 @@ class UserDataService(GenericChildDataService):
 
 class ApplicationDataService(GenericChildDataService):
     def GetApplications(self):
-        return self.root['app'].keys()
+        return [k for k in self.root['app'].keys() if k[0] != '_']
 
     def NewApplication(self, app_name):
         id = self.db['applications'].insert({'_class': "Application", "app_name": app_name})
-
+        self.parent.refresh_root()
         self.root['app'][app_name] = {
             "_doc": bson.DBRef("applications", id),
             "builds": {"_doc": self.parent.NewContainer("BuildContainer", "builds", app_name)},
@@ -192,6 +198,7 @@ class JobDataService(GenericChildDataService):
             'status': job.status,
             'attributes': job.attributes
         })
+        self.parent.refresh_root()
         self.root['job'][str(job.job_id)] = {
             "_doc": bson.DBRef("jobs", jid)
         }
@@ -223,6 +230,7 @@ class JobDataService(GenericChildDataService):
     def NewAction(self, app_name, action_name, params):
         util.debugLog(self, "NewAction: app_name: {}".format(app_name))
         util.debugLog(self, "NewAction: action_name: {}".format(action_name))
+        self.parent.refresh_root()
         self.root['app'][app_name]['action'][action_name] = Action(app_name, action_name, params, self)
         pp = pprint.PrettyPrinter(indent=4)
         util.debugLog(self, "NewAction: actions: {}".format(pp.pformat(self.root['app'][app_name]['action'])))
@@ -240,7 +248,7 @@ class ServerDataService(GenericChildDataService):
                 'name': name,
                 'attributes': attribs
             })
-        except SaltServerNotAccessible:
+        except daft_exceptions.SaltServerNotAccessible:
             return {
                 'NewServer': {
                     'status': 'error',
@@ -253,6 +261,7 @@ class ServerDataService(GenericChildDataService):
             'gitdeploys': [],
             'attributes': server.attributes
         })
+        self.parent.refresh_root()
         self.root['server'][name] = {
             '_doc': bson.DBRef('servers', sid),
             'gitdeploys': {"_doc": self.parent.NewContainer("GitDeployContainer", "gitdeploys", name)}
@@ -296,6 +305,7 @@ class GitDataService(GenericChildDataService):
             'attributes': gd.attributes,
             'location': gd.location
         })
+        self.parent.refresh_root()
         self.root['server'][server_name]['gitdeploys'][name] = {'_doc': bson.DBRef('gitdeploys', gdid)}
 
     def GetGitProviders(self, objs=False):
@@ -322,50 +332,55 @@ class GitDataService(GenericChildDataService):
             'base_url': gpobj.base_url,
             'auth': gpobj.auth
         })
+        self.parent.refresh_root()
         self.root['global']['gitproviders'][gpobj.name] = {'_doc': bson.DBRef('gitproviders', gpid)}
 
     def UpdateGitProvider(self, name, doc):
-        gp_doc = self.db['gitproviders'].find_one({'name': name})
-        if gp_doc:
-            gpobj = GitProvider(gp_doc)
-            gpobj.update_values(doc)
-            new_doc = gpobj.get_doc()
-            new_doc['_id'] = gp_doc['_id']
-            new_doc['_class'] = "GitProvider"
-            self.db['gitproviders'].save(new_doc)
+        self.parent.UpdateObject(name, doc, 'gitproviders', GitProvider)
 
     def DeleteGitProvider(self, name):
-        self.db['gitproviders'].remove({'name': name})
-        del self.root['global']['gitproviders'][name]
+        self.parent.DeleteObject(self.root['global']['gitproviders'], name, 'gitproviders')
 
     def GetGitRepos(self, app):
         return [k for k in self.root['app'][app]['gitrepos'].keys() if k[0] != '_']
 
-    def NewGitRepo(self, app, name, gitprovider, existing=False):
+    def NewGitRepo(self, app, name, keypair, gitprovider, existing=False):
         gp_doc = self.db['gitproviders'].find_one({'name': gitprovider})
         if gp_doc is None:
             return {'NewGitRepo': "gitprovider '{}' is unknown".format(gitprovider)}
+        kp_doc = self.db['keypairs'].find_one({'name': keypair})
+        if kp_doc is None:
+            return {'NewGitRepo': "keypair '{}' is unknown".format(keypair)}
         gr_obj = GitRepo({
             'name': name,
             'application': app,
+            'keypair': bson.DBRef("keypairs", kp_doc['_id']),
             'gitprovider': bson.DBRef("gitproviders", gp_doc['_id'])
         })
         gr_id = self.db['gitrepos'].insert({
             '_class': "GitRepo",
             'name': gr_obj.name,
             'application': gr_obj.application,
+            'keypair': gr_obj.keypair,
             'gitprovider': gr_obj.gitprovider
         })
+        self.parent.refresh_root()
         self.root['app'][app]['gitrepos'][name] = {
             '_doc': bson.DBRef('gitrepos', gr_id)
         }
         return {'NewGitRepo': 'ok'}
 
     def DeleteGitRepo(self, name):
-        self.db['gitrepos'].remove({'name': name})
-        del self.root['global']['gitrepos'][name]
+        self.parent.DeleteObject(self.root['global']['gitrepos'], name, 'gitrepos')
 
 class KeyDataService(GenericChildDataService):
+    def GetKeyPairs(self):
+        return [k for k in self.root['global']['keypairs'].keys() if k[0] != '_']
+
+    def GetKeyPair(self, name):
+        kobj = KeyPair(self.db['keypairs'].find_one({'name': name}))
+        return kobj.get_doc()
+
     def NewKeyPair(self, name, attribs, key_type, private_key, public_key):
         try:
             kp_obj = KeyPair({
@@ -377,6 +392,7 @@ class KeyDataService(GenericChildDataService):
             })
         except:
             exc_type, exc_obj, tb = sys.exc_info()
+            util.debugLog(self, "exception: {}, {}".format(exc_type, exc_obj))
             if exc_type == daft_exceptions.InvalidPrivateKey:
                 err = "Invalid private key"
             if exc_type == daft_exceptions.InvalidPublicKey:
@@ -405,12 +421,15 @@ class KeyDataService(GenericChildDataService):
             }
         }
 
+    def UpdateKeyPair(self, name, doc):
+        self.parent.UpdateObject(name, doc, "keypairs", KeyPair)
+
     def DeleteKeyPair(self, name):
-        self.db['keypairs'].remove({'name': name})
-        del self.root['global']['keypairs'][name]
+        self.parent.DeleteObject(self.root['global']['keypairs'], name, "keypairs")
+
 
 class DataService:
-    def __init__(self, settings, db, root):
+    def __init__(self, settings, db, root, actions_init=True):
         self.settings = settings
         self.db = db
         self.root = root
@@ -422,7 +441,25 @@ class DataService:
         self.serversvc = ServerDataService(self)
         self.gitsvc = GitDataService(self)
         self.keysvc = KeyDataService(self)
-        self.actionsvc = ActionService(self)
+        if actions_init:
+            self.actionsvc = ActionService(self)
+
+    def refresh_root(self):
+        # when running long async actions the root tree passed to constructor may be stale by the time we try to update
+        # so just prior to altering it, we refresh from the DB
+        req = Request()
+        req.db = self.db
+        self.root = daft.RootService(req)
+
+    def UpdateObject(self, name, doc, collection_name, class_obj):
+        old_doc = self.db[collection_name].find_one({"name": name})
+        if old_doc:
+            cobj = class_obj(old_doc)
+            cobj.update_values(doc)
+            new_doc = cobj.get_doc()
+            new_doc['_id'] = old_doc['_id']
+            new_doc['class'] = class_obj.__class__.__name__
+            self.db[collection_name].save(new_doc)
 
     def NewContainer(self, class_name, name, parent):
         cdoc = self.db['containers'].insert({'_class': class_name,
@@ -433,6 +470,7 @@ class DataService:
     def DeleteObject(self, container, key, collection):
         id = container[key].doc['_id']
         self.db[collection].remove({'_id': id})
+        self.parent.refresh_root()
         del container[key]
 
     def Dereference(self, dbref):
@@ -532,6 +570,7 @@ class GitRepo(GenericDataModel):
     default_values = {
         'name': None,
         'application': None,
+        'keypair': bson.DBRef("", None),
         'gitprovider': bson.DBRef("", None)
     }
 
@@ -693,6 +732,8 @@ class RootTree(collections.MutableMapping):
             #util.debugLog(self, "__getitem__: is_application: subtree: {}".format(self.tree[key]))
             return self.tree[key]
         if key in self.tree:
+            if key == '_doc':
+                return self.tree[key]
             doc = self.db.dereference(self.tree[key]['_doc'])
             if doc is None:
                 #util.debugLog(self, "__getitem__: doc is none")
@@ -746,7 +787,7 @@ class RootTreeUpdater:
         self.db['root_tree'].update({"_id": root_tree['_id']}, self.tree)
 
 class DataValidator:
-    '''Independed class to migrate/validate the root tree and potentially all docs
+    '''Independent class to migrate/validate the root tree and potentially all docs
         Intended to run prior to main application, to migrate schema or fix problems
     '''
     def __init__(self, root, db):
@@ -837,6 +878,9 @@ class DataValidator:
             },
             'gitproviders': {
                 'class': "GitProviderContainer"
+            },
+            'keypairs': {
+                'class': "KeyPairContainer"
             }
         }
         for l in global_levels:

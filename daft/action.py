@@ -13,7 +13,7 @@ def regen_datasvc(settings):
     tree = db['root_tree'].find_one()
     updater = models.RootTreeUpdater(tree, db)
     root = models.RootTree(db, updater, tree, None)
-    return client, models.DataService(settings, db, root)
+    return client, models.DataService(settings, db, root, actions_init=False)
 
 @celeryinit.celery.task(bind=True, name="daft_task_run_job")
 def run_job(self, settings, callable, args):
