@@ -106,14 +106,25 @@ class DataService:
 
     def NewBuild(self, app_name, build_name, attribs, subsys):
         buildobj = Build(app_name, build_name, None, attributes=attribs, subsys=subsys)
-        id = self.db['builds'].insert({'_class': "Build",
-                                       'build_name': buildobj.build_name,
-                                       'files': buildobj.files,
-                                       'stored': buildobj.stored,
-                                       'app_name': buildobj.app_name,
-                                       'packages': buildobj.packages,
-                                       'attributes': buildobj.attributes,
-                                       'subsys': buildobj.subsys})
+        new_doc = {
+            '_class': "Build",
+            'build_name': buildobj.build_name,
+            'files': buildobj.files,
+            'stored': buildobj.stored,
+            'app_name': buildobj.app_name,
+            'packages': buildobj.packages,
+            'attributes': buildobj.attributes,
+            'subsys': buildobj.subsys
+        }
+        existing = [doc['_id'] for doc in self.db['builds'].find({'build_name': build_name})]
+        if len(existing) > 0:
+            if len(existing) > 1:
+                # we should never have more than one, if so keep the 'top' one
+                util.debugLog(self, "WARNING: multiple build documents found, dropping all but the first")
+                for id in existing[1:]:
+                    self.db['builds'].remove({'_id': id})
+            new_doc['_id'] = existing[0]
+        id = self.db['builds'].save(new_doc)
         self.refresh_root()
         self.root['app'][app_name]['builds'][build_name] = {
             "_doc": bson.DBRef("builds", id)
