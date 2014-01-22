@@ -44,6 +44,14 @@ class GenericView:
     def get_created_datetime_text(self):
         return self.context.created_datetime.isoformat(' ') if hasattr(self.context, 'created_datetime') else None
 
+    def run_async(self, name, callable, args):
+        jid = action.run_async(self.datasvc, name, callable, args)
+        return {
+            'task': name,
+            'job_id': jid,
+            'status': 'async/running'
+        }
+
     def deserialize_attributes(self):
         if 'attributes' in self.req.params and self.req.params['attributes'] in AFFIRMATIVE_SYNONYMS:
             try:
@@ -604,15 +612,10 @@ class GitRepoContainerView(GenericView):
             if not existing:
                 gp_doc = self.datasvc.gitsvc.GetGitProvider(gitprovider)
                 logger.debug("GitRepoContainerView: gp_doc: {}".format(gp_doc))
-                repo_callable = gitservice.callable_from_type(gp_doc['type'])
+                repo_callable = gitservice.create_repo_callable_from_type(gp_doc['type'])
                 if not repo_callable:
                     return self.Error("gitprovider type not supported ({})".format(gp_doc['type']))
-                jid = action.run_async(self.datasvc, "CreateGitRepo", repo_callable, {'gitprovider': gp_doc, 'name': name})
-                msg = {
-                    'task': 'create_repository',
-                    'job_id': jid,
-                    'status': 'async/running'
-                }
+                msg = self.run_async("create_repository", repo_callable, {'gitprovider': gp_doc, 'name': name})
             else:
                 msg = {
                     'task': 'none'
@@ -645,7 +648,7 @@ class GitRepoView(GenericView):
             'gitrepo': {
                 'name': self.context.name,
                 'application': self.context.pa,
-                'path': self.context.path,
+                'uri': self.context.uri,
                 'gitprovider': gp_doc
             }
         }
@@ -670,6 +673,9 @@ class GitDeployContainerView(GenericView):
         else:
             return self.Error("invalid location object (valid JSON, 'location' key not found)")
         self.datasvc.gitsvc.NewGitDeploy(name, app, self.server_name, location, attribs)
+        gd = self.datasvc.gitsvc.GetGitDeploy(name)
+        msg = self.run_async("create_gitdeploy", gitservice.initialize_gitdeploy, {'gitdeploy': gd})
+        return self.status_ok({'create_gitdeploy': {'name': name, 'message': msg}})
 
 
 class GitDeployView(GenericView):
@@ -683,8 +689,31 @@ class GitDeployView(GenericView):
             'server': self.context.server,
             'application': self.context.application,
             'attributes': self.context.attributes,
+            'options': self.context.options,
+            'actions': self.context.actions,
             'location': self.context.location
         }
+
+    def POST(self):
+        server = self.req.params['server'] if 'server' in self.req.params else None
+        keys = {'attributes', 'options', 'actions', 'location'}
+        try:
+            body = self.req.json_body
+        except:
+            return self.Error("invalid gitdeploy modification object (problem deserializing, bad JSON?)")
+        if "location" not in body:
+            return self.Error("invalid location object (valid JSON, 'location' key not found)")
+        if not keys.issuperset({k for k in body.keys()}):
+            diff = keys - {k for k in body.keys()}
+            u_i = len(diff)
+            word = "key" + "" if u_i == 1 else "s"
+            return self.Error("invalid {}: {}".format(word, diff))
+        if server is not None:
+            body['server'] = server
+        self.datasvc.gitsvc.UpdateGitDeploy(self.context.name, body)
+        return self.status_ok({'update_gitdeploy': {'name': self.context.name, 'object': body}})
+
+
 
 class GlobalContainerView(GenericView):
     def __init__(self, context, request):

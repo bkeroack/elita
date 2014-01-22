@@ -13,12 +13,15 @@ requires = [
     'pyramid',
     'gunicorn',
     'gevent',
+    'unittest2',
     'pymongo',
     'celery',
     'requests',
     'python-slugify',
     'salt',
-    'M2Crypto'
+    'M2Crypto',
+    'PyYAML',
+    'lockfile'
     ]
 
 setup(name='daft',

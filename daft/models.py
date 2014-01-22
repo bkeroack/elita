@@ -282,7 +282,7 @@ class ServerDataService(GenericChildDataService):
         return [k for k in self.root['server'][server_name]['gitdeploys'].keys() if k[0] != '_']
 
 class GitDataService(GenericChildDataService):
-    def NewGitDeploy(self, name, app_name, server_name, location, attributes):
+    def NewGitDeploy(self, name, app_name, server_name, options, actions, location, attributes):
         server_doc = self.db['servers'].find_one({'name': server_name})
         if server_doc is None:
             return {'NewGitDeploy': "invalid server (not found)"}
@@ -295,7 +295,9 @@ class GitDataService(GenericChildDataService):
             'application': app_name,
             'server': bson.DBRef('servers', server_doc['_id']),
             'location': location,
-            'attributes': attributes
+            'attributes': attributes,
+            'options': options,
+            'actions': actions
         })
         gdid = self.db['gitdeploys'].insert({
             '_class': "GitDeploy",
@@ -303,10 +305,24 @@ class GitDataService(GenericChildDataService):
             'application': gd.application,
             'server': gd.server,
             'attributes': gd.attributes,
+            'options': gd.options,
+            'actions': gd.actions,
             'location': gd.location
         })
         self.parent.refresh_root()
         self.root['server'][server_name]['gitdeploys'][name] = {'_doc': bson.DBRef('gitdeploys', gdid)}
+
+    def GetGitDeploy(self, name):
+        doc = self.db['gitdeploys'].fine_one({'name': name})
+        #dereference embedded dbrefs
+        doc['server'] = self.db.dereference(doc['server'])
+        doc['location']['git_repo'] = self.db.dereference(doc['location']['git_repo'])
+        doc['location']['git_repo']['keypair'] = self.db.dereference(doc['location']['git_repo']['keypair'])
+        doc['location']['git_repo']['gitprovider'] = self.db.dereference(doc['location']['git_repo']['gitprovider'])
+        return {k: doc[k] for k in doc if k[0] != '_'}
+
+    def UpdateGitDeploy(self, name, doc):
+        self.parent.UpdateObject(name, doc, 'gitdeploys', GitDeploy)
 
     def GetGitProviders(self, objs=False):
         if objs:
@@ -570,6 +586,7 @@ class GitRepo(GenericDataModel):
     default_values = {
         'name': None,
         'application': None,
+        'uri': None,
         'keypair': bson.DBRef("", None),
         'gitprovider': bson.DBRef("", None)
     }
@@ -580,6 +597,14 @@ class GitDeploy(GenericDataModel):
         'application': None,
         'server': bson.DBRef("", None),
         'attributes': dict(),
+        'options': {
+            'favor': 'ours',
+            'ignore-whitespace': 'true'
+        },
+        'actions': {
+            'prepull': [],
+            'postpull': []
+        },
         'location': {
             'path': None,
             'git_repo': bson.DBRef("", None),
