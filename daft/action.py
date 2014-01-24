@@ -3,6 +3,8 @@ from pkg_resources import iter_entry_points
 import models
 import celeryinit
 import pymongo
+import sys
+import traceback
 
 __author__ = 'bkeroack'
 
@@ -20,7 +22,14 @@ def run_job(self, settings, callable, args):
     '''
     job_id = self.request.id
     client, datasvc = regen_datasvc(settings, job_id)
-    results = callable(datasvc, **args)
+    try:
+        results = callable(datasvc, **args)
+    except:
+        exc_type, exc_obj, tb = sys.exc_info()
+        results = {
+            "error": "unhandled exception during callable!",
+            "exception": traceback.format_exception(exc_type, exc_obj, tb)
+        }
     datasvc.jobsvc.SaveJobResults(results)
     client.close()
 

@@ -1,4 +1,5 @@
 import salt.client
+import salt.config
 import lockfile
 import os.path
 import random
@@ -26,8 +27,9 @@ class RemoteCommands:
         resp = self.sc.salt_command(server, 'grains.item', opts={'arg': ["os"]})
         return OSTypes.Windows if resp[server]['os'] == "Windows" else OSTypes.Unix_like
 
-    def create_directory(self, server, path):
-        return self.sc.salt_command(server, 'file.makedirs', opts={'arg': [path]})
+    def create_directory(self, server_list, path):
+        assert isinstance(server_list, list)
+        return self.sc.salt_command(server_list, 'file.makedirs', opts={'expr_form': 'list', 'arg': [path]})
 
     def push_file(self, target, local_path, remote_path):
         r_postfix = ''.join(random.sample(string.letters + string.digits, 20))
@@ -42,25 +44,28 @@ class RemoteCommands:
         util.debugLog(self, "push_file: resp: {}".format(res))
         os.unlink(new_fullpath)
 
-    def push_key(self, server, file, name, ext):
-        ost = self.get_os(server)
-        if ost == OSTypes.Windows:
-            return self.push_file(server, file, 'C:\\Program Files (x86)\\Git\\.ssh\\{}.pub'.format(name))
-        elif ost == OSTypes.Unix_like:
-            return self.push_file(server, file, '/etc/daft/keys/{}{}'.format(name, ext))
-        else:
-            assert False
+    def push_key(self, server_list, file, name, ext):
+        res = list()
+        for s in server_list:
+            ost = self.get_os(s)
+            if ost == OSTypes.Windows:
+                res.append(self.push_file(s, file, 'C:\\Program Files (x86)\\Git\\.ssh\\{}.pub'.format(name)))
+            elif ost == OSTypes.Unix_like:
+                res.append(self.push_file(s, file, '/etc/daft/keys/{}{}'.format(name, ext)))
+            else:
+                assert False
+        return res
 
-    def clone_repo(self, server, repo_uri, dest):
+    def clone_repo(self, server_list, repo_uri, dest):
         cwd, dest_dir = os.path.split(dest)
-        return self.sc.salt_command(server, 'cmd.run', opts={
+        return self.sc.salt_command(server_list, 'cmd.run', opts={
             'arg': ['git clone {uri} {dest}'.format(repo_uri, dest_dir)],
-            'cwd': cwd
+            'cwd': cwd,
+            'expr_form': list
         }, timeout=1200)
 
-    def highstate(self, target):
-        expr_form = "list" if isinstance(target, list) else "glob"
-        return self.sc.salt_command(target, 'state.highstate', opts={'expr_form': expr_form}, timeout=300)
+    def highstate(self, server_list):
+        return self.sc.salt_command(server_list, 'state.highstate', opts={'expr_form': 'list'}, timeout=300)
 
 class SaltController:
     def __init__(self, settings):
@@ -78,32 +83,44 @@ class SaltController:
         return self.salt_command(target, 'cmd.run', {"arg": [cmd], "shell": shell}, timeout=timeout)
 
     def load_salt_info(self):
-        util.debugLog(self, "load_salt_info: self.settings: {}".format(self.settings))
-        with open(self.settings['daft.salt.config'], 'r') as f:
-            salt_config = yaml.load(f, Loader=Loader)
-            util.debugLog(self, "load_salt_info: salt_config: {}".format(salt_config))
-            self.file_roots = salt_config['file_roots'] if 'file_roots' in salt_config else {'base': ['/srv/salt']}
-            self.pillar_roots = salt_config['pillar_roots'] if 'pillar_roots' in salt_config else {'base': ['/srv/pillar']}
+        util.debugLog(self, "load_salt_info")
+        master_config = salt.config.master_config(os.environ.get('SALT_MASTER_CONFIG', '/etc/salt/master'))
+        self.file_roots = master_config['file_roots']
+        self.pillar_roots = master_config['pillar_roots']
 
     def verify_connectivity(self, server, timeout=10):
         return len(self.salt_client.cmd(server, 'test.ping', timeout=timeout)) != 0
 
-    def get_file_name(self, name):
+    def get_gd_file_name(self, name):
         root = self.file_roots['base'][0]
         path = self.settings['daft.salt.dir']
         return "{}/{}/{}.sls".format(root, path, name)
 
     def new_yaml(self, name, content):
         '''path must be relative to file_root'''
-        new_file = self.get_file_name(name)
+        new_file = self.get_gd_file_name(name)
         with open(new_file, 'w') as f:
             f.write(yaml.dump(content, Dumper=Dumper))
 
-    def add_gitdeploy_to_yaml(self, gitdeploy):
-        '''Adds new gitdeploy to existing YAML file. Top-level keys in content will clobber existing ones in the file'''
+    def add_servers_to_daft_top(self, server_list):
+        util.debugLog(self, "add_server_to_daft_top: server_list: {}".format(server_list))
+        fname = "{}/{}".format(self.file_roots['base'][0], self.settings['daft.salt.dafttop'])
+        util.debugLog(self, "add_server_to_daft_top: acquiring lock on {}".format(fname))
+        lock = lockfile.FileLock(fname)
+        lock.acquire(timeout=60)
+        with open(fname, 'r') as f:
+            dt_content = yaml.load(f, Loader=Loader)
+        for s in server_list:
+            dt_content['base'][s] = ['none']
+        with open(fname, 'w') as f:
+            f.write(yaml.dump(dt_content, Dumper=Dumper))
+        lock.release()
+
+    def new_gitdeploy_yaml(self, gitdeploy):
+        '''Adds new gitdeploy to existing YAML file or creates new YAML file.'''
         name = gitdeploy['name']
-        filename = self.get_file_name(name)
-        util.debugLog(self, "add_gitdeploy_to_yaml: filename: {}".format(filename))
+        filename = self.get_gd_file_name(name)
+        util.debugLog(self, "add_gitdeploy_to_yaml: acquiring lock on {}".format(filename))
         lock = lockfile.FileLock(filename)
         lock.acquire(timeout=60)  # throws exception if timeout
         if os.path.isfile(filename):

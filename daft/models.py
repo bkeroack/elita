@@ -66,7 +66,7 @@ class BuildDataService(GenericChildDataService):
         self.UpdateBuild(bobj)
 
     def UpdateBuild(self, buildobj):
-        doc = self.db['builds'].find_one({"build_name": buildobj.build_name})
+        doc = self.db['builds'].find_one({"build_name": buildobj.build_name, "app_name": buildobj.app_name})
         assert doc is not None
         doc["files"] = buildobj.files
         doc["stored"] = buildobj.stored
@@ -177,9 +177,10 @@ class ApplicationDataService(GenericChildDataService):
         self.root['app'][app_name] = {
             "_doc": bson.DBRef("applications", id),
             "builds": {"_doc": self.parent.NewContainer("BuildContainer", "builds", app_name)},
-            "action": {"_doc": self.parent.NewContainer("ActionContainer", "action", app_name)},
+            "actions": {"_doc": self.parent.NewContainer("ActionContainer", "action", app_name)},
             "gitrepos": {"_doc": self.parent.NewContainer("GitRepoContainer", "gitrepos", app_name)},
-            "gitdeploys": {"_doc": self.parent.NewContainer("GitDeployContainer", "gitdeploys", app_name)}
+            "gitdeploys": {"_doc": self.parent.NewContainer("GitDeployContainer", "gitdeploys", app_name),},
+            "deployments": {"_doc": self.parent.NewContainer("DeploymentContainer", "deployments", app_name)}
         }
 
     def DeleteApplication(self, app_name):
@@ -187,8 +188,8 @@ class ApplicationDataService(GenericChildDataService):
 
 class JobDataService(GenericChildDataService):
     def GetAllActions(self, app_name):
-        if 'action' in self.root['app'][app_name]:
-            return [action for action in self.root['app'][app_name]['action'] if action[0] != '_']
+        if 'actions' in self.root['app'][app_name]:
+            return [action for action in self.root['app'][app_name]['actions'] if action[0] != '_']
 
     def NewJob(self, name):
         job = Job({
@@ -232,15 +233,16 @@ class JobDataService(GenericChildDataService):
                                                                    'completed_datetime': now,
                                                                    'duration_in_seconds': diff}})
         util.debugLog(self, "SaveJobResults: update job doc: {}".format(res))
-        self.NewJobData(self.parent.job_id, {"completed_results": results})
+        self.NewJobData({"completed_results": results})
 
     def NewAction(self, app_name, action_name, params):
         util.debugLog(self, "NewAction: app_name: {}".format(app_name))
         util.debugLog(self, "NewAction: action_name: {}".format(action_name))
-        self.parent.refresh_root()
-        self.root['app'][app_name]['action'][action_name] = Action(app_name, action_name, params, self)
-        pp = pprint.PrettyPrinter(indent=4)
-        util.debugLog(self, "NewAction: actions: {}".format(pp.pformat(self.root['app'][app_name]['action'])))
+        if app_name in self.parent.appsvc.GetApplications():
+            self.parent.refresh_root()
+            self.root['app'][app_name]['actions'][action_name] = Action(app_name, action_name, params, self)
+        else:
+            util.debugLog(self, "NewAction: application '{}' not found".format(app_name))
 
     def ExecuteAction(self, app_name, action_name, params, verb):
         return self.parent.actionsvc.async(app_name, action_name, params, verb)
@@ -282,11 +284,6 @@ class ServerDataService(GenericChildDataService):
     def DeleteServer(self, name):
         self.parent.DeleteObject(self.root['server'], name, 'servers')
 
-    def AddGitDeploy(self, server_name, gitdeploy_dbref):
-        pass
-
-    def GetGitDeploys(self, server_name):
-        return [k for k in self.root['server'][server_name]['gitdeploys'].keys() if k[0] != '_']
 
 class GitDataService(GenericChildDataService):
     def NewGitDeploy(self, name, app_name, server_name, package, options, actions, location, attributes):
@@ -326,6 +323,9 @@ class GitDataService(GenericChildDataService):
         self.parent.refresh_root()
         self.root['server'][server_name]['gitdeploys'][name] = {'_doc': bson.DBRef('gitdeploys', gdid)}
 
+    def GetGitDeploys(self, app):
+        return [k for k in self.root['app'][app]['gitdeploys'].keys() if k[0] != '_']
+
     def GetGitDeploy(self, app, name):
         doc = self.db['gitdeploys'].fine_one({'name': name, 'application': app})
         #dereference embedded dbrefs
@@ -358,7 +358,6 @@ class GitDataService(GenericChildDataService):
             '_class': "GitProvider",
             'name': gpobj.name,
             'type': gpobj.type,
-            'base_url': gpobj.base_url,
             'auth': gpobj.auth
         })
         self.parent.refresh_root()
@@ -399,8 +398,15 @@ class GitDataService(GenericChildDataService):
         }
         return {'NewGitRepo': 'ok'}
 
+    def UpdateGitRepo(self, app, name, doc):
+        pass
+
     def DeleteGitRepo(self, name):
         self.parent.DeleteObject(self.root['global']['gitrepos'], name, 'gitrepos')
+
+class DeploymentDataService(GenericChildDataService):
+    def GetDeployments(self, app):
+        return [k for k in self.root['app'][app]['deployments'].keys() if k[0] != '_']
 
 class KeyDataService(GenericChildDataService):
     def GetKeyPairs(self):
@@ -470,6 +476,7 @@ class DataService:
         self.serversvc = ServerDataService(self)
         self.gitsvc = GitDataService(self)
         self.keysvc = KeyDataService(self)
+        self.deploysvc = DeploymentDataService(self)
         if actions_init:
             self.actionsvc = ActionService(self)
         #passed in if this is part of an async job
@@ -590,7 +597,6 @@ class GitProvider(GenericDataModel):
     default_values = {
         'name': None,
         'type': None,
-        'base_url': None,
         'auth': {
             'username': None,
             'password': None
@@ -815,12 +821,12 @@ class RootTreeUpdater:
         for a in self.tree['app']:
             actions = list()
             if a[0] != '_':
-                if "action" in self.tree['app'][a]:
-                    for ac in self.tree['app'][a]['action']:
+                if "actions" in self.tree['app'][a]:
+                    for ac in self.tree['app'][a]['actions']:
                         if ac[0] != '_':
                             actions.append(ac)
                     for action in actions:
-                        del self.tree['app'][a]['action'][action]
+                        del self.tree['app'][a]['actions'][action]
 
     def update(self):
         self.clean_actions()
@@ -844,11 +850,13 @@ class DataValidator:
         self.check_apps()
         self.check_jobs()
         self.check_servers()
-        self.check_deployments()
         self.SaveRoot()
 
     def SaveRoot(self):
-        self.db['root_tree'].update({"_id": self.root['_id']}, self.root)
+        if '_id' in self.root:
+            self.db['root_tree'].update({"_id": self.root['_id']}, self.root)
+        else:
+            self.db['root_tree'].insert(self.root)
 
     def NewContainer(self, class_name, name, parent):
         cdoc = self.db['containers'].insert({'_class': class_name,
@@ -934,6 +942,35 @@ class DataValidator:
                 util.debugLog(self, "WARNING: '{}' not found under global".format(l))
                 self.root['global'][l] = dict()
                 self.root['global'][l]['_doc'] = self.NewContainer(global_levels[l]['class'], l, "")
+        if 'admin' not in self.root['global']['users']:
+            util.debugLog(self, "WARNING: admin user not found")
+            uobj = User({
+                'name': 'admin',
+                'password': 'daft',
+                'permissions': {
+                    'apps': {
+                        '*': 'read/write',
+                        '_global': 'read/write'
+                    },
+                    'actions': {
+                        '*': {
+                            '*': 'execute'
+                        }
+                    },
+                    'servers': '*'
+                }
+            })
+            id = self.db['users'].insert({
+            "_class": "User",
+            "name": uobj.name,
+            "hashed_pw": uobj.hashed_pw,
+            "attributes": uobj.attributes,
+            "salt": uobj.salt,
+            "permissions": uobj.permissions
+            })
+            self.root['global']['users']['admin'] = {
+                '_doc': bson.DBRef('users', id)
+            }
 
     def check_jobs(self):
         djs = list()
@@ -950,7 +987,7 @@ class DataValidator:
             'builds': {
                 'class': "BuildContainer"
             },
-            'action': {
+            'actions': {
                 'class': "ActionContainer"
             },
             'gitrepos': {
@@ -974,11 +1011,6 @@ class DataValidator:
     def check_servers(self):
         pass
 
-    def check_deployments(self):
-        for d in self.root['deployment']:
-            if d[0] != '_':
-                pass
-
     def check_toplevel(self):
         top_levels = {
             'app': {
@@ -992,9 +1024,6 @@ class DataValidator:
             },
             'server': {
                 'class': 'ServerContainer'
-            },
-            'keypair': {
-                'class': 'KeyPairContainer'
             }
         }
         for tl in top_levels:

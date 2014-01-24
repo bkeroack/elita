@@ -6,6 +6,7 @@ import urllib2
 import pprint
 import traceback
 import sys
+import fnmatch
 
 import models
 import builds
@@ -73,7 +74,7 @@ class GenericView:
             else:
                 return self.Error('insufficient permissions')
         else:
-            return self.UNKNOWN_VERB()
+            return self.UNIMPLEMENTED()
 
     def __call__(self):
         g, p = self.check_params()
@@ -148,19 +149,22 @@ class GenericView:
         return {'status': 'error', 'message': message}
 
     def GET(self):
-        return self.Error("not implemented")
+        return self.UNIMPLEMENTED()
 
     def POST(self):
-        return self.Error("not implemented")
+        return self.UNIMPLEMENTED()
 
     def PUT(self):
-        return self.Error("not implemented")
+        return self.UNIMPLEMENTED()
 
     def DELETE(self):
-        return self.Error("not implemented")
+        return self.UNIMPLEMENTED()
 
     def UNKNOWN_VERB(self):
-        return self.Error("unknown or unimplemented HTTP verb")
+        return self.Error("unknown/unsupported HTTP verb")
+
+    def UNIMPLEMENTED(self):
+        return self.Error("HTTP verb '{}' not implemented for this resource".format(self.req.method))
 
 
 
@@ -454,12 +458,13 @@ class ServerView(GenericView):
 
 class DeploymentContainerView(GenericView):
     def __init__(self, context, request):
-        GenericView.__init__(self, context, request, app_name=context.application)
+        GenericView.__init__(self, context, request, app_name=context.parent)
         self.set_params({"GET": [], "PUT": [], "POST": ['build_name'], "DELETE": []})
 
     def GET(self):
         return {
-            'deployments': self.datasvc.deploysvc.GetDeployments(self.context.application)
+            'application': self.context.parent,
+            'deployments': self.datasvc.deploysvc.GetDeployments(self.context.parent)
         }
 
     def POST(self):
@@ -474,10 +479,16 @@ class DeploymentContainerView(GenericView):
         ok, msg = deploy.validate_server_specs(sspecs)
         if not ok:
             return self.Error("invalid server specs object ({})".format(msg))
+        if sspecs['type'] == 'glob':
+            servers = fnmatch.filter(self.datasvc.serversvc.GetServers(), sspecs['spec'])
+            if len(servers) == 0:
+                return self.Error("server spec doesn't match anything: {}".format(sspecs['spec']))
+        else:
+            servers = sspecs['spec']
         msg = self.run_async('deploy_{}_{}'.format(self.context.application,  build_name), deploy.run_deploy,{
             'application': self.context.application,
             'build_name': build_name,
-            'server_spec': sspecs
+            'server_spec': servers
         })
         return self.status_ok({
             'start_deployment': {
@@ -495,7 +506,7 @@ class DeploymentView(GenericView):
 
 class KeyPairContainerView(GenericView):
     def __init__(self, context, request):
-        GenericView.__init__(self, context, request)
+        GenericView.__init__(self, context, request, app_name='_global')
         self.set_params({"GET": [], "PUT": ['name', 'key_type'], "POST": ['name', 'key_type'], "DELETE": ['name']})
 
     def GET(self):
@@ -536,7 +547,7 @@ class KeyPairContainerView(GenericView):
 
 class KeyPairView(GenericView):
     def __init__(self, context, request):
-        GenericView.__init__(self, context, request)
+        GenericView.__init__(self, context, request, app_name='_global')
         self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
 
     def GET(self):
@@ -632,6 +643,7 @@ class GitRepoContainerView(GenericView):
 
     def GET(self):
         return {
+            'application': self.context.parent,
             'gitrepos': self.datasvc.gitsvc.GetGitRepos(self.context.parent)
         }
 
@@ -680,21 +692,41 @@ class GitRepoView(GenericView):
     def GET(self):
         gp_doc = self.datasvc.Dereference(self.context.gitprovider)
         gp_doc = {k: gp_doc[k] for k in gp_doc if k[0] != '_'}
+        gp_doc['auth']['password'] = "*****"
         return {
             'gitrepo': {
                 'name': self.context.name,
-                'application': self.context.pa,
+                'application': self.context.application,
                 'uri': self.context.uri if hasattr(self.context, 'uri') else None,
                 'gitprovider': gp_doc
             }
         }
 
+    def DELETE(self):
+        name = self.context.name
+        self.datasvc.gitsvc.DeleteGitRepo(name)
+        resp = {'delete_gitrepo': {'name': name}}
+        if 'delete' in self.req.params and self.req.params['delete'] in AFFIRMATIVE_SYNONYMS:
+            gp_doc = self.datasvc.gitsvc.GetGitProvider(self.datasvc.Dereference(self.context.gitprovider))
+            del_callable = gitservice.delete_repo_callable_from_type(gp_doc['type'])
+            if not del_callable:
+                return self.Error("git provider type not supported ({})".format(gp_doc['type']))
+            msg = self.run_async("delete_repository", del_callable, {'gitprovider': gp_doc, 'name': self.context.name})
+            resp['message'] = { 'delete_repository': msg}
+        return self.status_ok(resp)
+
 
 class GitDeployContainerView(GenericView):
     def __init__(self, context, request):
-        GenericView.__init__(self, context, request)
+        GenericView.__init__(self, context, request, app_name=context.parent)
         self.set_params({"GET": [], "PUT": ['name', 'application'], "POST": [], "DELETE": []})
         self.server_name = context.parent
+
+    def GET(self):
+        return {
+            'application': self.context.parent,
+            'gitdeploys': self.datasvc.gitsvc.GetGitDeploys(self.context.parent)
+        }
 
     def PUT(self):
         name = self.req.params['name']
@@ -719,7 +751,7 @@ class GitDeployContainerView(GenericView):
             return self.Error("invalid location object: one or more of ('path', 'git_repo', 'default_branch') not found")
         self.datasvc.gitsvc.NewGitDeploy(name, app, self.server_name, package, options, actions, location, attribs)
         gd = self.datasvc.gitsvc.GetGitDeploy(app, name)
-        msg = self.run_async("create_gitdeploy", gitservice.initialize_gitdeploy, {'gitdeploy': gd})
+        msg = self.run_async("create_gitdeploy", gitservice.create_gitdeploy, {'gitdeploy': gd})
         return self.status_ok({'create_gitdeploy': {'name': name, 'message': msg}})
 
 
@@ -740,14 +772,11 @@ class GitDeployView(GenericView):
             'location': self.context.location
         }
 
-    def POST(self):
+    def update(self, body):
         keys = {'attributes', 'options', 'actions', 'location'}
-        try:
-            body = self.req.json_body
-        except:
-            return self.Error("invalid gitdeploy modification object (problem deserializing, bad JSON?)")
         if "location" not in body:
             return self.Error("invalid location object (valid JSON, 'location' key not found)")
+        #verify no unknown/incorrect location keys
         if not keys.issuperset({k for k in body.keys()}):
             diff = keys - {k for k in body.keys()}
             u_i = len(diff)
@@ -755,6 +784,42 @@ class GitDeployView(GenericView):
             return self.Error("invalid {}: {}".format(word, diff))
         self.datasvc.gitsvc.UpdateGitDeploy(self.context.name, body)
         return self.status_ok({'update_gitdeploy': {'name': self.context.name, 'object': body}})
+
+    def initialize(self, body):
+        if "servers" not in body:
+            return self.Error("initialization requested but 'servers' not found")
+        servers = body['servers']
+        eservers = self.datasvc.serversvc.GetServers()
+        if isinstance(servers, list):
+            sset = set(eservers)
+            sset_r = set(servers)
+            if not sset.issuperset(sset_r):
+                return self.Error("unknown servers: {}".format(list(sset_r-sset)))
+        else:
+            sglob = servers
+            servers = fnmatch.filter(eservers, servers)
+            if len(servers) == 0:
+                return self.Error("no servers matched pattern: {}".format(sglob))
+        gddoc = self.datasvc.gitsvc.GetGitDeploy(self.context.name)  # we need to get the fully dereferenced doc
+        msg = self.run_async('initialize_gitdeploy_servers', gitservice.initialize_gitdeploy, {'gitdeploy': gddoc,
+                                                                                               'server_list': servers})
+        return self.status_ok({
+            'initialize_gitdeploy': {
+                'name': self.context.name,
+                'servers': servers,
+                'msg': msg
+            }
+        })
+
+    def POST(self):
+        try:
+            body = self.req.json_body
+        except:
+            return self.Error("invalid body object (problem deserializing, bad JSON?)")
+        if "initialize" in self.req.params and self.req.params['initialize'] in AFFIRMATIVE_SYNONYMS:
+            return self.initialize(body)
+        else:
+            return self.update(body)
 
 
 
@@ -907,8 +972,7 @@ class UserView(GenericView):
 
 class TokenContainerView(GenericView):
     def __init__(self, context, request):
-        #permissionless b/c the token is the secret. no need to supply token in URL and auth_token param
-        GenericView.__init__(self, context, request, permissionless=True)
+        GenericView.__init__(self, context, request, app_name='_global')
         self.set_params({"GET": ["username", "password"], "PUT": [], "POST": [], "DELETE": ["token"]})
 
     def GET(self):
@@ -934,7 +998,8 @@ class TokenContainerView(GenericView):
 
 class TokenView(GenericView):
     def __init__(self, context, request):
-        GenericView.__init__(self, context, request)
+        #permissionless b/c the token is the secret. no need to supply token in URL and auth_token param
+        GenericView.__init__(self, context, request, permissionless=True)
 
     def GET(self):
         return {"token": self.context.token, "created": self.get_created_datetime_text(),
