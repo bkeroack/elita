@@ -21,7 +21,8 @@ requires = [
     'salt',
     'M2Crypto',
     'PyYAML',
-    'lockfile'
+    'lockfile',
+    'sh'
     ]
 
 setup(name='daft',

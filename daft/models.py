@@ -90,6 +90,10 @@ class BuildDataService(GenericChildDataService):
     def GetBuild(self, app_name, build_name):
         return Build(self.root['app'][app_name]['builds'][build_name].doc)
 
+    def GetBuildDoc(self, app_name, build_name):
+        bobj = self.GetBuild(app_name, build_name)
+        return bobj.get_doc()
+
 class UserDataService(GenericChildDataService):
     def NewUser(self, name, pw, perms, attribs):
         userobj = User({
@@ -174,7 +178,8 @@ class ApplicationDataService(GenericChildDataService):
             "_doc": bson.DBRef("applications", id),
             "builds": {"_doc": self.parent.NewContainer("BuildContainer", "builds", app_name)},
             "action": {"_doc": self.parent.NewContainer("ActionContainer", "action", app_name)},
-            "gitrepos": {"_doc": self.parent.NewContainer("GitRepoContainer", "gitrepos", app_name)}
+            "gitrepos": {"_doc": self.parent.NewContainer("GitRepoContainer", "gitrepos", app_name)},
+            "gitdeploys": {"_doc": self.parent.NewContainer("GitDeployContainer", "gitdeploys", app_name)}
         }
 
     def DeleteApplication(self, app_name):
@@ -204,9 +209,10 @@ class JobDataService(GenericChildDataService):
         }
         return job
 
-    def NewJobData(self, job_id, data):
+    def NewJobData(self, data):
+        assert self.parent.job_id
         self.db['job_data'].insert({
-            'job_id': job_id,
+            'job_id': self.parent.job_id,
             'data': data
         })
 
@@ -217,15 +223,16 @@ class JobDataService(GenericChildDataService):
         return sorted([{'created_datetime': d['_id'].generation_time.isoformat(' '), 'data': d['data']} for
                        d in self.db['job_data'].find({'job_id': job_id})], key=lambda k: k['created_datetime'])
 
-    def SaveJobResults(self, job_id, results):
+    def SaveJobResults(self, results):
+        assert self.parent.job_id
         now = datetime.datetime.now(tz=pytz.utc)
-        doc = self.db['jobs'].find_one({'job_id': job_id})
+        doc = self.db['jobs'].find_one({'job_id': self.parent.job_id})
         diff = (now - doc['_id'].generation_time).total_seconds()
-        res = self.db['jobs'].update({'job_id': job_id}, {'$set': {'status': "completed",
+        res = self.db['jobs'].update({'job_id': self.parent.job_id}, {'$set': {'status': "completed",
                                                                    'completed_datetime': now,
                                                                    'duration_in_seconds': diff}})
         util.debugLog(self, "SaveJobResults: update job doc: {}".format(res))
-        self.NewJobData(job_id, {"completed_results": results})
+        self.NewJobData(self.parent.job_id, {"completed_results": results})
 
     def NewAction(self, app_name, action_name, params):
         util.debugLog(self, "NewAction: app_name: {}".format(app_name))
@@ -282,7 +289,7 @@ class ServerDataService(GenericChildDataService):
         return [k for k in self.root['server'][server_name]['gitdeploys'].keys() if k[0] != '_']
 
 class GitDataService(GenericChildDataService):
-    def NewGitDeploy(self, name, app_name, server_name, options, actions, location, attributes):
+    def NewGitDeploy(self, name, app_name, server_name, package, options, actions, location, attributes):
         server_doc = self.db['servers'].find_one({'name': server_name})
         if server_doc is None:
             return {'NewGitDeploy': "invalid server (not found)"}
@@ -290,20 +297,27 @@ class GitDataService(GenericChildDataService):
         if gitrepo_doc is None:
             return {'NewGitDeploy': "invalid gitrepo (not found)"}
         location['gitrepo'] = bson.DBRef("gitrepos", gitrepo_doc['_id'])
-        gd = GitDeploy({
+        new_gd = {
             'name': name,
             'application': app_name,
             'server': bson.DBRef('servers', server_doc['_id']),
             'location': location,
             'attributes': attributes,
-            'options': options,
-            'actions': actions
-        })
+        }
+        #override defaults if specified
+        if package:
+            new_gd['package'] = package
+        if options:
+            new_gd['options'] = options
+        if actions:
+            new_gd['actions'] = actions
+        gd = GitDeploy(new_gd)
         gdid = self.db['gitdeploys'].insert({
             '_class': "GitDeploy",
             'name': gd.name,
             'application': gd.application,
             'server': gd.server,
+            'package': gd.package,
             'attributes': gd.attributes,
             'options': gd.options,
             'actions': gd.actions,
@@ -312,10 +326,9 @@ class GitDataService(GenericChildDataService):
         self.parent.refresh_root()
         self.root['server'][server_name]['gitdeploys'][name] = {'_doc': bson.DBRef('gitdeploys', gdid)}
 
-    def GetGitDeploy(self, name):
-        doc = self.db['gitdeploys'].fine_one({'name': name})
+    def GetGitDeploy(self, app, name):
+        doc = self.db['gitdeploys'].fine_one({'name': name, 'application': app})
         #dereference embedded dbrefs
-        doc['server'] = self.db.dereference(doc['server'])
         doc['location']['git_repo'] = self.db.dereference(doc['location']['git_repo'])
         doc['location']['git_repo']['keypair'] = self.db.dereference(doc['location']['git_repo']['keypair'])
         doc['location']['git_repo']['gitprovider'] = self.db.dereference(doc['location']['git_repo']['gitprovider'])
@@ -445,7 +458,7 @@ class KeyDataService(GenericChildDataService):
 
 
 class DataService:
-    def __init__(self, settings, db, root, actions_init=True):
+    def __init__(self, settings, db, root, actions_init=True, job_id=None):
         self.settings = settings
         self.db = db
         self.root = root
@@ -459,6 +472,8 @@ class DataService:
         self.keysvc = KeyDataService(self)
         if actions_init:
             self.actionsvc = ActionService(self)
+        #passed in if this is part of an async job
+        self.job_id = job_id
 
     def refresh_root(self):
         # when running long async actions the root tree passed to constructor may be stale by the time we try to update
@@ -596,6 +611,7 @@ class GitDeploy(GenericDataModel):
         'name': None,
         'application': None,
         'server': bson.DBRef("", None),
+        'package': 'master',
         'attributes': dict(),
         'options': {
             'favor': 'ours',
@@ -850,7 +866,8 @@ class DataValidator:
             'gitdeploys',
             'jobs',
             'tokens',
-            'users'
+            'users',
+            'servers'
         ]
         for c in collects:
             for d in self.db[c].find():
@@ -891,6 +908,10 @@ class DataValidator:
                     if d['name'] not in self.root['global']['users']:
                         util.debugLog(self, "WARNING: orphan user object: '{}', adding to root tree".format(d['name']))
                         self.root['global']['users'][d['name']] = {'_doc': bson.DBRef('users', d['_id'])}
+                if c == 'servers':
+                    if d['name'] not in self.root['server']:
+                        util.debugLog(self, "WARNING: orphan server object: '{}', adding to root tree".format(d['name']))
+                        self.root['server'][d['name']] = {'_doc': bson.DBRef('servers', d['_id'])}
 
 
     def check_global(self):
@@ -934,6 +955,12 @@ class DataValidator:
             },
             'gitrepos': {
                 'class': "GitRepoContainer"
+            },
+            'gitdeploys': {
+                'class': "GitDeployContainer"
+            },
+            'deployments': {
+                'class': "DeploymentContainer"
             }
         }
         for a in self.root['app']:
@@ -945,13 +972,8 @@ class DataValidator:
                         self.root['app'][a][sl]['_doc'] = self.NewContainer(app_sublevels[sl]['class'], sl, a)
 
     def check_servers(self):
-        for s in self.root['server']:
-            if s[0] != '_':
-                if 'gitdeploys' not in self.root['server'][s]:
-                    util.debugLog(self, "WARNING: 'gitdeploys' not found under server {}".format(s))
-                    self.root['server'][s]['gitdeploy'] = dict()
-                    self.root['server'][s]['gitdeploy']['_doc'] = self.NewContainer("GitDeployContainer",
-                                                                                    "gitdeploys", s)
+        pass
+
     def check_deployments(self):
         for d in self.root['deployment']:
             if d[0] != '_':
@@ -970,9 +992,6 @@ class DataValidator:
             },
             'server': {
                 'class': 'ServerContainer'
-            },
-            'deployment': {
-                'class': 'DeploymentContainer'
             },
             'keypair': {
                 'class': 'KeyPairContainer'

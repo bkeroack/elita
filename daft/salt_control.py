@@ -58,6 +58,10 @@ class RemoteCommands:
             'cwd': cwd
         }, timeout=1200)
 
+    def highstate(self, target):
+        expr_form = "list" if isinstance(target, list) else "glob"
+        return self.sc.salt_command(target, 'state.highstate', opts={'expr_form': expr_form}, timeout=300)
+
 class SaltController:
     def __init__(self, settings):
         self.settings = settings
@@ -117,7 +121,7 @@ class SaltController:
         existing[slsname] = {
             'cmd.run': [
                 {
-                    'name': 'git checkout {branch} && git fetch && git merge -s recursive -X{favor} -Xpatience {ignorews}'
+                    'name': 'git checkout {branch}; git pull -s recursive -X{favor} -Xpatience {ignorews}'
                     .format(branch=branch, favor=favor, ignorews=ignore_whitespace_op)
                 },
                 {

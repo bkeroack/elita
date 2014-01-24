@@ -98,5 +98,34 @@ class BuildStorage:
         return True
 
 
+class BuildFile:
+    def __init__(self, package_doc):
+        self.file_type = package_doc['file_type']
+        self.filename = package_doc['filename']
+
+    def decompress(self, target_path):
+        if self.file_type == SupportedFileType.Zip:
+            self.decompress_zip(target_path)
+        elif self.file_type == SupportedFileType.TarBz2:
+            self.decompress_tbz2(target_path)
+        elif self.file_type == SupportedFileType.TarGz:
+            self.decompress_tgz(target_path)
+        else:
+            raise BuildError
+
+    def decompress_tar(self, target_path, ext):
+        with tarfile.open(name=self.filename, mode='r:{}'.format(ext)) as tf:
+            tf.extractall(target_path)
+
+    def decompress_tbz2(self, target_path):
+        self.decompress_tar(target_path, 'bz2')
+
+    def decompress_tgz(self, target_path):
+        self.decompress_tar(target_path, 'gz')
+
+    def decompress_zip(self, target_path):
+        with zipfile.ZipFile(self.filename, 'r') as zf:
+            zf.extractall(target_path)
+
 
 

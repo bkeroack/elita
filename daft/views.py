@@ -13,6 +13,7 @@ import auth
 import action
 import gitservice
 import daft_exceptions
+import deploy
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
@@ -452,7 +453,41 @@ class ServerView(GenericView):
         }
 
 class DeploymentContainerView(GenericView):
-    pass
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request, app_name=context.application)
+        self.set_params({"GET": [], "PUT": [], "POST": ['build_name'], "DELETE": []})
+
+    def GET(self):
+        return {
+            'deployments': self.datasvc.deploysvc.GetDeployments(self.context.application)
+        }
+
+    def POST(self):
+        build_name = self.req.params['build_name']
+        try:
+            body = self.req.json_body
+        except:
+            return self.Error("invalid server specs object (problem deserializing, bad JSON?)")
+        if 'server_specs' not in body:
+            return self.Error("invalid server specs object ('server_specs' key not found)")
+        sspecs = body['server_specs']
+        ok, msg = deploy.validate_server_specs(sspecs)
+        if not ok:
+            return self.Error("invalid server specs object ({})".format(msg))
+        msg = self.run_async('deploy_{}_{}'.format(self.context.application,  build_name), deploy.run_deploy,{
+            'application': self.context.application,
+            'build_name': build_name,
+            'server_spec': sspecs
+        })
+        return self.status_ok({
+            'start_deployment': {
+                'application': self.context.application,
+                'build': build_name,
+                'server_spec': sspecs,
+                'message': msg
+            }
+        })
+
 
 class DeploymentView(GenericView):
     pass
@@ -615,7 +650,8 @@ class GitRepoContainerView(GenericView):
                 repo_callable = gitservice.create_repo_callable_from_type(gp_doc['type'])
                 if not repo_callable:
                     return self.Error("gitprovider type not supported ({})".format(gp_doc['type']))
-                msg = self.run_async("create_repository", repo_callable, {'gitprovider': gp_doc, 'name': name})
+                msg = self.run_async("create_repository", repo_callable, {'gitprovider': gp_doc, 'name': name,
+                                                                          'application': self.context.parent})
             else:
                 msg = {
                     'task': 'none'
@@ -648,7 +684,7 @@ class GitRepoView(GenericView):
             'gitrepo': {
                 'name': self.context.name,
                 'application': self.context.pa,
-                'uri': self.context.uri,
+                'uri': self.context.uri if hasattr(self.context, 'uri') else None,
                 'gitprovider': gp_doc
             }
         }
@@ -657,23 +693,32 @@ class GitRepoView(GenericView):
 class GitDeployContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request)
-        self.set_params({"GET": [], "PUT": ['name', 'application'], "POST": ['attributes'], "DELETE": []})
+        self.set_params({"GET": [], "PUT": ['name', 'application'], "POST": [], "DELETE": []})
         self.server_name = context.parent
 
     def PUT(self):
         name = self.req.params['name']
         app = self.req.params['application']
+        package = self.req.params['package'] if 'package' in self.req.params else 'master'
         try:
             location_attribs = self.req.json_body
         except:
             return self.Error("invalid location/attributes object (problem deserializing, bad JSON?)")
         attribs = location_attribs['attributes'] if 'attributes' in location_attribs else {}
+        options = location_attribs['options'] if 'options' in location_attribs else None
+        actions = location_attribs['actions'] if 'actions' in location_attribs else None
         if 'location' in location_attribs:
             location = location_attribs['location']
         else:
             return self.Error("invalid location object (valid JSON, 'location' key not found)")
-        self.datasvc.gitsvc.NewGitDeploy(name, app, self.server_name, location, attribs)
-        gd = self.datasvc.gitsvc.GetGitDeploy(name)
+        try:
+            assert 'path' in location
+            assert 'git_repo' in location
+            assert 'default_branch' in location
+        except AssertionError:
+            return self.Error("invalid location object: one or more of ('path', 'git_repo', 'default_branch') not found")
+        self.datasvc.gitsvc.NewGitDeploy(name, app, self.server_name, package, options, actions, location, attribs)
+        gd = self.datasvc.gitsvc.GetGitDeploy(app, name)
         msg = self.run_async("create_gitdeploy", gitservice.initialize_gitdeploy, {'gitdeploy': gd})
         return self.status_ok({'create_gitdeploy': {'name': name, 'message': msg}})
 
@@ -687,6 +732,7 @@ class GitDeployView(GenericView):
         return {
             'name': self.context.name,
             'server': self.context.server,
+            'package': self.context.package,
             'application': self.context.application,
             'attributes': self.context.attributes,
             'options': self.context.options,
@@ -695,7 +741,6 @@ class GitDeployView(GenericView):
         }
 
     def POST(self):
-        server = self.req.params['server'] if 'server' in self.req.params else None
         keys = {'attributes', 'options', 'actions', 'location'}
         try:
             body = self.req.json_body
@@ -708,8 +753,6 @@ class GitDeployView(GenericView):
             u_i = len(diff)
             word = "key" + "" if u_i == 1 else "s"
             return self.Error("invalid {}: {}".format(word, diff))
-        if server is not None:
-            body['server'] = server
         self.datasvc.gitsvc.UpdateGitDeploy(self.context.name, body)
         return self.status_ok({'update_gitdeploy': {'name': self.context.name, 'object': body}})
 

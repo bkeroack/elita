@@ -6,23 +6,22 @@ import pymongo
 
 __author__ = 'bkeroack'
 
-def regen_datasvc(settings):
-    pass
+def regen_datasvc(settings, job_id):
     client = pymongo.MongoClient(settings['daft.mongo.host'], int(settings['daft.mongo.port']))
     db = client[settings['daft.mongo.db']]
     tree = db['root_tree'].find_one()
     updater = models.RootTreeUpdater(tree, db)
     root = models.RootTree(db, updater, tree, None)
-    return client, models.DataService(settings, db, root, actions_init=False)
+    return client, models.DataService(settings, db, root, actions_init=False, job_id=job_id)
 
 @celeryinit.celery.task(bind=True, name="daft_task_run_job")
 def run_job(self, settings, callable, args):
     ''' Generate new dataservice, run callable, store results
     '''
     job_id = self.request.id
-    client, datasvc = regen_datasvc(settings)
+    client, datasvc = regen_datasvc(settings, job_id)
     results = callable(datasvc, **args)
-    datasvc.jobsvc.SaveJobResults(job_id, results)
+    datasvc.jobsvc.SaveJobResults(results)
     client.close()
 
 #generic interface to run code async (not explicit named actions/hooks)
