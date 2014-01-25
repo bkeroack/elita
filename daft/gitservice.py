@@ -25,8 +25,9 @@ def create_bitbucket_repo(datasvc, gitprovider, name, application):
     resp = bbsvc.create_repo(name)
     uri = bbsvc.get_ssh_uri(name)
     if uri:
-        bbsvc.setup_gitdeploy_dir(name, application)
-        datasvc.gitsvc.UpdateGitRepo(name, {'uri': uri})
+        util.debugLog(create_bitbucket_repo, "got uri: {}".format(uri))
+        bbsvc.setup_gitdeploy_dir(name, application, uri)
+        datasvc.gitsvc.UpdateGitRepo(application, name, {'uri': uri})
     else:
         util.debugLog(create_bitbucket_repo, "ERROR: uri for gitrepo not found!")
         resp['error'] = {'message': 'error getting uri!, local master not initialized!'}
@@ -73,7 +74,10 @@ class GitRepoService:
 
     def setup_gitdeploy_dir(self, name, application, uri):
         '''create master gitdeploy directory and initialize with git'''
+        util.debugLog(self, "setup_gitdeploy_dir: name: {}; app: {}; uri: {}".format(name, application, uri))
         root = self.settings['daft.gitdeploy.dir']
+        if not os.path.isdir(root):
+            os.mkdir(root)
         path = "{}/{}".format(root, application)
         if not os.path.isdir(path):
             os.mkdir(path)
@@ -83,7 +87,7 @@ class GitRepoService:
         git = sh.git.bake(_cwd=path)
         res = git.init()
         util.debugLog(self, "setup_gitdeploy_dir: git init: {}".format(res))
-        res = git.remote("add origin ssh://{}".format(uri))
+        res = git.remote.add.origin("ssh://{}".format(uri))
         util.debugLog(self, "setup_gitdeploy_dir: git remote add origin: {}".format(res))
 
 
@@ -132,10 +136,12 @@ class BitBucketRepoService(GitRepoService):
         try:
             resp = r.json()
         except:
+            util.debugLog(self, "exception parsing json resp!")
             return None
         for l in resp['links']['clone']:
             if l['name'] == "ssh":
                 return l['href'][6:]  # chop off leading 'ssh://'
+        util.debugLog(self, "nothing found in response!")
         return None
 
 class GitDeployManager:
@@ -167,10 +173,10 @@ class GitDeployManager:
 
     def push_keypair(self, server_list):
         f_pub, tf_pub = tempfile.mkstemp(text=True)
-        f_pub.write(self.gitdeploy['location']['git_repo']['keypair']['public_key'])
+        f_pub.write(self.gitdeploy['location']['gitrepo']['keypair']['public_key'])
         f_pub.close()
         f_priv, tf_priv = tempfile.mkstemp(text=True)
-        f_priv.write(self.gitdeploy['location']['git_repo']['keypair']['private_key'])
+        f_priv.write(self.gitdeploy['location']['gitrepo']['keypair']['private_key'])
         f_priv.close()
         res_pub = self.rc.push_key(server_list, tf_pub, self.gitdeploy['name'], '.pub')
         util.debugLog(self, "push_keypair: push pub resp: {}".format(res_pub))
@@ -181,7 +187,7 @@ class GitDeployManager:
         return res_pub, res_priv
 
     def clone_repo(self, server_list):
-        uri = self.gitdeploy['location']['git_repo']['uri']
+        uri = self.gitdeploy['location']['gitrepo']['uri']
         dest = self.gitdeploy['location']['path']
         res = self.rc.clone_repo(server_list, uri, dest)
         util.debugLog(self, "clone_repo: resp: {}".format(res))
@@ -189,7 +195,7 @@ class GitDeployManager:
 
     def get_path(self):
         appname = self.gitdeploy['application']
-        gitrepo_name = self.gitdeploy['location']['git_repo']['name']
+        gitrepo_name = self.gitdeploy['location']['gitrepo']['name']
         root = self.settings['daft.gitdeploy.dir']
         return "{}/{}/{}".format(root, appname, gitrepo_name)
 

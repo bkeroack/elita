@@ -47,13 +47,25 @@ class BuildDataService(GenericChildDataService):
             'build_name': build_name,
             'attributes': attribs
         })
-        id = self.db['builds'].insert({'_class': "Build",
-                                       'build_name': buildobj.build_name,
-                                       'files': buildobj.files,
-                                       'stored': buildobj.stored,
-                                       'app_name': buildobj.app_name,
-                                       'packages': buildobj.packages,
-                                       'attributes': buildobj.attributes})
+        new_doc = {
+            '_class': "Build",
+            'build_name': buildobj.build_name,
+            'files': buildobj.files,
+            'stored': buildobj.stored,
+            'app_name': buildobj.app_name,
+            'packages': buildobj.packages,
+            'attributes': buildobj.attributes,
+            'subsys': buildobj.subsys
+        }
+        existing = [doc['_id'] for doc in self.db['builds'].find({'build_name': build_name, 'app_name': app_name})]
+        if len(existing) > 0:
+            if len(existing) > 1:
+                # we should never have more than one, if so keep the 'top' one
+                util.debugLog(self, "WARNING: multiple build documents found, dropping all but the first")
+                for id in existing[1:]:
+                    self.db['builds'].remove({'_id': id})
+            new_doc['_id'] = existing[0]
+        id = self.db['builds'].save(new_doc)
         self.parent.refresh_root()
         self.root['app'][app_name]['builds'][build_name] = {
             "_doc": bson.DBRef("builds", id)
@@ -286,18 +298,15 @@ class ServerDataService(GenericChildDataService):
 
 
 class GitDataService(GenericChildDataService):
-    def NewGitDeploy(self, name, app_name, server_name, package, options, actions, location, attributes):
-        server_doc = self.db['servers'].find_one({'name': server_name})
-        if server_doc is None:
-            return {'NewGitDeploy': "invalid server (not found)"}
-        gitrepo_doc = self.db['gitrepos'].find_one({name: location['gitrepo']})
+    def NewGitDeploy(self, name, app_name, package, options, actions, location, attributes):
+        gitrepo_doc = self.db['gitrepos'].find_one({'name': location['gitrepo']})
+        util.debugLog(self, "NewGitDeploy: gitrepo_doc: {}".format(gitrepo_doc))
         if gitrepo_doc is None:
-            return {'NewGitDeploy': "invalid gitrepo (not found)"}
+            return {'error': "invalid gitrepo (not found)"}
         location['gitrepo'] = bson.DBRef("gitrepos", gitrepo_doc['_id'])
         new_gd = {
             'name': name,
             'application': app_name,
-            'server': bson.DBRef('servers', server_doc['_id']),
             'location': location,
             'attributes': attributes,
         }
@@ -313,7 +322,6 @@ class GitDataService(GenericChildDataService):
             '_class': "GitDeploy",
             'name': gd.name,
             'application': gd.application,
-            'server': gd.server,
             'package': gd.package,
             'attributes': gd.attributes,
             'options': gd.options,
@@ -321,17 +329,18 @@ class GitDataService(GenericChildDataService):
             'location': gd.location
         })
         self.parent.refresh_root()
-        self.root['server'][server_name]['gitdeploys'][name] = {'_doc': bson.DBRef('gitdeploys', gdid)}
+        self.root['app'][app_name]['gitdeploys'][name] = {'_doc': bson.DBRef('gitdeploys', gdid)}
+        return {"ok": "done"}
 
     def GetGitDeploys(self, app):
         return [k for k in self.root['app'][app]['gitdeploys'].keys() if k[0] != '_']
 
     def GetGitDeploy(self, app, name):
-        doc = self.db['gitdeploys'].fine_one({'name': name, 'application': app})
+        doc = self.db['gitdeploys'].find_one({'name': name, 'application': app})
         #dereference embedded dbrefs
-        doc['location']['git_repo'] = self.db.dereference(doc['location']['git_repo'])
-        doc['location']['git_repo']['keypair'] = self.db.dereference(doc['location']['git_repo']['keypair'])
-        doc['location']['git_repo']['gitprovider'] = self.db.dereference(doc['location']['git_repo']['gitprovider'])
+        doc['location']['gitrepo'] = self.db.dereference(doc['location']['gitrepo'])
+        doc['location']['gitrepo']['keypair'] = self.db.dereference(doc['location']['gitrepo']['keypair'])
+        doc['location']['gitrepo']['gitprovider'] = self.db.dereference(doc['location']['gitrepo']['gitprovider'])
         return {k: doc[k] for k in doc if k[0] != '_'}
 
     def UpdateGitDeploy(self, name, doc):
@@ -372,6 +381,10 @@ class GitDataService(GenericChildDataService):
     def GetGitRepos(self, app):
         return [k for k in self.root['app'][app]['gitrepos'].keys() if k[0] != '_']
 
+    def GetGitRepo(self, app, name):
+        doc = self.db['gitrepos'].find_one({'name': name, 'application': app})
+        return {k: doc[k] for k in doc if k[0] != '_'}
+
     def NewGitRepo(self, app, name, keypair, gitprovider, existing=False):
         gp_doc = self.db['gitproviders'].find_one({'name': gitprovider})
         if gp_doc is None:
@@ -399,10 +412,25 @@ class GitDataService(GenericChildDataService):
         return {'NewGitRepo': 'ok'}
 
     def UpdateGitRepo(self, app, name, doc):
-        pass
+        gro = GitRepo(self.GetGitRepo(app, name))
+        gro.update_values(doc)
+        grd = gro.get_doc()
+        existing = [doc['_id'] for doc in self.db['gitrepos'].find({'name': name, 'application': app})]
+        if len(existing) > 0:
+            if len(existing) > 1:
+                # we should never have more than one, if so keep the 'top' one
+                util.debugLog(self, "WARNING: multiple gitrepo documents found, dropping all but the first")
+                for id in existing[1:]:
+                    self.db['gitrepos'].remove({'_id': id})
+            grd['_id'] = existing[0]
+        else:
+            util.debugLog(self, "UpdateGitRepo: WARNING: existing doc not found!")
+            return
+        grd['_class'] = "GitRepo"
+        self.db['gitrepos'].save(grd)
 
-    def DeleteGitRepo(self, name):
-        self.parent.DeleteObject(self.root['global']['gitrepos'], name, 'gitrepos')
+    def DeleteGitRepo(self, app, name):
+        self.parent.DeleteObject(self.root['app'][app]['gitrepos'], name, 'gitrepos')
 
 class DeploymentDataService(GenericChildDataService):
     def GetDeployments(self, app):
@@ -508,7 +536,7 @@ class DataService:
     def DeleteObject(self, container, key, collection):
         id = container[key].doc['_id']
         self.db[collection].remove({'_id': id})
-        self.parent.refresh_root()
+        self.refresh_root()
         del container[key]
 
     def Dereference(self, dbref):
@@ -588,10 +616,6 @@ class Server(GenericDataModel):
         "salt_key": bson.DBRef("", None)
     }
 
-    def init_hook(self):
-        sc = salt_control.SaltController(self.name)
-        if not sc.verify_connectivity():
-            raise daft_exceptions.SaltServerNotAccessible
 
 class GitProvider(GenericDataModel):
     default_values = {
@@ -1007,6 +1031,15 @@ class DataValidator:
                         util.debugLog(self, "WARNING: '{}' not found under {}".format(sl, a))
                         self.root['app'][a][sl] = dict()
                         self.root['app'][a][sl]['_doc'] = self.NewContainer(app_sublevels[sl]['class'], sl, a)
+                    d_o = list()
+                    for o in self.root['app'][a][sl]:
+                        if o[0] != '_' and '_doc' in self.root['app'][a][sl][o]:
+                            if self.db.dereference(self.root['app'][a][sl][o]['_doc']) is None:
+                                util.debugLog(self,
+                                              "WARNING: dangling {} reference '{}' in app {}; deleting".format(sl, o, a))
+                                d_o.append(o)
+                    for d in d_o:
+                        del self.root['app'][a][sl][d]
 
     def check_servers(self):
         pass

@@ -26,10 +26,12 @@ def run_job(self, settings, callable, args):
         results = callable(datasvc, **args)
     except:
         exc_type, exc_obj, tb = sys.exc_info()
+        f_exc = traceback.format_exception(exc_type, exc_obj, tb)
         results = {
             "error": "unhandled exception during callable!",
-            "exception": traceback.format_exception(exc_type, exc_obj, tb)
+            "exception": f_exc
         }
+        util.debugLog(run_job, "EXCEPTION: {}".format(f_exc))
     datasvc.jobsvc.SaveJobResults(results)
     client.close()
 

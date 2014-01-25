@@ -73,6 +73,8 @@ class SaltController:
         self.salt_client = salt.client.LocalClient()
         self.file_roots = None
         self.pillar_roots = None
+        self.sls_dir = None
+
         self.load_salt_info()
 
     def salt_command(self, target, cmd, opts={}, timeout=120):
@@ -87,14 +89,16 @@ class SaltController:
         master_config = salt.config.master_config(os.environ.get('SALT_MASTER_CONFIG', '/etc/salt/master'))
         self.file_roots = master_config['file_roots']
         self.pillar_roots = master_config['pillar_roots']
+        self.sls_dir = "{}/{}".format(self.file_roots['base'][0], self.settings['daft.salt.slsdir'])
+        if not os.path.isdir(self.sls_dir):
+            os.mkdir(self.sls_dir)
 
     def verify_connectivity(self, server, timeout=10):
         return len(self.salt_client.cmd(server, 'test.ping', timeout=timeout)) != 0
 
     def get_gd_file_name(self, name):
-        root = self.file_roots['base'][0]
-        path = self.settings['daft.salt.dir']
-        return "{}/{}/{}.sls".format(root, path, name)
+        path = self.sls_dir
+        return "{}/{}.sls".format(path, name)
 
     def new_yaml(self, name, content):
         '''path must be relative to file_root'''

@@ -424,11 +424,16 @@ class ServerContainerView(GenericView):
         else:
             attribs = attribs[1]
         res = self.datasvc.serversvc.NewServer(name, attribs)
+        if not existing:
+            msg = {"error": "server provisioning not implemented yet!"}
+        else:
+            msg = "none"
         if res['NewServer']['status'] == 'ok':
             return self.status_ok({
                 "new_server": {
                     "server_name": name,
-                    "attributes": attribs
+                    "attributes": attribs,
+                    "message": msg
                 }
             })
         else:
@@ -704,10 +709,11 @@ class GitRepoView(GenericView):
 
     def DELETE(self):
         name = self.context.name
-        self.datasvc.gitsvc.DeleteGitRepo(name)
-        resp = {'delete_gitrepo': {'name': name}}
+        app = self.context.application
+        self.datasvc.gitsvc.DeleteGitRepo(app, name)
+        resp = {'delete_gitrepo': {'application': app, 'name': name}}
         if 'delete' in self.req.params and self.req.params['delete'] in AFFIRMATIVE_SYNONYMS:
-            gp_doc = self.datasvc.gitsvc.GetGitProvider(self.datasvc.Dereference(self.context.gitprovider))
+            gp_doc = self.datasvc.Dereference(self.context.gitprovider)
             del_callable = gitservice.delete_repo_callable_from_type(gp_doc['type'])
             if not del_callable:
                 return self.Error("git provider type not supported ({})".format(gp_doc['type']))
@@ -719,8 +725,7 @@ class GitRepoView(GenericView):
 class GitDeployContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, app_name=context.parent)
-        self.set_params({"GET": [], "PUT": ['name', 'application'], "POST": [], "DELETE": []})
-        self.server_name = context.parent
+        self.set_params({"GET": [], "PUT": ['name'], "POST": [], "DELETE": []})
 
     def GET(self):
         return {
@@ -730,7 +735,7 @@ class GitDeployContainerView(GenericView):
 
     def PUT(self):
         name = self.req.params['name']
-        app = self.req.params['application']
+        app = self.context.parent
         package = self.req.params['package'] if 'package' in self.req.params else 'master'
         try:
             location_attribs = self.req.json_body
@@ -745,11 +750,13 @@ class GitDeployContainerView(GenericView):
             return self.Error("invalid location object (valid JSON, 'location' key not found)")
         try:
             assert 'path' in location
-            assert 'git_repo' in location
+            assert 'gitrepo' in location
             assert 'default_branch' in location
         except AssertionError:
-            return self.Error("invalid location object: one or more of ('path', 'git_repo', 'default_branch') not found")
-        self.datasvc.gitsvc.NewGitDeploy(name, app, self.server_name, package, options, actions, location, attribs)
+            return self.Error("invalid location object: one or more of ('path', 'gitrepo', 'default_branch') not found")
+        res = self.datasvc.gitsvc.NewGitDeploy(name, app, package, options, actions, location, attribs)
+        if 'error' in res:
+            return self.Error({"NewGitDeploy": res})
         gd = self.datasvc.gitsvc.GetGitDeploy(app, name)
         msg = self.run_async("create_gitdeploy", gitservice.create_gitdeploy, {'gitdeploy': gd})
         return self.status_ok({'create_gitdeploy': {'name': name, 'message': msg}})
