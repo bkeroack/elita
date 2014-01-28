@@ -507,7 +507,18 @@ class DeploymentContainerView(GenericView):
 
 
 class DeploymentView(GenericView):
-    pass
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request, app_name=context.parent)
+        self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
+
+    def GET(self):
+        return {
+            'deployment': {
+                'created_datetime': self.get_created_datetime_text(),
+                'application': self.context.application,
+                'status': self.context.status
+            }
+        }
 
 
 class KeyPairContainerView(GenericView):
@@ -558,7 +569,10 @@ class KeyPairView(GenericView):
 
     def GET(self):
         return {
-            'keypair': self.datasvc.keysvc.GetKeyPair(self.context.name)
+            'keypair': {
+                'created_datetime': self.get_created_datetime_text(),
+                'name': self.datasvc.keysvc.GetKeyPair(self.context.name)
+            }
         }
 
     def POST(self):
@@ -624,6 +638,7 @@ class GitProviderView(GenericView):
     def GET(self):
         return {
             'gitprovider': {
+                'created_datetime': self.get_created_datetime_text(),
                 'name': self.context.name,
                 'type': self.context.type,
             }
@@ -701,6 +716,7 @@ class GitRepoView(GenericView):
         gp_doc['auth']['password'] = "*****"
         return {
             'gitrepo': {
+                'created_datetime': self.get_created_datetime_text(),
                 'name': self.context.name,
                 'application': self.context.application,
                 'uri': self.context.uri if hasattr(self.context, 'uri') else None,
@@ -771,19 +787,22 @@ class GitDeployView(GenericView):
     def GET(self):
         gddoc = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
         return {
-            'name': gddoc['name'],
-            'package': gddoc['package'],
-            'application': gddoc['application'],
-            'attributes': gddoc['attributes'],
-            'options': gddoc['options'],
-            'actions': gddoc['actions'],
-            'location': {
-                'path': gddoc['location']['path'],
-                'gitrepo': {
-                    'name': gddoc['location']['gitrepo']['name'],
-                    'gitprovider': {
-                        'name': gddoc['location']['gitrepo']['gitprovider']['name'],
-                        'type': gddoc['location']['gitrepo']['gitprovider']['type']
+            'gitdeploy': {
+                'created_datetime': self.get_created_datetime_text(),
+                'name': gddoc['name'],
+                'package': gddoc['package'],
+                'application': gddoc['application'],
+                'attributes': gddoc['attributes'],
+                'options': gddoc['options'],
+                'actions': gddoc['actions'],
+                'location': {
+                    'path': gddoc['location']['path'],
+                    'gitrepo': {
+                        'name': gddoc['location']['gitrepo']['name'],
+                        'gitprovider': {
+                            'name': gddoc['location']['gitrepo']['gitprovider']['name'],
+                            'type': gddoc['location']['gitrepo']['gitprovider']['type']
+                        }
                     }
                 }
             }

@@ -467,6 +467,25 @@ class GitDataService(GenericChildDataService):
         self.parent.DeleteObject(self.root['app'][app]['gitrepos'], name, 'gitrepos')
 
 class DeploymentDataService(GenericChildDataService):
+    def NewDeployment(self, app, server_specs):
+        dpo = Deployment({
+            'application': app,
+            'server_specs': server_specs
+        })
+        did = self.db['deployments'].insert({
+            'applicatoin': dpo.application,
+            'server_specs': dpo.server_specs,
+            'results': dpo.results
+        })
+        self.parent.refresh_root()
+        self.root['app'][app]['deployments'][str(did)] = {
+            '_doc': bson.DBRef('deployments', did)
+        }
+        return { 'NewDeployment': {
+            'application': app,
+            'id': str(did)
+        }}
+
     def GetDeployments(self, app):
         return [k for k in self.root['app'][app]['deployments'].keys() if k[0] != '_']
 
@@ -698,7 +717,22 @@ class GitDeploy(GenericDataModel):
     }
 
 class Deployment(GenericDataModel):
-    pass
+    default_values = {
+        'id': None,
+        'application': None,
+        'server_specs': {
+            'type': None,
+            'spec': [],
+            'gitdeploys': []
+        },
+        'results': {
+            'status': 'pending',
+            'job_id': None
+        }
+    }
+
+    def init_hook(self):
+        self.id = uuid.uuid4()
 
 
 class Build(GenericDataModel):

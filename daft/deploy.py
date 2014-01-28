@@ -8,7 +8,7 @@ import salt_control
 def run_deploy(datasvc, application, build_name, server_spec):
     dc = DeployController(datasvc, application, build_name, server_spec)
     dc.run()
-    return { "deploy_status": "complete"}
+    return {"deploy_status": "complete"}
 
 def validate_server_specs(server_specs):
     if not isinstance(server_specs, dict):
