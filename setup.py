@@ -22,7 +22,8 @@ requires = [
     'M2Crypto',
     'PyYAML',
     'lockfile',
-    'sh'
+    'sh',
+    'simplejson'
     ]
 
 setup(name='daft',

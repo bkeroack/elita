@@ -7,6 +7,7 @@ import pprint
 import traceback
 import sys
 import fnmatch
+import simplejson as json
 
 import models
 import builds
@@ -764,19 +765,28 @@ class GitDeployContainerView(GenericView):
 
 class GitDeployView(GenericView):
     def __init__(self, context, request):
-        GenericView.__init__(self, context, request, app_name=self.context.application)
+        GenericView.__init__(self, context, request, app_name=context.application)
         self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
 
     def GET(self):
+        gddoc = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
         return {
-            'name': self.context.name,
-            'server': self.context.server,
-            'package': self.context.package,
-            'application': self.context.application,
-            'attributes': self.context.attributes,
-            'options': self.context.options,
-            'actions': self.context.actions,
-            'location': self.context.location
+            'name': gddoc['name'],
+            'package': gddoc['package'],
+            'application': gddoc['application'],
+            'attributes': gddoc['attributes'],
+            'options': gddoc['options'],
+            'actions': gddoc['actions'],
+            'location': {
+                'path': gddoc['location']['path'],
+                'gitrepo': {
+                    'name': gddoc['location']['gitrepo']['name'],
+                    'gitprovider': {
+                        'name': gddoc['location']['gitrepo']['gitprovider']['name'],
+                        'type': gddoc['location']['gitrepo']['gitprovider']['type']
+                    }
+                }
+            }
         }
 
     def update(self, body):
@@ -807,7 +817,8 @@ class GitDeployView(GenericView):
             servers = fnmatch.filter(eservers, servers)
             if len(servers) == 0:
                 return self.Error("no servers matched pattern: {}".format(sglob))
-        gddoc = self.datasvc.gitsvc.GetGitDeploy(self.context.name)  # we need to get the fully dereferenced doc
+        #we need to get the fully dereferenced doc
+        gddoc = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
         msg = self.run_async('initialize_gitdeploy_servers', gitservice.initialize_gitdeploy, {'gitdeploy': gddoc,
                                                                                                'server_list': servers})
         return self.status_ok({

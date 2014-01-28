@@ -1,10 +1,12 @@
 import salt.client
 import salt.config
 import lockfile
+import os
 import os.path
 import random
 import shutil
 import string
+import simplejson as json
 import yaml
 try:
     from yaml import CLoader as Loader, CDumper as Dumper
@@ -29,39 +31,77 @@ class RemoteCommands:
 
     def create_directory(self, server_list, path):
         assert isinstance(server_list, list)
-        return self.sc.salt_command(server_list, 'file.makedirs', opts={'expr_form': 'list', 'arg': [path]})
+        return self.sc.salt_command(server_list, 'file.mkdir', opts={'expr_form': 'list', 'arg': [path]})
+
+    def delete_directory_win(self, server_list, path):
+        return self.sc.salt_command(server_list, 'cmd.run',
+                                    opts={'expr_form': 'list',
+                                          'arg': ["Remove-Item -Recurse -Force {}".format(path)],
+                                          'kwarg': {'shell': 'powershell'}})
+
+    def delete_directory_unix(self, server_list, path):
+        return self.sc.salt_command(server_list, 'cmd.run', opts={'expr_form': 'list',
+                                                                  'arg': ["rm -rf {}".format(path)]})
+
+    def delete_directory(self, server_list, path):
+        assert isinstance(server_list, list)
+        res = list()
+        win_s = list()
+        unix_s = list()
+        for s in server_list:
+            ost = self.get_os(s)
+            if ost == OSTypes.Windows:
+                win_s.append(s)
+            elif os == OSTypes.Unix_like:
+                unix_s.append(s)
+        if len(win_s) > 0:
+            res.append(self.delete_directory_win(win_s, path))
+        if len(unix_s) > 0:
+            res.append(self.delete_directory_unix(unix_s, path))
+        return res
 
     def push_file(self, target, local_path, remote_path):
         r_postfix = ''.join(random.sample(string.letters + string.digits, 20))
-        root = self.sc.file_roots['base'][0]
+        root = self.sc.sls_dir
         newname = os.path.basename(local_path) + r_postfix
         new_fullpath = "{}/{}".format(root, newname)
         shutil.copy(local_path, new_fullpath)
-        salt_uri = 'salt://{}'.format(newname)
+        salt_uri = 'salt://{}/{}'.format(self.sc.settings['daft.salt.slsdir'], newname)
+        util.debugLog(self, "push_file: salt_uri: {}".format(salt_uri))
+        util.debugLog(self, "push_file: remote_path: {}".format(remote_path))
         res = self.sc.salt_command(target, 'cp.get_file', opts={
             'arg': [salt_uri, remote_path]
         })
         util.debugLog(self, "push_file: resp: {}".format(res))
         os.unlink(new_fullpath)
+        return {'success': {'target': target, 'remote_path': remote_path}}
 
     def push_key(self, server_list, file, name, ext):
         res = list()
         for s in server_list:
             ost = self.get_os(s)
+            results = {
+                'server': s,
+                'os': ost,
+                'results': []
+            }
             if ost == OSTypes.Windows:
-                res.append(self.push_file(s, file, 'C:\\Program Files (x86)\\Git\\.ssh\\{}.pub'.format(name)))
+                path = 'C:\Program Files (x86)\Git\.ssh'
+                fullpath = path + "\{}{}".format("id_rsa", ext)
             elif ost == OSTypes.Unix_like:
-                res.append(self.push_file(s, file, '/etc/daft/keys/{}{}'.format(name, ext)))
-            else:
-                assert False
+                path = '/etc/daft/keys'
+                fullpath = path + '/{}{}'.format("id_rsa", ext)
+            results['results'].append(self.create_directory([s], path))
+            results['results'].append(self.push_file(s, file, fullpath))
+            res.append(results)
         return res
 
     def clone_repo(self, server_list, repo_uri, dest):
         cwd, dest_dir = os.path.split(dest)
         return self.sc.salt_command(server_list, 'cmd.run', opts={
-            'arg': ['git clone {uri} {dest}'.format(repo_uri, dest_dir)],
+            'arg': ['git clone {uri} {dest}'.format(uri=repo_uri, dest=dest_dir)],
             'cwd': cwd,
-            'expr_form': list
+            'expr_form': 'list'
         }, timeout=1200)
 
     def highstate(self, server_list):
@@ -96,9 +136,8 @@ class SaltController:
     def verify_connectivity(self, server, timeout=10):
         return len(self.salt_client.cmd(server, 'test.ping', timeout=timeout)) != 0
 
-    def get_gd_file_name(self, name):
-        path = self.sls_dir
-        return "{}/{}.sls".format(path, name)
+    def get_gd_file_name(self, app, name):
+        return "{}/{}/{}.sls".format(self.sls_dir, app, name)
 
     def new_yaml(self, name, content):
         '''path must be relative to file_root'''
@@ -106,24 +145,34 @@ class SaltController:
         with open(new_file, 'w') as f:
             f.write(yaml.dump(content, Dumper=Dumper))
 
-    def add_servers_to_daft_top(self, server_list):
+    def add_gitdeploy_servers_to_daft_top(self, server_list, app, gd_name):
         util.debugLog(self, "add_server_to_daft_top: server_list: {}".format(server_list))
         fname = "{}/{}".format(self.file_roots['base'][0], self.settings['daft.salt.dafttop'])
+        if not os.path.isfile(fname):
+            with open(fname, 'w') as f:
+                f.write("\n")  # create if doesn't exist
+        gdentry = "{}.{}.{}".format(self.settings['daft.salt.slsdir'], app, gd_name)
         util.debugLog(self, "add_server_to_daft_top: acquiring lock on {}".format(fname))
         lock = lockfile.FileLock(fname)
         lock.acquire(timeout=60)
         with open(fname, 'r') as f:
             dt_content = yaml.load(f, Loader=Loader)
+        if not dt_content:
+            dt_content = dict()
+        if 'base' not in dt_content:
+            dt_content['base'] = dict()
         for s in server_list:
-            dt_content['base'][s] = ['none']
+            dt_content['base'][s] = [gdentry]
         with open(fname, 'w') as f:
-            f.write(yaml.dump(dt_content, Dumper=Dumper))
+            f.write(yaml.safe_dump(dt_content, default_flow_style=False))
         lock.release()
+        return "success"
 
     def new_gitdeploy_yaml(self, gitdeploy):
         '''Adds new gitdeploy to existing YAML file or creates new YAML file.'''
         name = gitdeploy['name']
-        filename = self.get_gd_file_name(name)
+        app = gitdeploy['application']
+        filename = self.get_gd_file_name(app, name)
         util.debugLog(self, "add_gitdeploy_to_yaml: acquiring lock on {}".format(filename))
         lock = lockfile.FileLock(filename)
         lock.acquire(timeout=60)  # throws exception if timeout
@@ -158,18 +207,20 @@ class SaltController:
         }
         prepull = gitdeploy['actions']['prepull']
         if prepull is not None:
+            existing['prepull'] = dict()
             for k in prepull:
                 top_key = prepull[k].keys()[0]
                 prepull[k][top_key].append({'order': 0})
-                existing[k] = prepull[k]
+                existing['prepull'][k] = prepull[k]
         postpull = gitdeploy['actions']['postpull']
         if postpull is not None:
+            existing['postpull'] = dict()
             for k in postpull:
                 top_key = postpull[k].keys()[0]
                 postpull[k][top_key].append({'order': 'last'})
-                existing[k] = postpull[k]
+                existing['postpull'][k] = postpull[k]
         with open(filename, 'w') as f:
-            f.write(yaml.dump(existing, Dumper=Dumper, default_flow_style=False))
+            f.write(yaml.safe_dump(existing, default_flow_style=False))
         lock.release()
 
 

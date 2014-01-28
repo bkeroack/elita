@@ -59,6 +59,10 @@ def create_gitdeploy(datasvc, gitdeploy):
     return "done"
 
 def initialize_gitdeploy(datasvc, gitdeploy, server_list):
+    sc = salt_control.SaltController(datasvc.settings)
+    for s in server_list:
+        if not sc.verify_connectivity(s):
+            return {'error': "server '{}' not accessible via salt".format(s)}
     gdm = GitDeployManager(gitdeploy, datasvc.settings)
     return gdm.initialize(server_list)
 
@@ -152,18 +156,26 @@ class GitDeployManager:
         self.rc = salt_control.RemoteCommands(self.sc)
 
     def initialize(self, server_list):
-        cr = self.create_remote_dir(server_list)
-        pku, pkr = self.push_keypair(server_list)
-        cl = self.clone_repo(server_list)
         return {
-            'create_remote_dir': cr,
-            'push_public_key': pku,
-            'push_private_key': pkr,
-            'clone_repo': cl
+            'delete_remote_dir': self.delete_remote_dir(server_list),
+            'create_remote_dir': self.create_remote_dir(server_list),
+            'push_keys': self.push_keypair(server_list),
+            'add_to_top': self.add_to_top(server_list),
+            'clone_repo': self.clone_repo(server_list)
         }
 
     def add_sls(self):
         self.sc.new_gitdeploy_yaml(self.gitdeploy)
+
+    def add_to_top(self, server_list):
+        return self.sc.add_gitdeploy_servers_to_daft_top(server_list, self.gitdeploy['application'],
+                                                         self.gitdeploy['name'])
+
+    def delete_remote_dir(self, server_list):
+        path = self.gitdeploy['location']['path']
+        res = self.rc.delete_directory(server_list, path)
+        util.debugLog(self, "delete_remote_dir on servers: {}: resp: {}".format(server_list, res))
+        return res
 
     def create_remote_dir(self, server_list):
         path = self.gitdeploy['location']['path']
@@ -173,11 +185,13 @@ class GitDeployManager:
 
     def push_keypair(self, server_list):
         f_pub, tf_pub = tempfile.mkstemp(text=True)
-        f_pub.write(self.gitdeploy['location']['gitrepo']['keypair']['public_key'])
-        f_pub.close()
+        with open(tf_pub, 'w') as f:
+            f.write(self.gitdeploy['location']['gitrepo']['keypair']['public_key'].decode('string_escape'))
+
         f_priv, tf_priv = tempfile.mkstemp(text=True)
-        f_priv.write(self.gitdeploy['location']['gitrepo']['keypair']['private_key'])
-        f_priv.close()
+        with open(tf_priv, 'w') as f:
+            f.write(self.gitdeploy['location']['gitrepo']['keypair']['private_key'].decode('string_escape'))
+
         res_pub = self.rc.push_key(server_list, tf_pub, self.gitdeploy['name'], '.pub')
         util.debugLog(self, "push_keypair: push pub resp: {}".format(res_pub))
         res_priv = self.rc.push_key(server_list, tf_priv, self.gitdeploy['name'], '')
@@ -187,7 +201,7 @@ class GitDeployManager:
         return res_pub, res_priv
 
     def clone_repo(self, server_list):
-        uri = self.gitdeploy['location']['gitrepo']['uri']
+        uri = "ssh://{}".format(self.gitdeploy['location']['gitrepo']['uri'])
         dest = self.gitdeploy['location']['path']
         res = self.rc.clone_repo(server_list, uri, dest)
         util.debugLog(self, "clone_repo: resp: {}".format(res))

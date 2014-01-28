@@ -276,12 +276,15 @@ class ServerDataService(GenericChildDataService):
                     'message': "server not accessible via salt"
                 }
             }
-        sid = self.db['servers'].insert({
+        so = self.db['servers'].find_and_modify(query={
+            'name': server.name,
+        }, update={
             '_class': "Server",
             'name': server.name,
             'gitdeploys': [],
             'attributes': server.attributes
-        })
+        }, upsert=True, new=True)
+        sid = so['_id']
         self.parent.refresh_root()
         self.root['server'][name] = {
             '_doc': bson.DBRef('servers', sid),
@@ -296,6 +299,16 @@ class ServerDataService(GenericChildDataService):
     def DeleteServer(self, name):
         self.parent.DeleteObject(self.root['server'], name, 'servers')
 
+    def GetGitDeploys(self, name):
+        servers = [s for s in self.db['servers'].find({'name': name})]
+        assert servers
+        s = servers[0]
+        if len(servers) > 1:
+            util.debugLog(self, "(Server->)GetGitDeploys: WARNING: {} server docs found for {}; removing all but the first".format(len(servers), name))
+            for s in servers[1:]:
+                self.db['servers'].remove({'_id': s['_id']})
+        s['gitdeploys'] = [self.db.dereference(d) for d in s['gitdeploys']]
+        return [{'application': gd['application'], 'gitdeploy_name': gd['name']} for gd in s['gitdeploys']]
 
 class GitDataService(GenericChildDataService):
     def NewGitDeploy(self, name, app_name, package, options, actions, location, attributes):
@@ -307,6 +320,14 @@ class GitDataService(GenericChildDataService):
         new_gd = {
             'name': name,
             'application': app_name,
+            'options': {
+                'favor': 'ours',
+                'ignore-whitespace': 'true'
+            },
+            'actions': {
+                'prepull': [],
+                'postpull': []
+            },
             'location': location,
             'attributes': attributes,
         }
@@ -314,11 +335,16 @@ class GitDataService(GenericChildDataService):
         if package:
             new_gd['package'] = package
         if options:
-            new_gd['options'] = options
+            for k in options:
+                new_gd['options'][k] = options[k]
         if actions:
-            new_gd['actions'] = actions
+            for k in actions:
+                new_gd['actions'][k] = actions[k]
         gd = GitDeploy(new_gd)
-        gdid = self.db['gitdeploys'].insert({
+        gdo = self.db['gitdeploys'].find_and_modify(query={
+            'name': gd.name,
+            'application': gd.application
+        }, update={
             '_class': "GitDeploy",
             'name': gd.name,
             'application': gd.application,
@@ -327,7 +353,8 @@ class GitDataService(GenericChildDataService):
             'options': gd.options,
             'actions': gd.actions,
             'location': gd.location
-        })
+        }, upsert=True, new=True)
+        gdid = gdo['_id']
         self.parent.refresh_root()
         self.root['app'][app_name]['gitdeploys'][name] = {'_doc': bson.DBRef('gitdeploys', gdid)}
         return {"ok": "done"}
@@ -363,12 +390,15 @@ class GitDataService(GenericChildDataService):
             'type': type,
             'auth': auth
         })
-        gpid = self.db['gitproviders'].insert({
+        gpo = self.db['gitproviders'].find_and_modify(query={
+            'name': gpobj.name
+        }, update={
             '_class': "GitProvider",
             'name': gpobj.name,
             'type': gpobj.type,
             'auth': gpobj.auth
-        })
+        }, upsert=True, new=True)
+        gpid = gpo['_id']
         self.parent.refresh_root()
         self.root['global']['gitproviders'][gpobj.name] = {'_doc': bson.DBRef('gitproviders', gpid)}
 
@@ -398,13 +428,17 @@ class GitDataService(GenericChildDataService):
             'keypair': bson.DBRef("keypairs", kp_doc['_id']),
             'gitprovider': bson.DBRef("gitproviders", gp_doc['_id'])
         })
-        gr_id = self.db['gitrepos'].insert({
+        gro = self.db['gitrepos'].find_and_modify(query={
+            'name': gr_obj.name,
+            'application': gr_obj.application
+        }, update={
             '_class': "GitRepo",
             'name': gr_obj.name,
             'application': gr_obj.application,
             'keypair': gr_obj.keypair,
             'gitprovider': gr_obj.gitprovider
-        })
+        }, upsert=True, new=True)
+        gr_id = gro['_id']
         self.parent.refresh_root()
         self.root['app'][app]['gitrepos'][name] = {
             '_doc': bson.DBRef('gitrepos', gr_id)
@@ -468,13 +502,16 @@ class KeyDataService(GenericChildDataService):
                     'message': err
                 }
             }
-        kp_id = self.db['keypairs'].insert({
+        kpo = self.db['keypairs'].find_and_modify(query={
+            'name': kp_obj.name
+        }, update={
             'name': kp_obj.name,
             'attributes': kp_obj.attributes,
             'key_type': kp_obj.key_type,
             'private_key': kp_obj.private_key,
             'public_key': kp_obj.public_key
-        })
+        }, upsert=True, new=True)
+        kp_id = kpo['_id']
         self.root['global']['keypairs'][kp_obj.name] = {
             '_doc': bson.DBRef("keypairs", kp_id)
         }
