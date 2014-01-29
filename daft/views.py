@@ -293,8 +293,14 @@ class BuildContainerView(GenericView):
         else:
             attribs = attribs[1]
         self.datasvc.buildsvc.NewBuild(self.app_name, build_name, attribs)
-        return self.return_action_status({"new_build": {"application": self.app_name, "build_name": build_name,
-                                                        "attributes": attribs, "messages": msg}})
+        return self.return_action_status({
+            "new_build": {
+                "application": self.app_name,
+                "build_name": build_name,
+                "attributes": attribs,
+                "messages": msg
+            }
+        })
 
     def POST(self):
         build_name = self.req.params["build_name"]
@@ -474,7 +480,10 @@ class DeploymentContainerView(GenericView):
         }
 
     def POST(self):
+        app = self.context.parent
         build_name = self.req.params['build_name']
+        if build_name not in self.datasvc.buildsvc.GetBuilds(app):
+            return self.Error("unknown build '{}'".format(build_name))
         try:
             body = self.req.json_body
         except:
@@ -491,14 +500,17 @@ class DeploymentContainerView(GenericView):
                 return self.Error("server spec doesn't match anything: {}".format(sspecs['spec']))
         else:
             servers = sspecs['spec']
-        msg = self.run_async('deploy_{}_{}'.format(self.context.application,  build_name), deploy.run_deploy,{
-            'application': self.context.application,
+        msg = self.run_async('deploy_{}_{}'.format(app,  build_name), deploy.run_deploy, {
+            'application': app,
             'build_name': build_name,
-            'server_spec': servers
+            'servers': servers,
+            'gitdeploys': sspecs['gitdeploys']
         })
+        dpo = self.datasvc.deploysvc.NewDeployment(app, build_name, sspecs, msg['job_id'])
         return self.status_ok({
-            'start_deployment': {
-                'application': self.context.application,
+            'deployment': {
+                'deployment_id': dpo['NewDeployment']['id'],
+                'application': app,
                 'build': build_name,
                 'server_spec': sspecs,
                 'message': msg
@@ -809,17 +821,21 @@ class GitDeployView(GenericView):
         }
 
     def update(self, body):
-        keys = {'attributes', 'options', 'actions', 'location'}
+        keys = {'attributes', 'options', 'package', 'actions', 'location'}
         if "location" not in body:
             return self.Error("invalid location object (valid JSON, 'location' key not found)")
         #verify no unknown/incorrect location keys
-        if not keys.issuperset({k for k in body.keys()}):
-            diff = keys - {k for k in body.keys()}
+        body_keys = {k for k in body.keys()}
+        if not keys.issuperset(body_keys):
+            diff = body_keys - keys
             u_i = len(diff)
-            word = "key" + "" if u_i == 1 else "s"
+            word = "key"
+            word += "s" if u_i > 1 else ""
             return self.Error("invalid {}: {}".format(word, diff))
-        self.datasvc.gitsvc.UpdateGitDeploy(self.context.name, body)
-        return self.status_ok({'update_gitdeploy': {'name': self.context.name, 'object': body}})
+        self.datasvc.gitsvc.UpdateGitDeploy(self.context.application, self.context.name, body)
+        gd = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
+        msg = self.run_async("create_gitdeploy", gitservice.create_gitdeploy, {'gitdeploy': gd})
+        return self.status_ok({'update_gitdeploy': {'name': self.context.name, 'object': body, 'message': msg}})
 
     def initialize(self, body):
         if "servers" not in body:

@@ -172,12 +172,14 @@ class GitDeployManager:
                                                          self.gitdeploy['name'])
 
     def delete_remote_dir(self, server_list):
+        util.debugLog(self, "delete_remote_dir")
         path = self.gitdeploy['location']['path']
         res = self.rc.delete_directory(server_list, path)
         util.debugLog(self, "delete_remote_dir on servers: {}: resp: {}".format(server_list, res))
         return res
 
     def create_remote_dir(self, server_list):
+        util.debugLog(self, "create_remote_dir")
         path = self.gitdeploy['location']['path']
         res = self.rc.create_directory(server_list, path)
         util.debugLog(self, 'create_remote_dir on servers: {}: resp: {}'.format(server_list, res))
@@ -201,6 +203,7 @@ class GitDeployManager:
         return res_pub, res_priv
 
     def clone_repo(self, server_list):
+        util.debugLog(self, "clone_repo: cloning")
         uri = "ssh://{}".format(self.gitdeploy['location']['gitrepo']['uri'])
         dest = self.gitdeploy['location']['path']
         res = self.rc.clone_repo(server_list, uri, dest)
@@ -213,28 +216,39 @@ class GitDeployManager:
         root = self.settings['daft.gitdeploy.dir']
         return "{}/{}/{}".format(root, appname, gitrepo_name)
 
+    def git_obj(self):
+        path = self.get_path()
+        return sh.git.bake(_cwd=path)
+
+    def checkout_default_branch(self):
+        branch = self.gitdeploy['location']['default_branch']
+        util.debugLog(self, "checkout_default_branch: git checkout {}".format(branch))
+        git = self.git_obj()
+        return git.checkout(branch)
+
     def decompress_to_repo(self, package_doc):
         path = self.get_path()
         util.debugLog(self, "commit_to_repo_and_push: decompressing {} to {}".format(package_doc['filename'], path))
         bf = builds.BuildFile(package_doc)
         bf.decompress(path)
 
+    def check_repo_status(self):
+        git = self.git_obj()
+        return git.status()
+
     def add_files_to_repo(self):
         util.debugLog(self, "commit_to_repo_and_push: git add")
-        path = self.get_path()
-        git = sh.git.bake(_cwd=path)
+        git = self.git_obj()
         return git.add('-A')
 
     def commit_to_repo(self, build_name):
         util.debugLog(self, "commit_to_repo_and_push: git commit")
-        path = self.get_path()
-        git = sh.git.bake(_cwd=path)
+        git = self.git_obj()
         return git.commit(m=build_name)
 
     def push_repo(self):
         util.debugLog(self, "commit_to_repo_and_push: git push")
-        path = self.get_path()
-        git = sh.git.bake(_cwd=path)
+        git = self.git_obj()
         return git.push()
 
 

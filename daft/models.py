@@ -54,8 +54,7 @@ class BuildDataService(GenericChildDataService):
             'stored': buildobj.stored,
             'app_name': buildobj.app_name,
             'packages': buildobj.packages,
-            'attributes': buildobj.attributes,
-            'subsys': buildobj.subsys
+            'attributes': buildobj.attributes
         }
         existing = [doc['_id'] for doc in self.db['builds'].find({'build_name': build_name, 'app_name': app_name})]
         if len(existing) > 0:
@@ -370,8 +369,13 @@ class GitDataService(GenericChildDataService):
         doc['location']['gitrepo']['gitprovider'] = self.db.dereference(doc['location']['gitrepo']['gitprovider'])
         return {k: doc[k] for k in doc if k[0] != '_'}
 
-    def UpdateGitDeploy(self, name, doc):
-        self.parent.UpdateObject(name, doc, 'gitdeploys', GitDeploy)
+    def UpdateGitDeploy(self, app, name, doc):
+        if 'location' in doc:
+            assert 'gitrepo' in doc['location']
+            grd = self.db['gitrepos'].find_one({'name': doc['location']['gitrepo'], 'application': app})
+            assert grd
+            doc['location']['gitrepo'] = bson.DBRef('gitrepos', grd['_id'])
+        self.parent.UpdateAppObject(name, doc, 'gitdeploys', GitDeploy, app)
 
     def GetGitProviders(self, objs=False):
         if objs:
@@ -446,6 +450,14 @@ class GitDataService(GenericChildDataService):
         return {'NewGitRepo': 'ok'}
 
     def UpdateGitRepo(self, app, name, doc):
+        if 'keypair' in doc:
+            kpd = self.db['keypairs'].find_one({'name': doc['keypair']})
+            assert kpd
+            doc['keypair'] = bson.DBRef('keypairs', kpd['_id'])
+        if 'keypair' in doc:
+            kpd = self.db['keypairs'].find_one({'name': doc['keypair']})
+            assert kpd
+            doc['keypair'] = bson.DBRef('keypairs', kpd['_id'])
         gro = GitRepo(self.GetGitRepo(app, name))
         gro.update_values(doc)
         grd = gro.get_doc()
@@ -467,23 +479,30 @@ class GitDataService(GenericChildDataService):
         self.parent.DeleteObject(self.root['app'][app]['gitrepos'], name, 'gitrepos')
 
 class DeploymentDataService(GenericChildDataService):
-    def NewDeployment(self, app, server_specs):
+    def NewDeployment(self, app, build_name, server_specs, job_id):
         dpo = Deployment({
             'application': app,
+            'build_name': build_name,
             'server_specs': server_specs
         })
         did = self.db['deployments'].insert({
-            'applicatoin': dpo.application,
+            '_class': 'Deployment',
+            'application': dpo.application,
+            'build_name': dpo.build_name,
             'server_specs': dpo.server_specs,
-            'results': dpo.results
+            'results': {
+                'status': 'pending',
+                'job_id': job_id
+            }
         })
         self.parent.refresh_root()
         self.root['app'][app]['deployments'][str(did)] = {
             '_doc': bson.DBRef('deployments', did)
         }
-        return { 'NewDeployment': {
-            'application': app,
-            'id': str(did)
+        return {
+            'NewDeployment': {
+                'application': app,
+                'id': str(did)
         }}
 
     def GetDeployments(self, app):
@@ -574,13 +593,20 @@ class DataService:
         self.root = daft.RootService(req)
 
     def UpdateObject(self, name, doc, collection_name, class_obj):
-        old_doc = self.db[collection_name].find_one({"name": name})
+        self.UpdateGenericObject(name, doc, collection_name, class_obj, {"name": name})
+
+    def UpdateAppObject(self, name, doc, collection_name, class_obj, app):
+        self.UpdateGenericObject(name, doc, collection_name, class_obj, {"name": name, "application": app})
+
+    def UpdateGenericObject(self, name, doc, collection_name, class_obj, query):
+        old_doc = self.db[collection_name].find_one(query)
         if old_doc:
             cobj = class_obj(old_doc)
             cobj.update_values(doc)
             new_doc = cobj.get_doc()
             new_doc['_id'] = old_doc['_id']
-            new_doc['class'] = class_obj.__class__.__name__
+            new_doc['class'] = class_obj.__class__.__name__ if hasattr(class_obj, "__class__") else \
+                type(class_obj).__class__.__name__
             self.db[collection_name].save(new_doc)
 
     def NewContainer(self, class_name, name, parent):
@@ -718,8 +744,8 @@ class GitDeploy(GenericDataModel):
 
 class Deployment(GenericDataModel):
     default_values = {
-        'id': None,
         'application': None,
+        'build_name': None,
         'server_specs': {
             'type': None,
             'spec': [],
@@ -730,9 +756,6 @@ class Deployment(GenericDataModel):
             'job_id': None
         }
     }
-
-    def init_hook(self):
-        self.id = uuid.uuid4()
 
 
 class Build(GenericDataModel):

@@ -17,6 +17,9 @@ import util
 
 __author__ = 'bkeroack'
 
+class FatalSaltError(Exception):
+    pass
+
 class OSTypes:
     Windows = 0
     Unix_like = 1
@@ -26,22 +29,20 @@ class RemoteCommands:
         self.sc = sc
 
     def get_os(self, server):
-        resp = self.sc.salt_command(server, 'grains.item', opts={'arg': ["os"]})
+        resp = self.sc.salt_command(server, 'grains.item', ["os"])
         return OSTypes.Windows if resp[server]['os'] == "Windows" else OSTypes.Unix_like
 
     def create_directory(self, server_list, path):
         assert isinstance(server_list, list)
-        return self.sc.salt_command(server_list, 'file.mkdir', opts={'expr_form': 'list', 'arg': [path]})
+        return self.sc.salt_command(server_list, 'file.mkdir', [path], opts={'expr_form': 'list'})
 
     def delete_directory_win(self, server_list, path):
-        return self.sc.salt_command(server_list, 'cmd.run',
+        return self.sc.salt_command(server_list, 'cmd.run', ["Remove-Item -Recurse -Force {}".format(path)],
                                     opts={'expr_form': 'list',
-                                          'arg': ["Remove-Item -Recurse -Force {}".format(path)],
-                                          'kwarg': {'shell': 'powershell'}})
+                                          'shell': 'powershell'})
 
     def delete_directory_unix(self, server_list, path):
-        return self.sc.salt_command(server_list, 'cmd.run', opts={'expr_form': 'list',
-                                                                  'arg': ["rm -rf {}".format(path)]})
+        return self.sc.salt_command(server_list, 'cmd.run', ["rm -rf {}".format(path)], opts={'expr_form': 'list'})
 
     def delete_directory(self, server_list, path):
         assert isinstance(server_list, list)
@@ -69,9 +70,7 @@ class RemoteCommands:
         salt_uri = 'salt://{}/{}'.format(self.sc.settings['daft.salt.slsdir'], newname)
         util.debugLog(self, "push_file: salt_uri: {}".format(salt_uri))
         util.debugLog(self, "push_file: remote_path: {}".format(remote_path))
-        res = self.sc.salt_command(target, 'cp.get_file', opts={
-            'arg': [salt_uri, remote_path]
-        })
+        res = self.sc.salt_command(target, 'cp.get_file', [salt_uri, remote_path])
         util.debugLog(self, "push_file: resp: {}".format(res))
         os.unlink(new_fullpath)
         return {'success': {'target': target, 'remote_path': remote_path}}
@@ -98,14 +97,21 @@ class RemoteCommands:
 
     def clone_repo(self, server_list, repo_uri, dest):
         cwd, dest_dir = os.path.split(dest)
-        return self.sc.salt_command(server_list, 'cmd.run', opts={
-            'arg': ['git clone {uri} {dest}'.format(uri=repo_uri, dest=dest_dir)],
-            'cwd': cwd,
+        return self.sc.salt_command(server_list, 'cmd.run',
+                                    ['git clone {uri} {dest}'.format(uri=repo_uri, dest=dest_dir)],
+                                    opts={
+                                        'cwd': cwd,
+                                        'expr_form': 'list'
+                                    }, timeout=1200)
+
+    def checkout_branch(self, server_list, location, branch_name):
+        return self.sc.salt_command(server_list, 'cmd.run', ['git checkout {}'.format(branch_name)], opts={
+            'cwd': location,
             'expr_form': 'list'
-        }, timeout=1200)
+        })
 
     def highstate(self, server_list):
-        return self.sc.salt_command(server_list, 'state.highstate', opts={'expr_form': 'list'}, timeout=300)
+        return self.sc.salt_command(server_list, 'state.highstate', [], opts={'expr_form': 'list'}, timeout=300)
 
 class SaltController:
     def __init__(self, settings):
@@ -117,9 +123,8 @@ class SaltController:
 
         self.load_salt_info()
 
-    def salt_command(self, target, cmd, opts={}, timeout=120):
-        opts['timeout'] = timeout
-        return self.salt_client.cmd(target, cmd, **opts)
+    def salt_command(self, target, cmd, arg, opts={}, timeout=120):
+        return self.salt_client.cmd(target, cmd, arg, kwarg=opts, timeout=timeout)
 
     def run_command(self, target, cmd, shell, timeout=120):
         return self.salt_command(target, 'cmd.run', {"arg": [cmd], "shell": shell}, timeout=timeout)
@@ -132,12 +137,47 @@ class SaltController:
         self.sls_dir = "{}/{}".format(self.file_roots['base'][0], self.settings['daft.salt.slsdir'])
         if not os.path.isdir(self.sls_dir):
             os.mkdir(self.sls_dir)
+        self.include_daft_top()
+
+    def include_daft_top(self):
+        util.debugLog(self, "include_daft_top")
+        top_sls = "{}/top.sls".format(self.file_roots['base'][0])
+        if not os.path.isfile(top_sls):
+            util.debugLog(self, "ERROR: default salt top.sls not found! (check base file roots setting)")
+            raise FatalSaltError
+        lock = lockfile.FileLock(top_sls)
+        lock.acquire(timeout=60)
+        with open(top_sls, 'r') as f:
+            top_content = yaml.load(f, Loader=Loader)
+        write = False
+        if 'include' not in top_content:
+            util.debugLog(self, "include_daft_top: include not in top")
+            top_content['include'] = dict()
+            write = True
+        if not isinstance(top_content['include'], list):
+            util.debugLog(self, "include_daft_top: creating include list")
+            top_content['include'] = list()
+            write = True
+        if 'daft' not in top_content['include']:
+            util.debugLog(self, "include_daft_top: adding daft to include")
+            top_content['include'].append('daft')
+            write = True
+        if write:
+            util.debugLog(self, "include_daft_top: writing new top.sls")
+            with open(top_sls, 'w') as f:
+                f.write(yaml.safe_dump(top_content, default_flow_style=False))
+        lock.release()
 
     def verify_connectivity(self, server, timeout=10):
         return len(self.salt_client.cmd(server, 'test.ping', timeout=timeout)) != 0
 
     def get_gd_file_name(self, app, name):
-        return "{}/{}/{}.sls".format(self.sls_dir, app, name)
+        if not os.path.isdir(self.sls_dir):
+            os.mkdir(self.sls_dir)
+        appdir = "{}/{}".format(self.sls_dir, app)
+        if not os.path.isdir(appdir):
+            os.mkdir(appdir)
+        return "{}/{}.sls".format(appdir, name)
 
     def new_yaml(self, name, content):
         '''path must be relative to file_root'''
@@ -164,6 +204,7 @@ class SaltController:
         for s in server_list:
             dt_content['base'][s] = [gdentry]
         with open(fname, 'w') as f:
+            util.debugLog(self, "add_server_to_daft_top: writing file")
             f.write(yaml.safe_dump(dt_content, default_flow_style=False))
         lock.release()
         return "success"
@@ -184,15 +225,14 @@ class SaltController:
             util.debugLog(self, "add_gitdeploy_to_yaml: yaml sls does not exist")
             existing = dict()
         slsname = 'gitdeploy_{}'.format(name)
-        branch = gitdeploy['location']['default_branch']
         favor = "theirs" if gitdeploy['options']['favor'] in ('theirs', 'remote') else 'ours'
         ignore_whitespace_op = "-Xignore-all-space" if gitdeploy['options']['ignore-whitespace'] == 'true' else ""
         dir = gitdeploy['location']['path']
         existing[slsname] = {
             'cmd.run': [
                 {
-                    'name': 'git checkout {branch}; git pull -s recursive -X{favor} -Xpatience {ignorews}'
-                    .format(branch=branch, favor=favor, ignorews=ignore_whitespace_op)
+                    'name': 'git pull -s recursive -X{favor} -Xpatience {ignorews}'
+                    .format(favor=favor, ignorews=ignore_whitespace_op)
                 },
                 {
                     'cwd': dir

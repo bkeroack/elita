@@ -43,7 +43,6 @@ def run_async(datasvc, name, callable, args):
     run_job.apply_async((datasvc.settings, callable, args), task_id=job_id)
     return job_id
 
-
 class ActionService:
     def __init__(self, datasvc):
         self.datasvc = datasvc
@@ -55,7 +54,7 @@ class ActionService:
     def async(self, app, action_name, params, verb):
         action = self.actions.actionmap[app][action_name]['callable']
         util.debugLog(self, "action: {}, params: {}, verb: {}".format(action, params, verb))
-        job = self.datasvc.NewJob(action_name)
+        job = self.datasvc.jobsvc.NewJob(action_name)
         job_id = str(job.job_id)
         run_job.apply_async((self.datasvc.settings, action, {'params': params, 'verb': verb}), task_id=job_id)
         return {"action": action_name, "job_id": job_id, "status": "async/running"}
@@ -83,9 +82,9 @@ class RegisterHooks:
         hook = self.hookmap[app][name]
         if hook is None:
             return "none"
-        job = self.datasvc.NewJob("hook: {} (app: {})".format(name, app))
-        job_id = str(job.id)
-        util.debugLog(self, "run_hook: job_id: {}; app: {}; name: {}; args: {}".format(job.id, app, name, args))
+        job = self.datasvc.jobsvc.NewJob("hook: {} (app: {})".format(name, app))
+        job_id = str(job.job_id)
+        util.debugLog(self, "run_hook: job_id: {}; app: {}; name: {}; args: {}".format(job.job_id, app, name, args))
         run_job.apply_async((self.datasvc.settings, hook, args), task_id=job_id)
         return {
             "hook": {
