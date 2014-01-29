@@ -500,13 +500,14 @@ class DeploymentContainerView(GenericView):
                 return self.Error("server spec doesn't match anything: {}".format(sspecs['spec']))
         else:
             servers = sspecs['spec']
+        dpo = self.datasvc.deploysvc.NewDeployment(app, build_name, sspecs, msg['job_id'])
         msg = self.run_async('deploy_{}_{}'.format(app,  build_name), deploy.run_deploy, {
             'application': app,
             'build_name': build_name,
             'servers': servers,
-            'gitdeploys': sspecs['gitdeploys']
+            'gitdeploys': sspecs['gitdeploys'],
+            'deployment': dpo['NewDeployment']['id']
         })
-        dpo = self.datasvc.deploysvc.NewDeployment(app, build_name, sspecs, msg['job_id'])
         return self.status_ok({
             'deployment': {
                 'deployment_id': dpo['NewDeployment']['id'],
@@ -520,7 +521,7 @@ class DeploymentContainerView(GenericView):
 
 class DeploymentView(GenericView):
     def __init__(self, context, request):
-        GenericView.__init__(self, context, request, app_name=context.parent)
+        GenericView.__init__(self, context, request, app_name=context.application)
         self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
 
     def GET(self):
@@ -528,7 +529,7 @@ class DeploymentView(GenericView):
             'deployment': {
                 'created_datetime': self.get_created_datetime_text(),
                 'application': self.context.application,
-                'status': self.context.status
+                'status': self.context.results
             }
         }
 

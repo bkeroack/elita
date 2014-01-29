@@ -508,6 +508,9 @@ class DeploymentDataService(GenericChildDataService):
     def GetDeployments(self, app):
         return [k for k in self.root['app'][app]['deployments'].keys() if k[0] != '_']
 
+    def UpdateDeployment(self, app, name, doc):
+        self.parent.UpdateAppObject(name, doc, 'deployments', Deployment, app)
+
 class KeyDataService(GenericChildDataService):
     def GetKeyPairs(self):
         return [k for k in self.root['global']['keypairs'].keys() if k[0] != '_']

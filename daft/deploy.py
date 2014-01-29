@@ -5,9 +5,10 @@ import gitservice
 import salt_control
 
 #async callable
-def run_deploy(datasvc, application, build_name, servers, gitdeploys):
+def run_deploy(datasvc, application, build_name, servers, gitdeploys, deployment):
     dc = DeployController(datasvc, application, build_name, servers, gitdeploys)
     dc.run()
+    datasvc.deploysvc.UpdateDeployment({"results": "complete"})
     return {"deploy_status": "complete"}
 
 def validate_server_specs(server_specs):
@@ -48,7 +49,7 @@ class DeployController:
         })
 
     def push_to_gitdeploy(self, gddoc):
-        self.add_msg("Starting gitdeploy push to gitdeploy '{}' for application '{}'".format(gddoc['name'], self.application))
+        self.add_msg("Starting push to gitdeploy '{}' for application '{}'".format(gddoc['name'], self.application))
         package = gddoc['package']
         package_doc = self.build_doc['packages'][package]
         gdm = gitservice.GitDeployManager(gddoc, self.datasvc.settings)
