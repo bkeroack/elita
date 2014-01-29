@@ -34,15 +34,14 @@ class RemoteCommands:
 
     def create_directory(self, server_list, path):
         assert isinstance(server_list, list)
-        return self.sc.salt_command(server_list, 'file.mkdir', [path], opts={'expr_form': 'list'})
+        return self.sc.salt_command(server_list, 'file.mkdir', [path])
 
     def delete_directory_win(self, server_list, path):
         return self.sc.salt_command(server_list, 'cmd.run', ["Remove-Item -Recurse -Force {}".format(path)],
-                                    opts={'expr_form': 'list',
-                                          'shell': 'powershell'})
+                                    opts={'shell': 'powershell'})
 
     def delete_directory_unix(self, server_list, path):
-        return self.sc.salt_command(server_list, 'cmd.run', ["rm -rf {}".format(path)], opts={'expr_form': 'list'})
+        return self.sc.salt_command(server_list, 'cmd.run', ["rm -rf {}".format(path)])
 
     def delete_directory(self, server_list, path):
         assert isinstance(server_list, list)
@@ -99,19 +98,14 @@ class RemoteCommands:
         cwd, dest_dir = os.path.split(dest)
         return self.sc.salt_command(server_list, 'cmd.run',
                                     ['git clone {uri} {dest}'.format(uri=repo_uri, dest=dest_dir)],
-                                    opts={
-                                        'cwd': cwd,
-                                        'expr_form': 'list'
-                                    }, timeout=1200)
+                                    opts={'cwd': cwd}, timeout=1200)
 
     def checkout_branch(self, server_list, location, branch_name):
-        return self.sc.salt_command(server_list, 'cmd.run', ['git checkout {}'.format(branch_name)], opts={
-            'cwd': location,
-            'expr_form': 'list'
-        })
+        return self.sc.salt_command(server_list, 'cmd.run', ['git checkout {}'.format(branch_name)],
+                                    opts={'cwd': location})
 
     def highstate(self, server_list):
-        return self.sc.salt_command(server_list, 'state.highstate', [], opts={'expr_form': 'list'}, timeout=300)
+        return self.sc.salt_command(server_list, 'state.highstate', [], timeout=300)
 
 class SaltController:
     def __init__(self, settings):
@@ -124,10 +118,10 @@ class SaltController:
         self.load_salt_info()
 
     def salt_command(self, target, cmd, arg, opts={}, timeout=120):
-        return self.salt_client.cmd(target, cmd, arg, kwarg=opts, timeout=timeout)
+        return self.salt_client.cmd(target, cmd, arg, kwarg=opts, timeout=timeout, expr_form='list')
 
     def run_command(self, target, cmd, shell, timeout=120):
-        return self.salt_command(target, 'cmd.run', {"arg": [cmd], "shell": shell}, timeout=timeout)
+        return self.salt_command(target, 'cmd.run', [cmd], opts={"shell": shell}, timeout=timeout)
 
     def load_salt_info(self):
         util.debugLog(self, "load_salt_info")
