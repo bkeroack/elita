@@ -14,7 +14,7 @@ class ValidatePermissionsObject:
     def verify_top_keys(self):
         for t in self.permissions:
             try:
-                assert (t == "apps") or (t == "actions")
+                assert (t == "apps") or (t == "actions") or (t == "servers")
             except AssertionError:
                 return False
         return True
