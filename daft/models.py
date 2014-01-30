@@ -1169,6 +1169,8 @@ class DataValidator:
     def check_root(self):
         self.root = dict() if self.root is None else self.root
         if '_class' in self.root:
+            util.debugLog(self, "WARNING: '_class' found in base of root; deleting")
             del self.root['_class']
         if '_doc' not in self.root:
+            util.debugLog(self, "WARNING: '_doc' not found in base of root")
             self.root['_doc'] = self.NewContainer('Root', 'Root', '')
