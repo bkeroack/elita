@@ -127,7 +127,15 @@ class SaltController:
         util.debugLog(self, "load_salt_info")
         master_config = salt.config.master_config(os.environ.get('SALT_MASTER_CONFIG', '/etc/salt/master'))
         self.file_roots = master_config['file_roots']
+        for e in self.file_roots:
+            for d in self.file_roots[e]:
+                if not os.path.isdir(d):
+                    os.mkdir(d)
         self.pillar_roots = master_config['pillar_roots']
+        for e in self.pillar_roots:
+            for d in self.pillar_roots[e]:
+                if not os.path.isdir(d):
+                    os.mkdir(d)
         self.sls_dir = "{}/{}".format(self.file_roots['base'][0], self.settings['daft.salt.slsdir'])
         if not os.path.isdir(self.sls_dir):
             os.mkdir(self.sls_dir)
