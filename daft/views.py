@@ -500,14 +500,16 @@ class DeploymentContainerView(GenericView):
                 return self.Error("server spec doesn't match anything: {}".format(sspecs['spec']))
         else:
             servers = sspecs['spec']
-        dpo = self.datasvc.deploysvc.NewDeployment(app, build_name, sspecs, msg['job_id'])
+        dpo = self.datasvc.deploysvc.NewDeployment(app, build_name, sspecs)
+        d_id = dpo['NewDeployment']['id']
         msg = self.run_async('deploy_{}_{}'.format(app,  build_name), deploy.run_deploy, {
             'application': app,
             'build_name': build_name,
             'servers': servers,
             'gitdeploys': sspecs['gitdeploys'],
-            'deployment': dpo['NewDeployment']['id']
+            'deployment': d_id
         })
+        self.datasvc.deploysvc.UpdateDeployment(app, d_id, {'results': {'status': 'running', 'job_id': msg['job_id']}})
         return self.status_ok({
             'deployment': {
                 'deployment_id': dpo['NewDeployment']['id'],

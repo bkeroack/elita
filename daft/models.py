@@ -16,6 +16,7 @@ import salt_control
 import keypair
 import daft_exceptions
 from action import ActionService
+import deploy
 
 # URL model:
 # root/app/
@@ -479,7 +480,7 @@ class GitDataService(GenericChildDataService):
         self.parent.DeleteObject(self.root['app'][app]['gitrepos'], name, 'gitrepos')
 
 class DeploymentDataService(GenericChildDataService):
-    def NewDeployment(self, app, build_name, server_specs, job_id):
+    def NewDeployment(self, app, build_name, server_specs):
         dpo = Deployment({
             'application': app,
             'build_name': build_name,
@@ -490,10 +491,7 @@ class DeploymentDataService(GenericChildDataService):
             'application': dpo.application,
             'build_name': dpo.build_name,
             'server_specs': dpo.server_specs,
-            'results': {
-                'status': 'pending',
-                'job_id': job_id
-            }
+            'results': {}
         })
         self.parent.refresh_root()
         self.root['app'][app]['deployments'][str(did)] = {
@@ -587,6 +585,10 @@ class DataService:
             self.actionsvc = ActionService(self)
         #passed in if this is part of an async job
         self.job_id = job_id
+        #super ugly below - only exists for plugin access
+        self.salt_controller = salt_control.SaltController(self.settings)
+        self.remote_controller = salt_control.RemoteCommands(self.salt_controller)
+        self.deploy_controller = deploy.DeployController(self, self.remote_controller)
 
     def refresh_root(self):
         # when running long async actions the root tree passed to constructor may be stale by the time we try to update
@@ -781,7 +783,7 @@ class Action:
         self.datasvc = datasvc
 
     def execute(self, params, verb):
-        return self.datasvc.jobsvc.ExecuteAction(self.app_name, self.action_name, params, verb)
+        return self.datasvc.ExecuteAction(self.app_name, self.action_name, params, verb)
 
 class Application(GenericDataModel):
     default_values = {

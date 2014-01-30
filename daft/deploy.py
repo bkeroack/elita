@@ -6,8 +6,10 @@ import salt_control
 
 #async callable
 def run_deploy(datasvc, application, build_name, servers, gitdeploys, deployment):
-    dc = DeployController(datasvc, application, build_name, servers, gitdeploys)
-    dc.run()
+    sc = salt_control.SaltController(datasvc.settings)
+    rc = salt_control.RemoteCommands(sc)
+    dc = DeployController(datasvc, rc)
+    dc.run(application, build_name, servers, gitdeploys)
     datasvc.deploysvc.UpdateDeployment({"results": "complete"})
     return {"deploy_status": "complete"}
 
@@ -30,15 +32,10 @@ def validate_server_specs(server_specs):
     return True, None
 
 class DeployController:
-    def __init__(self, datasvc, app_name, build_name, servers, gitdeploys):
+    def __init__(self, datasvc, remote_controller):
         self.datasvc = datasvc
-        self.application = app_name
-        self.build_name = build_name
-        self.build_doc = datasvc.buildsvc.GetBuildDoc(app_name, build_name)
-        self.servers = servers
-        self.gitdeploys = gitdeploys
-        self.sc = salt_control.SaltController(datasvc.settings)
-        self.rc = salt_control.RemoteCommands(self.sc)
+        self.rc = remote_controller
+        self.sc = remote_controller.sc
 
     def add_msg(self, msg):
         util.debugLog(self, msg)
@@ -88,7 +85,7 @@ class DeployController:
         self.add_msg({"highstate_result": res})
         self.add_msg("Finished highstate deployment on server_spec: {}".format(self.servers))
 
-    def run(self):
+    def run(self, app_name, build_name, servers, gitdeploys):
         '''
         1. Decompress build to gitdeploy dir and push
             a. Iterate over server_specs to build list of gitdeploys to push to (make sure no dupes)
@@ -96,6 +93,12 @@ class DeployController:
         2. Issue salt highstate
             a. Iterate over server_specs, issue highstate call for each
         '''
+        self.application = app_name
+        self.build_name = build_name
+        self.build_doc = self.datasvc.buildsvc.GetBuildDoc(app_name, build_name)
+        self.servers = servers
+        self.gitdeploys = gitdeploys
+
         self.add_msg("Beginning gitdeploy: build: {}; application: {}; server spec: {}".format(self.build_name,
                                                                                                self.application,
                                                                                                self.servers))
