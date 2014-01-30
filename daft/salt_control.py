@@ -152,6 +152,10 @@ class SaltController:
         with open(top_sls, 'r') as f:
             top_content = yaml.load(f, Loader=Loader)
         write = False
+        if top_content is None:
+            util.debugLog(self, "include_daft_top: empty file")
+            top_content = dict()
+            write = True
         if 'include' not in top_content:
             util.debugLog(self, "include_daft_top: include not in top")
             top_content['include'] = dict()
