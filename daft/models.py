@@ -881,6 +881,8 @@ class DeploymentContainer(GenericContainer):
 class KeyPairContainer(GenericContainer):
     pass
 
+class Root(GenericContainer):
+    pass
 
 class RootTree(collections.MutableMapping):
     def __init__(self, db, updater, tree, doc, *args, **kwargs):
@@ -1164,3 +1166,7 @@ class DataValidator:
 
     def check_root(self):
         self.root = dict() if self.root is None else self.root
+        if '_class' in self.root:
+            del self.root['_class']
+        if '_doc' not in self.root:
+            self.root['_doc'] = self.NewContainer('Root', 'Root', '')

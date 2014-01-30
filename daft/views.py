@@ -1096,6 +1096,20 @@ def Action(context, request):
 
     return view_class(mobj, request).__call__()
 
+class RootView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request, permissionless=True)
+
+    def GET(self):
+        return About(self.req)
+
+    def POST(self):
+        return self.GET()
+    def PUT(self):
+        return self.GET()
+    def DELETE(self):
+        return self.GET()
+
 import pkg_resources
 @view_config(name="about", renderer='json')
 def About(request):

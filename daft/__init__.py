@@ -17,7 +17,7 @@ def DataStore(request):
 def RootService(request):
     tree = request.db['root_tree'].find_one()
     updater = models.RootTreeUpdater(tree, request.db)
-    return models.RootTree(request.db, updater, tree, None)
+    return models.RootTree(request.db, updater, tree, request.db.dereference(tree['_doc']))
 
 def DataService(request):
     return models.DataService(request.registry.settings, request.db, request.root)
