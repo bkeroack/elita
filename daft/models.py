@@ -71,21 +71,9 @@ class BuildDataService(GenericChildDataService):
             "_doc": bson.DBRef("builds", id)
         }
 
-    def UpdateBuildProperties(self, app, properties):
-        bobj = self.GetBuild(app, properties['build_name'])
-        for p in properties:
-            setattr(bobj, p, properties[p])
-        self.UpdateBuild(bobj)
-
-    def UpdateBuild(self, buildobj):
-        doc = self.db['builds'].find_one({"build_name": buildobj.build_name, "app_name": buildobj.app_name})
-        assert doc is not None
-        doc["files"] = buildobj.files
-        doc["stored"] = buildobj.stored
-        doc["packages"] = buildobj.packages
-        doc["master_file"] = buildobj.master_file
-        doc["attributes"] = buildobj.attributes
-        self.db['builds'].update({"_id": doc['_id']}, doc)
+    def UpdateBuild(self, app, doc):
+        self.parent.UpdateGenericObject(doc['build_name'], doc, "builds", "Build", {'build_name': doc['build_name'],
+                                                                                    'app_name': app})
 
     def DeleteBuildStorage(self, app_name, build_name):
         dir = self.settings['daft.builds.dir']
@@ -376,7 +364,7 @@ class GitDataService(GenericChildDataService):
             grd = self.db['gitrepos'].find_one({'name': doc['location']['gitrepo'], 'application': app})
             assert grd
             doc['location']['gitrepo'] = bson.DBRef('gitrepos', grd['_id'])
-        self.parent.UpdateAppObject(name, doc, 'gitdeploys', GitDeploy, app)
+        self.parent.UpdateAppObject(name, doc, 'gitdeploys', "GitDeploy", app)
 
     def GetGitProviders(self, objs=False):
         if objs:
@@ -408,7 +396,7 @@ class GitDataService(GenericChildDataService):
         self.root['global']['gitproviders'][gpobj.name] = {'_doc': bson.DBRef('gitproviders', gpid)}
 
     def UpdateGitProvider(self, name, doc):
-        self.parent.UpdateObject(name, doc, 'gitproviders', GitProvider)
+        self.parent.UpdateObject(name, doc, 'gitproviders', "GitProvider")
 
     def DeleteGitProvider(self, name):
         self.parent.DeleteObject(self.root['global']['gitproviders'], name, 'gitproviders')
@@ -507,7 +495,7 @@ class DeploymentDataService(GenericChildDataService):
         return [k for k in self.root['app'][app]['deployments'].keys() if k[0] != '_']
 
     def UpdateDeployment(self, app, name, doc):
-        self.parent.UpdateAppObject(name, doc, 'deployments', Deployment, app)
+        self.parent.UpdateAppObject(name, doc, 'deployments', "Deployment", app)
 
 class KeyDataService(GenericChildDataService):
     def GetKeyPairs(self):
@@ -561,14 +549,14 @@ class KeyDataService(GenericChildDataService):
         }
 
     def UpdateKeyPair(self, name, doc):
-        self.parent.UpdateObject(name, doc, "keypairs", KeyPair)
+        self.parent.UpdateObject(name, doc, "keypairs", "KeyPair")
 
     def DeleteKeyPair(self, name):
         self.parent.DeleteObject(self.root['global']['keypairs'], name, "keypairs")
 
 
 class DataService:
-    def __init__(self, settings, db, root, actions_init=True, job_id=None):
+    def __init__(self, settings, db, root, job_id=None):
         self.settings = settings
         self.db = db
         self.root = root
@@ -581,8 +569,7 @@ class DataService:
         self.gitsvc = GitDataService(self)
         self.keysvc = KeyDataService(self)
         self.deploysvc = DeploymentDataService(self)
-        if actions_init:
-            self.actionsvc = ActionService(self)
+        self.actionsvc = ActionService(self)
         #passed in if this is part of an async job
         self.job_id = job_id
         #super ugly below - only exists for plugin access
@@ -597,21 +584,20 @@ class DataService:
         req.db = self.db
         self.root = daft.RootService(req)
 
-    def UpdateObject(self, name, doc, collection_name, class_obj):
-        self.UpdateGenericObject(name, doc, collection_name, class_obj, {"name": name})
+    def UpdateObject(self, name, doc, collection_name, class_name):
+        self.UpdateGenericObject(name, doc, collection_name, class_name, {"name": name})
 
-    def UpdateAppObject(self, name, doc, collection_name, class_obj, app):
-        self.UpdateGenericObject(name, doc, collection_name, class_obj, {"name": name, "application": app})
+    def UpdateAppObject(self, name, doc, collection_name, class_name, app):
+        self.UpdateGenericObject(name, doc, collection_name, class_name, {"name": name, "application": app})
 
-    def UpdateGenericObject(self, name, doc, collection_name, class_obj, query):
+    def UpdateGenericObject(self, name, doc, collection_name, class_name, query):
         old_doc = self.db[collection_name].find_one(query)
         if old_doc:
-            cobj = class_obj(old_doc)
+            cobj = globals()[class_name](old_doc)
             cobj.update_values(doc)
             new_doc = cobj.get_doc()
             new_doc['_id'] = old_doc['_id']
-            new_doc['class'] = class_obj.__class__.__name__ if hasattr(class_obj, "__class__") else \
-                type(class_obj).__class__.__name__
+            new_doc['_class'] = class_name
             self.db[collection_name].save(new_doc)
 
     def NewContainer(self, class_name, name, parent):

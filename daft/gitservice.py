@@ -169,11 +169,13 @@ class GitDeployManager:
 
     def initialize(self, server_list):
         return {
+            'prehook': self.run_init_prehook(server_list),
             'delete_remote_dir': self.delete_remote_dir(server_list),
             'create_remote_dir': self.create_remote_dir(server_list),
             'push_keys': self.push_keypair(server_list),
             'add_to_top': self.add_to_top(server_list),
-            'clone_repo': self.clone_repo(server_list)
+            'clone_repo': self.clone_repo(server_list),
+            'posthook': self.run_init_posthook(server_list)
         }
 
     def add_sls(self):

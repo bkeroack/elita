@@ -1,5 +1,4 @@
 import util
-from pkg_resources import iter_entry_points
 import models
 import celeryinit
 import pymongo
@@ -14,7 +13,7 @@ def regen_datasvc(settings, job_id):
     tree = db['root_tree'].find_one()
     updater = models.RootTreeUpdater(tree, db)
     root = models.RootTree(db, updater, tree, None)
-    return client, models.DataService(settings, db, root, actions_init=False, job_id=job_id)
+    return client, models.DataService(settings, db, root, job_id=job_id)
 
 @celeryinit.celery.task(bind=True, name="daft_task_run_job")
 def run_job(self, settings, callable, args):
@@ -70,6 +69,7 @@ class RegisterHooks:
         self.hookmap = dict()
 
     def register(self):
+        from pkg_resources import iter_entry_points
         for obj in iter_entry_points(group="daft.modules", name="register_hooks"):
             hooks = (obj.load())()  # returns: { app: { "HOOK_NAME": <callable> } }
             for app in hooks:
@@ -82,19 +82,8 @@ class RegisterHooks:
         hook = self.hookmap[app][name]
         if hook is None:
             return "none"
-        job = self.datasvc.jobsvc.NewJob("hook: {} (app: {})".format(name, app))
-        job_id = str(job.job_id)
-        util.debugLog(self, "run_hook: job_id: {}; app: {}; name: {}; args: {}".format(job.job_id, app, name, args))
-        run_job.apply_async((self.datasvc.settings, hook, args), task_id=job_id)
-        return {
-            "hook": {
-                name: {
-                    "status": "async/running",
-                    "job_id": job_id
-                }
-            }
-        }
-
+        args['datasvc'] = self.datasvc
+        return hook(**args)
 
 
 class RegisterActions:
@@ -104,6 +93,8 @@ class RegisterActions:
 
     def register(self):
         util.debugLog(self, "register")
+
+        from pkg_resources import iter_entry_points
         for obj in iter_entry_points(group="daft.modules", name="register_actions"):
             util.debugLog(self, "register: found obj: {}".format(obj))
             actions = (obj.load())()

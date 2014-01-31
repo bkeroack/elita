@@ -7,7 +7,7 @@ import pprint
 import traceback
 import sys
 import fnmatch
-import simplejson as json
+import tempfile
 
 import models
 import builds
@@ -324,73 +324,48 @@ class BuildView(GenericView):
         self.set_params({"GET": [], "PUT": [], "POST": ["file_type"], "DELETE": ["file_name"]})
         self.build_name = None
 
-    def upload_success_action(self):
-        args = {
-            'hook_parameters':
-                {
-                    'build_name': self.build_name,
-                    'build_storage_info':
-                        {
-                          'storage_dir': self.bs_obj.storage_dir,
-                          'filename': self.context.master_file,
-                          'file_type': self.ftype
-                        }
-                }
+    def run_build_storage(self, func, arg):
+        base_args = {
+            'app': self.app_name,
+            'build': self.build_name,
+            'file_type': self.file_type
         }
-        return self.datasvc.actionsvc.hooks.run_hook(self.app_name, 'BUILD_UPLOAD_SUCCESS', args)
-
-    def store_build(self, input_file, ftype):
-        self.bs_obj = builds.BuildStorage(self.req.registry.settings['daft.builds.dir'],
-                                          self.app_name, self.build_name, file_type=ftype, fd=input_file)
-        if not self.bs_obj.validate():
-            return self.Error("Invalid file type or corrupted file--check log")
-
-        #try:
-        fname = self.bs_obj.store()
-        #except:
-        #    return self.Error("error storing build or creating packages (see log)")
-        logger.debug("BuildView: bs_results: {}".format(fname))
-        self.context.master_file = fname
-        self.context.packages['master'] = {'filename': fname, 'file_type': ftype}
-        logger.debug("BuildView: context.packages: {}".format(self.context.packages))
-        for k in self.context.packages:
-            fname = self.context.packages[k]['filename']
-            ftype = self.context.packages[k]['file_type']
-            found = False
-            for f in self.context.files:
-                if f['path'] == fname:
-                    found = True
-            if not found:
-                self.context.files.append({"file_type": ftype, "path": fname})
-        self.context.stored = True
-        self.datasvc.buildsvc.UpdateBuild(self.context)
-        self.ftype = ftype
-
+        args = dict(base_args.items() + arg.items())
+        msg = self.run_async('store_build', func, args)
         return self.return_action_status({
             "build_stored": {
                 "application": self.app_name,
                 "build_name": self.build_name,
-                "actions_result": self.upload_success_action()}
+                "message": msg
+            }
         })
+
+    def run_build_storage_direct(self, tempfile):
+        return self.run_build_storage(builds.store_uploaded_build, {'tempfile': tempfile})
+
+    def run_build_storage_indirect(self, uri):
+        return self.run_build_storage(builds.store_indirect_build, {'uri': uri})
 
     def direct_upload(self):
         logger.debug("BuildView: direct_upload")
         if 'build' in self.req.POST:
             fname = self.req.POST['build'].filename
-            logger.debug("BuildContainer: PUT: filename: {}".format(fname))
-            return self.store_build(self.req.POST['build'].file, self.req.params["file_type"])
+            logger.debug("BuildView: PUT: filename: {}".format(fname))
+            fd, temp_file = tempfile.mkstemp()
+            with open(temp_file, 'wb') as f:
+                f.write(self.req.POST['build'].file.read(-1))
+            return self.run_build_storage_direct(temp_file)
         else:
             return self.Error("build data not found in POST body")
 
     def indirect_upload(self):
-        logger.debug("BuildView: indirect_upload: downloading from {}".format(self.req.params['indirect_url']))
-        r = urllib2.urlopen(self.req.params['indirect_url'])
-        return self.store_build(r, self.req.params["file_type"])
+        return self.run_build_storage_indirect(self.req.params['indirect_url'])
 
     def POST(self):
         self.build_name = self.context.build_name
         if self.req.params["file_type"] not in models.SupportedFileType.types:
             return self.Error("file type not supported")
+        self.file_type = self.req.params["file_type"]
 
         if "indirect_url" in self.req.params:
             return self.indirect_upload()
