@@ -93,7 +93,15 @@ class GitRepoService:
         util.debugLog(self, "setup_gitdeploy_dir: git init: {}".format(res))
         res = git.remote.add.origin("ssh://{}".format(uri))
         util.debugLog(self, "setup_gitdeploy_dir: git remote add origin: {}".format(res))
-
+        util.debugLog(self, "setup_gitdeploy_dir: creating initial repo with dummy file")
+        touch = sh.touch.bake(_cwd=path)
+        touch(".empty")
+        res = git.add('-A')
+        util.debugLog(self, "setup_gitdeploy_dir: git add: {}".format(res))
+        res = git.commit(m="initial state")
+        util.debugLog(self, "setup_gitdeploy_dir: git commit: {}".format(res))
+        res = git.push()
+        util.debugLog(self, "setup_gitdeploy_dir: git push: {}".format(res))
 
 class GitHubRepoService(GitRepoService):
     pass
