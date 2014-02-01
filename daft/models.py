@@ -13,6 +13,7 @@ import pytz
 import daft
 import util
 import salt_control
+from gitservice import EMBEDDED_YAML_DOT_REPLACEMENT
 import keypair
 import daft_exceptions
 from action import ActionService
@@ -326,6 +327,7 @@ class GitDataService(GenericChildDataService):
             for k in options:
                 new_gd['options'][k] = options[k]
         if actions:
+            util.change_dict_keys(actions, '.', EMBEDDED_YAML_DOT_REPLACEMENT)
             for k in actions:
                 new_gd['actions'][k] = actions[k]
         gd = GitDeploy(new_gd)
@@ -364,6 +366,8 @@ class GitDataService(GenericChildDataService):
             grd = self.db['gitrepos'].find_one({'name': doc['location']['gitrepo'], 'application': app})
             assert grd
             doc['location']['gitrepo'] = bson.DBRef('gitrepos', grd['_id'])
+        if 'actions' in doc:
+            util.change_dict_keys(doc['actions'], '.', EMBEDDED_YAML_DOT_REPLACEMENT)
         self.parent.UpdateAppObject(name, doc, 'gitdeploys', "GitDeploy", app)
 
     def GetGitProviders(self, objs=False):

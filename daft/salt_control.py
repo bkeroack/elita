@@ -14,6 +14,7 @@ except ImportError:
     from yaml import Loader, Dumper
 
 import util
+import gitservice
 
 __author__ = 'bkeroack'
 
@@ -253,18 +254,18 @@ class SaltController:
         }
         prepull = gitdeploy['actions']['prepull']
         if prepull is not None:
-            existing['prepull'] = dict()
+            util.change_dict_keys(prepull, gitservice.EMBEDDED_YAML_DOT_REPLACEMENT, '.')
             for k in prepull:
                 top_key = prepull[k].keys()[0]
                 prepull[k][top_key].append({'order': 0})
-                existing['prepull'][k] = prepull[k]
+                existing[k] = prepull[k]
         postpull = gitdeploy['actions']['postpull']
         if postpull is not None:
-            existing['postpull'] = dict()
+            util.change_dict_keys(postpull, gitservice.EMBEDDED_YAML_DOT_REPLACEMENT, '.')
             for k in postpull:
                 top_key = postpull[k].keys()[0]
                 postpull[k][top_key].append({'order': 'last'})
-                existing['postpull'][k] = postpull[k]
+                existing[k] = postpull[k]
         with open(filename, 'w') as f:
             f.write(yaml.safe_dump(existing, default_flow_style=False))
         lock.release()

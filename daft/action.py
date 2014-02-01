@@ -60,7 +60,9 @@ class ActionService:
 
 
 DefaultHookMap = {
-    'BUILD_UPLOAD_SUCCESS': None
+    'BUILD_UPLOAD_SUCCESS': None,
+    'GITDEPLOY_INIT_PRE': None,
+    'GITDEPLOY_INIT_POST': None
 }
 
 class RegisterHooks:

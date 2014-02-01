@@ -19,6 +19,9 @@ class BitBucketData:
 class GitHubData:
     api_base_url = 'https://github.com'
 
+#mongo does not allow dots in key names, so we have to replace dots in embedded yaml dict keys with this
+EMBEDDED_YAML_DOT_REPLACEMENT = '#'
+
 #callables for async execution
 def create_bitbucket_repo(datasvc, gitprovider, name, application):
     bbsvc = BitBucketRepoService(gitprovider, datasvc.settings)
@@ -54,7 +57,7 @@ def delete_github_repo(datasvc, gitprovider, name):
     return {'error': 'not implemented'}
 
 def create_gitdeploy(datasvc, gitdeploy):
-    gdm = GitDeployManager(gitdeploy, datasvc.settings)
+    gdm = GitDeployManager(gitdeploy, datasvc)
     gdm.add_sls()
     return "done"
 
@@ -63,7 +66,7 @@ def initialize_gitdeploy(datasvc, gitdeploy, server_list):
     for s in server_list:
         if not sc.verify_connectivity(s):
             return {'error': "server '{}' not accessible via salt".format(s)}
-    gdm = GitDeployManager(gitdeploy, datasvc.settings)
+    gdm = GitDeployManager(gitdeploy, datasvc)
     return gdm.initialize(server_list)
 
 class GitRepoService:
@@ -161,9 +164,10 @@ class BitBucketRepoService(GitRepoService):
         return None
 
 class GitDeployManager:
-    def __init__(self, gitdeploy, settings):
+    def __init__(self, gitdeploy, datasvc):
+        self.datasvc = datasvc
         self.gitdeploy = gitdeploy
-        self.settings = settings
+        self.settings = datasvc.settings
         self.sc = salt_control.SaltController(self.settings)
         self.rc = salt_control.RemoteCommands(self.sc)
 
@@ -177,6 +181,23 @@ class GitDeployManager:
             'clone_repo': self.clone_repo(server_list),
             'posthook': self.run_init_posthook(server_list)
         }
+
+    def run_hook(self, hook, server_list):
+        self.datasvc.jobsvc.NewJobData({'status': 'running hook {}'.format(hook)})
+        args = {
+            'hook_parameters':
+                {
+                    'gitdeploy': self.gitdeploy,
+                    'server_list': server_list
+                }
+        }
+        return self.datasvc.actionsvc.hooks.run_hook(self.gitdeploy['application'], hook, args)
+
+    def run_init_prehook(self, server_list):
+        return self.run_hook("GITDEPLOY_INIT_PRE", server_list)
+
+    def run_init_posthook(self, server_list):
+        return self.run_hook("GITDEPLOY_INIT_POST", server_list)
 
     def add_sls(self):
         self.sc.new_gitdeploy_yaml(self.gitdeploy)
