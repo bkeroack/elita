@@ -104,7 +104,7 @@ class GitRepoService:
         alias_name = "{}-{}".format(application, name)
         lock = lockfile.FileLock(ssh_config)
         lock.acquire(timeout=60)
-        with open(ssh_config, 'ra') as f:
+        with open(ssh_config, 'a') as f:
             f.write("\nHost {}".format(alias_name))
             f.write("\tHostName {}".format("bitbucket.org" if self.gp_type == 'bitbucket' else "github.com"))
             f.write("\tPreferredAuthentications publickey")
