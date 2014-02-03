@@ -49,7 +49,7 @@ class DeployController:
         self.add_msg("Starting push to gitdeploy '{}' for application '{}'".format(gddoc['name'], self.application))
         package = gddoc['package']
         package_doc = self.build_doc['packages'][package]
-        gdm = gitservice.GitDeployManager(gddoc, self.datasvc.settings)
+        gdm = gitservice.GitDeployManager(gddoc, self.datasvc)
         self.add_msg("checking out default git branch")
         res = gdm.checkout_default_branch()
         self.add_msg("git checkout result: {}".format(res))
