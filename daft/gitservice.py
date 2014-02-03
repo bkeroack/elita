@@ -2,6 +2,7 @@ import requests
 from slugify import slugify
 import tempfile
 import os
+import stat
 import sh
 import lockfile
 
@@ -94,12 +95,18 @@ class GitRepoService:
         util.debugLog(self, "key_setup: priv_key_name: {}".format(priv_key_name))
         util.debugLog(self, "key_setup: pub_key_name: {}".format(pub_key_name))
 
+
+        util.debugLog(self, "key_setup: writing keypairs")
         with open(pub_key_name, 'w') as f:
             f.write(keypair['public_key'].decode('string_escape'))
 
         with open(priv_key_name, 'w') as f:
             f.write(keypair['private_key'].decode('string_escape'))
 
+        util.debugLog(self, "key_setup: chmod private key to owner read/write only")
+        os.chmod(priv_key_name, stat.S_IWUSR | stat.S_IRUSR)
+
+        util.debugLog(self, "key_setup: adding alias to ssh config")
         ssh_config = "{}/.ssh/config".format(home_dir)
         alias_name = "{}-{}".format(application, name)
         lock = lockfile.FileLock(ssh_config)
