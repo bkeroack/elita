@@ -115,7 +115,7 @@ class GitRepoService:
         except:
             pass
         util.debugLog(self, "setup_gitdeploy_dir: git commit: {}".format(res))
-        res = git.push()
+        res = git.push("--set-upstream", "origin", "master")
         util.debugLog(self, "setup_gitdeploy_dir: git push: {}".format(res))
 
 class GitHubRepoService(GitRepoService):
