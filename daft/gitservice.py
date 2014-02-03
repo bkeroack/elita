@@ -94,7 +94,10 @@ class GitRepoService:
         git = sh.git.bake(_cwd=path)
         res = git.init()
         util.debugLog(self, "setup_gitdeploy_dir: git init: {}".format(res))
-        res = git.remote.add.origin("ssh://{}".format(uri))
+        try:
+            res = git.remote.add.origin("ssh://{}".format(uri))
+        except:
+            pass
         util.debugLog(self, "setup_gitdeploy_dir: git remote add origin: {}".format(res))
         util.debugLog(self, "setup_gitdeploy_dir: creating initial repo with dummy file")
         touch = sh.touch.bake(_cwd=path)
@@ -105,6 +108,8 @@ class GitRepoService:
         util.debugLog(self, "setup_gitdeploy_dir: git config user.email: {}".format(res))
         res = git.config("user.name", "daft")
         util.debugLog(self, "setup_gitdeploy_dir: git config user.name: {}".format(res))
+        res = git.config("--global", "push.default", "simple")
+        util.debugLog(self, "setup_gitdeploy_dir: git config --global push.default simple: {}".format(res))
         res = git.commit(m="initial state")
         util.debugLog(self, "setup_gitdeploy_dir: git commit: {}".format(res))
         res = git.push()
