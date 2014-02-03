@@ -105,11 +105,12 @@ class GitRepoService:
         lock = lockfile.FileLock(ssh_config)
         lock.acquire(timeout=60)
         with open(ssh_config, 'a') as f:
-            f.write("\nHost {}".format(alias_name))
-            f.write("\tHostName {}".format("bitbucket.org" if self.gp_type == 'bitbucket' else "github.com"))
-            f.write("\tPreferredAuthentications publickey")
-            f.write("\tStrictHostKeyChecking no")
-            f.write("\tIdentityFile {}".format(priv_key_name))
+            f.write("\nHost {}\n".format(alias_name))
+            f.write("\tHostName {}\n".format("bitbucket.org" if self.gp_type == 'bitbucket' else "github.com"))
+            f.write("\tPreferredAuthentications publickey\n")
+            f.write("\tStrictHostKeyChecking no\n")
+            f.write("\tIdentityFile {}\n".format(priv_key_name))
+        lock.release()
         return alias_name
 
     def setup_gitdeploy_dir(self, name, application, uri):
