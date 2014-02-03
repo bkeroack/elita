@@ -110,7 +110,10 @@ class GitRepoService:
         util.debugLog(self, "setup_gitdeploy_dir: git config user.name: {}".format(res))
         res = git.config("--global", "push.default", "simple")
         util.debugLog(self, "setup_gitdeploy_dir: git config --global push.default simple: {}".format(res))
-        res = git.commit(m="initial state")
+        try:
+            res = git.commit(m="initial state")
+        except:
+            pass
         util.debugLog(self, "setup_gitdeploy_dir: git commit: {}".format(res))
         res = git.push()
         util.debugLog(self, "setup_gitdeploy_dir: git push: {}".format(res))
