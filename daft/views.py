@@ -668,13 +668,15 @@ class GitRepoContainerView(GenericView):
             return self.Error(ret)
         else:
             if not existing:
+                kp = self.datasvc.keysvc.GetKeyPair(keypair)
                 gp_doc = self.datasvc.gitsvc.GetGitProvider(gitprovider)
                 logger.debug("GitRepoContainerView: gp_doc: {}".format(gp_doc))
                 repo_callable = gitservice.create_repo_callable_from_type(gp_doc['type'])
                 if not repo_callable:
                     return self.Error("gitprovider type not supported ({})".format(gp_doc['type']))
                 msg = self.run_async("create_repository", repo_callable, {'gitprovider': gp_doc, 'name': name,
-                                                                          'application': self.context.parent})
+                                                                          'application': self.context.parent,
+                                                                          'keypair': kp})
             else:
                 msg = {
                     'task': 'none'

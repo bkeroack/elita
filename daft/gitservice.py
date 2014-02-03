@@ -24,13 +24,13 @@ class GitHubData:
 EMBEDDED_YAML_DOT_REPLACEMENT = '#'
 
 #callables for async execution
-def create_bitbucket_repo(datasvc, gitprovider, name, application):
+def create_bitbucket_repo(datasvc, gitprovider, name, application, keypair):
     bbsvc = BitBucketRepoService(gitprovider, datasvc.settings)
     resp = bbsvc.create_repo(name)
     uri = bbsvc.get_ssh_uri(name)
     if uri:
         util.debugLog(create_bitbucket_repo, "got uri: {}".format(uri))
-        alias = bbsvc.key_setup(name, application)
+        alias = bbsvc.key_setup(name, application, keypair)
         alias_uri = uri.replace("bitbucket.org", alias)
         util.debugLog(create_bitbucket_repo, "alias uri: {}".format(alias_uri))
         bbsvc.setup_gitdeploy_dir(name, application, alias_uri)
@@ -40,7 +40,7 @@ def create_bitbucket_repo(datasvc, gitprovider, name, application):
         resp['error'] = {'message': 'error getting uri!, local master not initialized!'}
     return resp
 
-def create_github_repo(datasvc, gitprovider, name, application):
+def create_github_repo(datasvc, gitprovider, name, application, keypair):
     return {'error': 'not implemented'}
 
 def create_repo_callable_from_type(repo_type):
@@ -75,7 +75,6 @@ def initialize_gitdeploy(datasvc, gitdeploy, server_list):
 
 class GitRepoService:
     def __init__(self, gitprovider, settings):
-        self.keypair = gitprovider['keypair']
         self.gp_type = gitprovider['type']
         self.settings = settings
         self.auth = gitprovider['auth']
@@ -84,7 +83,7 @@ class GitRepoService:
     def create_repo(self, name):
         util.debugLog(self, "create_repo not implemented")
 
-    def key_setup(self, name, application):
+    def key_setup(self, name, application, keypair):
         #copy keypair to user ssh dir
         #add alias in ~/.ssh/config
         home_dir = os.path.expanduser('~')
@@ -96,10 +95,10 @@ class GitRepoService:
         util.debugLog(self, "key_setup: pub_key_name: {}".format(pub_key_name))
 
         with open(pub_key_name, 'w') as f:
-            f.write(self.keypair['public_key'].decode('string_escape'))
+            f.write(keypair['public_key'].decode('string_escape'))
 
         with open(priv_key_name, 'w') as f:
-            f.write(self.keypair['private_key'].decode('string_escape'))
+            f.write(keypair['private_key'].decode('string_escape'))
 
         ssh_config = "{}/.ssh/config".format(home_dir)
         alias_name = "{}-{}".format(application, name)
