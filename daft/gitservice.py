@@ -3,6 +3,7 @@ from slugify import slugify
 import tempfile
 import os
 import sh
+import lockfile
 
 import util
 import salt_control
@@ -29,7 +30,10 @@ def create_bitbucket_repo(datasvc, gitprovider, name, application):
     uri = bbsvc.get_ssh_uri(name)
     if uri:
         util.debugLog(create_bitbucket_repo, "got uri: {}".format(uri))
-        bbsvc.setup_gitdeploy_dir(name, application, uri)
+        alias = bbsvc.key_setup(name, application)
+        alias_uri = uri.replace("bitbucket.org", alias)
+        util.debugLog(create_bitbucket_repo, "alias uri: {}".format(alias_uri))
+        bbsvc.setup_gitdeploy_dir(name, application, alias_uri)
         datasvc.gitsvc.UpdateGitRepo(application, name, {'uri': uri})
     else:
         util.debugLog(create_bitbucket_repo, "ERROR: uri for gitrepo not found!")
@@ -71,6 +75,7 @@ def initialize_gitdeploy(datasvc, gitdeploy, server_list):
 
 class GitRepoService:
     def __init__(self, gitprovider, settings):
+        self.keypair = gitprovider['keypair']
         self.gp_type = gitprovider['type']
         self.settings = settings
         self.auth = gitprovider['auth']
@@ -78,6 +83,35 @@ class GitRepoService:
 
     def create_repo(self, name):
         util.debugLog(self, "create_repo not implemented")
+
+    def key_setup(self, name, application):
+        #copy keypair to user ssh dir
+        #add alias in ~/.ssh/config
+        home_dir = os.path.expanduser('~')
+        priv_key_name = "{}/.ssh/{}-{}".format(home_dir, application, name)
+        pub_key_name = "{}.pub".format(priv_key_name)
+
+        util.debugLog(self, "key_setup: home_dir: {}".format(home_dir))
+        util.debugLog(self, "key_setup: priv_key_name: {}".format(priv_key_name))
+        util.debugLog(self, "key_setup: pub_key_name: {}".format(pub_key_name))
+
+        with open(pub_key_name, 'w') as f:
+            f.write(self.keypair['public_key'].decode('string_escape'))
+
+        with open(priv_key_name, 'w') as f:
+            f.write(self.keypair['private_key'].decode('string_escape'))
+
+        ssh_config = "{}/.ssh/config".format(home_dir)
+        alias_name = "{}-{}".format(application, name)
+        lock = lockfile.FileLock(ssh_config)
+        lock.acquire(timeout=60)
+        with open(ssh_config, 'ra') as f:
+            f.write("\nHost {}".format(alias_name))
+            f.write("\tHostName {}".format("bitbucket.org" if self.gp_type == 'bitbucket' else "github.com"))
+            f.write("\tPreferredAuthentications publickey")
+            f.write("\tStrictHostKeyChecking no")
+            f.write("\tIdentityFile {}".format(priv_key_name))
+        return alias_name
 
     def setup_gitdeploy_dir(self, name, application, uri):
         '''create master gitdeploy directory and initialize with git'''
