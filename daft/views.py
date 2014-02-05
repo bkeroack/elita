@@ -341,7 +341,7 @@ class BuildView(GenericView):
         })
 
     def run_build_storage_direct(self, tempfile):
-        return self.run_build_storage(builds.store_uploaded_build, {'tempfile': tempfile})
+        return self.run_build_storage(builds.store_uploaded_build, {'temp_file': tempfile})
 
     def run_build_storage_indirect(self, uri):
         return self.run_build_storage(builds.store_indirect_build, {'uri': uri})
