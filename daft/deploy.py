@@ -82,7 +82,17 @@ class DeployController:
     def salt_highstate_server(self):
         self.add_msg("Starting highstate deployment on server_spec: {}".format(self.servers))
         res = self.rc.highstate(self.servers)
-        self.add_msg({"highstate_result": res})
+        errors = dict()
+        for host in res['highstate_result']:
+            for cmd in res['highstate_result'][host]:
+                if "gitdeploy" in cmd:
+                    if 'changes' in res['highstate_result'][host][cmd]:
+                        if 'retcode' in res['highstate_result'][host][cmd]['changes']:
+                            if res['highstate_result'][host][cmd]['changes']['retcode'] != 0:
+                                errors[host] = res['highstate_result'][host]
+        if len(errors) > 0:
+            self.add_msg({"highstate_errors": errors})
+        #self.add_msg({"highstate_result": res}) #too verbose
         self.add_msg("Finished highstate deployment on server_spec: {}".format(self.servers))
 
     def run(self, app_name, build_name, servers, gitdeploys):

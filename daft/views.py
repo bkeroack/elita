@@ -745,7 +745,6 @@ class GitDeployContainerView(GenericView):
     def PUT(self):
         name = self.req.params['name']
         app = self.context.parent
-        package = self.req.params['package'] if 'package' in self.req.params else 'master'
         try:
             location_attribs = self.req.json_body
         except:
@@ -753,6 +752,7 @@ class GitDeployContainerView(GenericView):
         attribs = location_attribs['attributes'] if 'attributes' in location_attribs else {}
         options = location_attribs['options'] if 'options' in location_attribs else None
         actions = location_attribs['actions'] if 'actions' in location_attribs else None
+        package = location_attribs['package'] if 'package' in location_attribs else 'master'
         if 'location' in location_attribs:
             location = location_attribs['location']
         else:

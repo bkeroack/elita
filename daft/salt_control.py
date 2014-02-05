@@ -206,7 +206,7 @@ class SaltController:
             dt_content = yaml.load(f, Loader=Loader)
         if not dt_content:
             dt_content = dict()
-        if 'base' not in dt_content:
+        if 'base' not in dt_content or not dt_content['base']:
             dt_content['base'] = dict()
         for s in server_list:
             dt_content['base'][s] = [gdentry]
