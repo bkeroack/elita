@@ -314,7 +314,7 @@ class GitDeployManager:
             fpath = os.path.join(path, f)
             if os.path.isdir(fpath) and ".git" not in f:
                 shutil.rmtree(fpath)
-            else:
+            elif os.path.isfile(fpath):
                 os.unlink(fpath)
         util.debugLog(self, "commit_to_repo_and_push: decompressing {} to {}".format(package_doc['filename'], path))
         bf = builds.BuildFile(package_doc)
