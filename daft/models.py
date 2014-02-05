@@ -73,6 +73,7 @@ class BuildDataService(GenericChildDataService):
         }
 
     def UpdateBuild(self, app, doc):
+        util.debugLog(self, "UpdateBuild: app: {}; doc: {}".format(app, doc))
         self.parent.UpdateGenericObject(doc['build_name'], doc, "builds", "Build", {'build_name': doc['build_name'],
                                                                                     'app_name': app})
 
