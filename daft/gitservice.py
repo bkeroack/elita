@@ -309,6 +309,13 @@ class GitDeployManager:
 
     def decompress_to_repo(self, package_doc):
         path = self.get_path()
+        util.debugLog(self, "commit_to_repo_and_push: deleting contents")
+        for f in os.listdir(path):
+            fpath = os.path.join(path, f)
+            if os.path.isdir(fpath) and ".git" not in f:
+                shutil.rmtree(fpath)
+            else:
+                os.unlink(fpath)
         util.debugLog(self, "commit_to_repo_and_push: decompressing {} to {}".format(package_doc['filename'], path))
         bf = builds.BuildFile(package_doc)
         bf.decompress(path)
