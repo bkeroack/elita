@@ -83,13 +83,12 @@ class DeployController:
         self.add_msg("Starting highstate deployment on server_spec: {}".format(self.servers))
         res = self.rc.highstate(self.servers)
         errors = dict()
-        for host in res['highstate_result']:
-            for cmd in res['highstate_result'][host]:
+        for host in res:
+            for cmd in res[host]:
                 if "gitdeploy" in cmd:
-                    if 'changes' in res['highstate_result'][host][cmd]:
-                        if 'retcode' in res['highstate_result'][host][cmd]['changes']:
-                            if res['highstate_result'][host][cmd]['changes']['retcode'] != 0:
-                                errors[host] = res['highstate_result'][host]
+                    if "result" in res[host][cmd]:
+                        if not res[host][cmd]["result"]:
+                            errors[host] = res[host][cmd]["changes"] if "changes" in res[host][cmd] else res[host][cmd]
         if len(errors) > 0:
             self.add_msg({"highstate_errors": errors})
         #self.add_msg({"highstate_result": res}) #too verbose
