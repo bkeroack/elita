@@ -117,6 +117,7 @@ class GitRepoService:
             f.write("\tPreferredAuthentications publickey\n")
             f.write("\tStrictHostKeyChecking no\n")
             f.write("\tIdentityFile {}\n".format(priv_key_name))
+        os.chmod(ssh_config, stat.S_IWUSR | stat.S_IRUSR)
         lock.release()
         return alias_name
 
