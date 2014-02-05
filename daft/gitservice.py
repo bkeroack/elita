@@ -134,8 +134,7 @@ class GitRepoService:
         path += "/{}".format(name)
         if os.path.isdir(path):
             shutil.rmtree(path)
-        else:
-            os.mkdir(path)
+        os.mkdir(path)
         git = sh.git.bake(_cwd=path)
         res = git.init()
         util.debugLog(self, "setup_gitdeploy_dir: git init: {}".format(res))
