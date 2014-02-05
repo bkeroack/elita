@@ -2,6 +2,7 @@ import requests
 from slugify import slugify
 import tempfile
 import os
+import shutil
 import stat
 import sh
 import lockfile
@@ -131,15 +132,14 @@ class GitRepoService:
         if not os.path.isdir(path):
             os.mkdir(path)
         path += "/{}".format(name)
-        if not os.path.isdir(path):
+        if os.path.isdir(path):
+            shutil.rmtree(path)
+        else:
             os.mkdir(path)
         git = sh.git.bake(_cwd=path)
         res = git.init()
         util.debugLog(self, "setup_gitdeploy_dir: git init: {}".format(res))
-        try:
-            res = git.remote.add.origin("ssh://{}".format(uri))
-        except:
-            pass
+        res = git.remote.add.origin("ssh://{}".format(uri))
         util.debugLog(self, "setup_gitdeploy_dir: git remote add origin: {}".format(res))
         util.debugLog(self, "setup_gitdeploy_dir: creating initial repo with dummy file")
         touch = sh.touch.bake(_cwd=path)
@@ -152,10 +152,7 @@ class GitRepoService:
         util.debugLog(self, "setup_gitdeploy_dir: git config user.name: {}".format(res))
         res = git.config("--global", "push.default", "simple")
         util.debugLog(self, "setup_gitdeploy_dir: git config --global push.default simple: {}".format(res))
-        try:
-            res = git.commit(m="initial state")
-        except:
-            pass
+        res = git.commit(m="initial state")
         util.debugLog(self, "setup_gitdeploy_dir: git commit: {}".format(res))
         res = git.push("--set-upstream", "origin", "master")
         util.debugLog(self, "setup_gitdeploy_dir: git push: {}".format(res))
