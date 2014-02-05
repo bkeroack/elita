@@ -10,7 +10,7 @@ def run_deploy(datasvc, application, build_name, servers, gitdeploys, deployment
     rc = salt_control.RemoteCommands(sc)
     dc = DeployController(datasvc, rc)
     dc.run(application, build_name, servers, gitdeploys)
-    datasvc.deploysvc.UpdateDeployment({"results": "complete"})
+    datasvc.deploysvc.UpdateDeployment(application, deployment, {"results": "complete"})
     return {"deploy_status": "complete"}
 
 def validate_server_specs(server_specs):
