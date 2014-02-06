@@ -120,6 +120,14 @@ class RemoteCommands:
                                          opts={'cwd': location}, timeout=120)
         }
 
+    def set_git_autocrlf(self, server_list, location):
+        return self.sc.salt_command(server_list, 'cmd.run', ['git config core.autocrlf input'],
+                                    opts={'cwd': location}, timeout=120)
+
+    def set_git_push_url(self, server_list, location, url):
+        return self.sc.salt_command(server_list, 'cmd.run', ['git remote set-url --push origin "{}"'.format(url)],
+                                    opts={'cwd': location}, timeout=120)
+
     def highstate(self, server_list):
         return self.sc.salt_command(server_list, 'state.highstate', [], timeout=300)
 
