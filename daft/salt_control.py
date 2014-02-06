@@ -112,6 +112,14 @@ class RemoteCommands:
         return self.sc.salt_command(server_list, 'cmd.run', ['git commit -m "{}"'.format(message)],
                                     opts={'cwd': location}, timeout=120)
 
+    def set_user_git(self, server_list, location, email, name):
+        return {
+            "name": self.sc.salt_command(server_list, 'cmd.run', ['git config user.name "{}"'.format(name)],
+                                         opts={'cwd': location}, timeout=120),
+            "email": self.sc.salt_command(server_list, 'cmd.run', ['git config user.email "{}"'.format(email)],
+                                         opts={'cwd': location}, timeout=120)
+        }
+
     def highstate(self, server_list):
         return self.sc.salt_command(server_list, 'state.highstate', [], timeout=300)
 
