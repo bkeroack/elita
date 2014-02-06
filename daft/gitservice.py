@@ -294,7 +294,7 @@ class GitDeployManager:
 
     def create_ignore(self, server_list):
         repo_path = self.gitdeploy['location']['path']
-        temp_name, fd = tempfile.mkstemp()
+        fd, temp_name = tempfile.mkstemp()
         util.debugLog(self, "create_ignore: writing file")
         if 'gitignore' in self.gitdeploy['options']:
             gi = self.gitdeploy['options']['gitignore']
