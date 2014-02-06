@@ -312,7 +312,8 @@ class GitDataService(GenericChildDataService):
             'application': app_name,
             'options': {
                 'favor': 'ours',
-                'ignore-whitespace': 'true'
+                'ignore-whitespace': 'true',
+                'gitignore': []
             },
             'actions': {
                 'prepull': [],
@@ -326,11 +327,13 @@ class GitDataService(GenericChildDataService):
             new_gd['package'] = package
         if options:
             for k in options:
-                new_gd['options'][k] = options[k]
+                if k in new_gd['options']:
+                    new_gd['options'][k] = options[k]
         if actions:
             util.change_dict_keys(actions, '.', EMBEDDED_YAML_DOT_REPLACEMENT)
             for k in actions:
-                new_gd['actions'][k] = actions[k]
+                if k in new_gd['actions']:
+                    new_gd['actions'][k] = actions[k]
         gd = GitDeploy(new_gd)
         gdo = self.db['gitdeploys'].find_and_modify(query={
             'name': gd.name,
@@ -723,7 +726,8 @@ class GitDeploy(GenericDataModel):
         'attributes': dict(),
         'options': {
             'favor': 'ours',
-            'ignore-whitespace': 'true'
+            'ignore-whitespace': 'true',
+            'gitignore': list()
         },
         'actions': {
             'prepull': [],

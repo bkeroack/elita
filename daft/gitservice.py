@@ -65,6 +65,7 @@ def delete_github_repo(datasvc, gitprovider, name):
 def create_gitdeploy(datasvc, gitdeploy):
     gdm = GitDeployManager(gitdeploy, datasvc)
     gdm.add_sls()
+    gdm.create_ignore()
     return "done"
 
 def initialize_gitdeploy(datasvc, gitdeploy, server_list):
@@ -309,14 +310,14 @@ class GitDeployManager:
 
     def decompress_to_repo(self, package_doc):
         path = self.get_path()
-        util.debugLog(self, "commit_to_repo_and_push: deleting contents")
+        util.debugLog(self, "decompress_to_repo: deleting contents")
         for f in os.listdir(path):
             fpath = os.path.join(path, f)
             if os.path.isdir(fpath) and ".git" not in f:
                 shutil.rmtree(fpath)
             elif os.path.isfile(fpath):
                 os.unlink(fpath)
-        util.debugLog(self, "commit_to_repo_and_push: decompressing {} to {}".format(package_doc['filename'], path))
+        util.debugLog(self, "decompress_to_repo: decompressing {} to {}".format(package_doc['filename'], path))
         bf = builds.BuildFile(package_doc)
         bf.decompress(path)
 
@@ -325,18 +326,33 @@ class GitDeployManager:
         return git.status()
 
     def add_files_to_repo(self):
-        util.debugLog(self, "commit_to_repo_and_push: git add")
+        util.debugLog(self, "add_files_to_repo: git add")
         git = self.git_obj()
         return git.add('-A')
 
     def commit_to_repo(self, build_name):
-        util.debugLog(self, "commit_to_repo_and_push: git commit")
+        util.debugLog(self, "commit_to_repo: git commit")
         git = self.git_obj()
         return git.commit(m=build_name)
 
     def push_repo(self):
-        util.debugLog(self, "commit_to_repo_and_push: git push")
+        util.debugLog(self, "push_repo: git push")
         git = self.git_obj()
         return git.push()
+
+    def create_ignore(self):
+        path = self.get_path()
+        giname = "{}/.gitignore".format(path)
+        util.debugLog(self, "create_ignore: writing file")
+        if 'gitignore' in self.gitdeploy['options']:
+            gi = self.gitdeploy['options']['gitignore']
+            assert isinstance(gi, list)
+            with open(giname, 'w') as f:
+                for l in gi:
+                    f.write("{}\n".format(l))
+        util.debugLog(self, "create_ignore: committing to repo")
+        self.add_files_to_repo()
+        self.commit_to_repo("gitignore")
+        self.push_repo()
 
 

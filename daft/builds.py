@@ -18,11 +18,13 @@ class SupportedFileType:
 #async callables
 def store_indirect_build(datasvc, app, build, file_type, uri):
     util.debugLog(store_indirect_build, "indirect_upload: downloading from {}".format(uri))
+    datasvc.jobsvc.NewJobData({'status': 'Downloading build file from {}'.format(uri)})
     r = requests.get(uri)
     fd, temp_file = tempfile.mkstemp()
     with open(temp_file, 'wb') as f:
         f.write(r.content)
     util.debugLog(store_indirect_build, "download and file write complete")
+    datasvc.jobsvc.NewJobData({'status': "download and file write complete"})
     return store_uploaded_build(datasvc, app, build, file_type, temp_file)
 
 def store_uploaded_build(datasvc, app, build, file_type, temp_file):
