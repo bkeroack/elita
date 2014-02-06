@@ -105,6 +105,13 @@ class RemoteCommands:
         return self.sc.salt_command(server_list, 'cmd.run', ['git checkout {}'.format(branch_name)],
                                     opts={'cwd': location})
 
+    def add_all_files_git(self, server_list, location):
+        return self.sc.salt_command(server_list, 'cmd.run', ['git add -A'], opts={'cwd': location}, timeout=120)
+
+    def commit_git(self, server_list, location, message):
+        return self.sc.salt_command(server_list, 'cmd.run', ['git commit -m "{}"'.format(message)],
+                                    opts={'cwd': location}, timeout=120)
+
     def highstate(self, server_list):
         return self.sc.salt_command(server_list, 'state.highstate', [], timeout=300)
 

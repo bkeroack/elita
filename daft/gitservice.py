@@ -65,7 +65,6 @@ def delete_github_repo(datasvc, gitprovider, name):
 def create_gitdeploy(datasvc, gitdeploy):
     gdm = GitDeployManager(gitdeploy, datasvc)
     gdm.add_sls()
-    gdm.create_ignore()
     return "done"
 
 def initialize_gitdeploy(datasvc, gitdeploy, server_list):
@@ -226,6 +225,7 @@ class GitDeployManager:
             'push_keys': self.push_keypair(server_list),
             'add_to_top': self.add_to_top(server_list),
             'clone_repo': self.clone_repo(server_list),
+            'create_gitignore': self.create_ignore(server_list),
             'posthook': self.run_init_posthook(server_list)
         }
 
@@ -292,6 +292,28 @@ class GitDeployManager:
         util.debugLog(self, "clone_repo: resp: {}".format(res))
         return res
 
+    def create_ignore(self, server_list):
+        repo_path = self.gitdeploy['location']['path']
+        temp_name, fd = tempfile.mkstemp()
+        util.debugLog(self, "create_ignore: writing file")
+        if 'gitignore' in self.gitdeploy['options']:
+            gi = self.gitdeploy['options']['gitignore']
+            assert isinstance(gi, list)
+            with open(temp_name, 'w') as f:
+                for l in gi:
+                    f.write("{}\n".format(l))
+        util.debugLog(self, "create_ignore: pushing gitignore")
+        remote_filename = os.path.join(repo_path, ".gitignore")
+        res = self.rc.push_file(server_list, temp_name, remote_filename)
+        util.debugLog(self, "create_ignore: push resp: {}".format(res))
+        util.debugLog(self, "create_ignore: adding file")
+        res = self.rc.add_all_files_git(server_list, repo_path)
+        util.debugLog(self, "create_ignore: add resp: {}".format(res))
+        util.debugLog(self, "create_ignore: committing")
+        res = self.rc.commit_git(server_list, repo_path, "gitignore")
+        util.debugLog(self, "create_ignore: commit resp: {}".format(res))
+        return res
+
     def get_path(self):
         appname = self.gitdeploy['application']
         gitrepo_name = self.gitdeploy['location']['gitrepo']['name']
@@ -340,19 +362,6 @@ class GitDeployManager:
         git = self.git_obj()
         return git.push()
 
-    def create_ignore(self):
-        path = self.get_path()
-        giname = "{}/.gitignore".format(path)
-        util.debugLog(self, "create_ignore: writing file")
-        if 'gitignore' in self.gitdeploy['options']:
-            gi = self.gitdeploy['options']['gitignore']
-            assert isinstance(gi, list)
-            with open(giname, 'w') as f:
-                for l in gi:
-                    f.write("{}\n".format(l))
-        util.debugLog(self, "create_ignore: committing to repo")
-        self.add_files_to_repo()
-        self.commit_to_repo("gitignore")
-        self.push_repo()
+
 
 
