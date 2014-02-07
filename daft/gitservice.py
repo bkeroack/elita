@@ -67,13 +67,47 @@ def create_gitdeploy(datasvc, gitdeploy):
     gdm.add_sls()
     return "done"
 
+def remove_gitdeploy(datasvc, gitdeploy):
+    gdm = GitDeployManager(gitdeploy, datasvc)
+    gdm.rm_sls()
+    datasvc.gitsvc.DeleteGitDeploy(gitdeploy['application'], gitdeploy['name'])
+    return "done"
+
 def initialize_gitdeploy(datasvc, gitdeploy, server_list):
     sc = salt_control.SaltController(datasvc.settings)
     for s in server_list:
         if not sc.verify_connectivity(s):
             return {'error': "server '{}' not accessible via salt".format(s)}
     gdm = GitDeployManager(gitdeploy, datasvc)
-    return gdm.initialize(server_list)
+    res = gdm.initialize(server_list)
+    servers = server_list if 'servers' not in gitdeploy or len(gitdeploy['servers']) == 0 else server_list + \
+                                                                                               gitdeploy['servers']
+    datasvc.gitsvc.UpdateGitDeploy(gitdeploy['application'], gitdeploy['name'], {'servers': servers})
+    return res
+
+def deinitialize_gitdeploy(datasvc, gitdeploy, server_list):
+    sc = salt_control.SaltController(datasvc.settings)
+    for s in server_list:
+        if not sc.verify_connectivity(s):
+            return {'error': "server '{}' not accessible via salt".format(s)}
+    gdm = GitDeployManager(gitdeploy, datasvc)
+    res = gdm.deinitialize(server_list)
+    existing_servers = gitdeploy['servers'] if 'servers' in gitdeploy else list()
+    for s in server_list:
+        if s in existing_servers:
+            existing_servers.remove(s)
+    datasvc.gitsvc.UpdateGitDeploy(gitdeploy['application'], gitdeploy['name'], {'servers': existing_servers})
+    return res
+
+def remove_and_deinitialize_gitdeploy(datasvc, gitdeploy):
+    assert 'servers' in gitdeploy
+    server_list = gitdeploy['servers']
+    res1 = deinitialize_gitdeploy(datasvc, gitdeploy, server_list)
+    res2 = remove_gitdeploy(datasvc, gitdeploy)
+    return {
+        'deinitialize': res1,
+        'remove': res2
+    }
 
 class GitRepoService:
     def __init__(self, gitprovider, settings):
@@ -229,6 +263,15 @@ class GitDeployManager:
             'posthook': self.run_init_posthook(server_list)
         }
 
+    def deinitialize(self, server_list):
+        return {
+            'prehook': self.run_deinit_prehook(server_list),
+            'delete_remote_dir': self.delete_remote_dir(server_list),
+            'delete_remote_keys': self.delete_remote_keypair(server_list),
+            'remove_from_top': self.remove_from_top(server_list),
+            'posthook': self.run_deinit_posthook(server_list)
+        }
+
     def run_hook(self, hook, server_list):
         self.datasvc.jobsvc.NewJobData({'status': 'running hook {}'.format(hook)})
         args = {
@@ -246,12 +289,24 @@ class GitDeployManager:
     def run_init_posthook(self, server_list):
         return self.run_hook("GITDEPLOY_INIT_POST", server_list)
 
+    def run_deinit_prehook(self, server_list):
+        return self.run_hook("GITDEPLOY_DEINIT_PRE", server_list)
+
+    def run_deinit_posthook(self, server_list):
+        return self.run_hook("GITDEPLOY_DEINIT_POST", server_list)
+
     def add_sls(self):
         self.sc.new_gitdeploy_yaml(self.gitdeploy)
 
     def add_to_top(self, server_list):
         return self.sc.add_gitdeploy_servers_to_daft_top(server_list, self.gitdeploy['application'],
                                                          self.gitdeploy['name'])
+    def rm_sls(self):
+        self.sc.rm_gitdeploy_yaml(self.gitdeploy)
+
+    def remove_from_top(self, server_list):
+        return self.sc.rm_gitdeploy_servers_from_daft_top(server_list, self.gitdeploy['application'],
+                                                          self.gitdeploy['name'])
 
     def delete_remote_dir(self, server_list):
         util.debugLog(self, "delete_remote_dir")
@@ -266,6 +321,9 @@ class GitDeployManager:
         res = self.rc.create_directory(server_list, path)
         util.debugLog(self, 'create_remote_dir on servers: {}: resp: {}'.format(server_list, res))
         return res
+
+    def delete_remote_keypair(self, server_list):
+        return {'status': 'noop'}
 
     def push_keypair(self, server_list):
         f_pub, tf_pub = tempfile.mkstemp(text=True)

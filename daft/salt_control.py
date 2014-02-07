@@ -209,6 +209,12 @@ class SaltController:
             os.mkdir(appdir)
         return "{}/{}.sls".format(appdir, name)
 
+    def get_daft_top_filename(self):
+        return "{}/{}".format(self.file_roots['base'][0], self.settings['daft.salt.dafttop'])
+
+    def get_gitdeploy_entry_name(self, app, gd_name):
+        return "{}.{}.{}".format(self.settings['daft.salt.slsdir'], app, gd_name)
+
     def new_yaml(self, name, content):
         '''path must be relative to file_root'''
         new_file = self.get_gd_file_name(name)
@@ -217,11 +223,11 @@ class SaltController:
 
     def add_gitdeploy_servers_to_daft_top(self, server_list, app, gd_name):
         util.debugLog(self, "add_server_to_daft_top: server_list: {}".format(server_list))
-        fname = "{}/{}".format(self.file_roots['base'][0], self.settings['daft.salt.dafttop'])
+        fname = self.get_daft_top_filename()
         if not os.path.isfile(fname):
             with open(fname, 'w') as f:
                 f.write("\n")  # create if doesn't exist
-        gdentry = "{}.{}.{}".format(self.settings['daft.salt.slsdir'], app, gd_name)
+        gdentry = self.get_gitdeploy_entry_name(app, gd_name)
         util.debugLog(self, "add_server_to_daft_top: acquiring lock on {}".format(fname))
         lock = lockfile.FileLock(fname)
         lock.acquire(timeout=60)
@@ -238,6 +244,44 @@ class SaltController:
             f.write(yaml.safe_dump(dt_content, default_flow_style=False))
         lock.release()
         return "success"
+
+    def rm_gitdeploy_servers_from_daft_top(self, server_list, app, gd_name):
+        util.debugLog(self, "rm_server_from_daft_top: server_list: {}".format(server_list))
+        daft_top = self.get_daft_top_filename()
+        assert os.path.isfile(daft_top)
+        util.debugLog(self, "rm_server_from_daft_top: acquiring lock on {}".format(daft_top))
+        lock = lockfile.FileLock(daft_top)
+        lock.acquire(timeout=60)
+        with open(daft_top, 'r') as f:
+            dt_content = yaml.load(f, Loader=Loader)
+        assert dt_content
+        assert 'base' in dt_content
+        for s in server_list:
+            if s in dt_content['base']:
+                util.debugLog(self, "rm_server_from_daft_top: deleting {} from daft top".format(s))
+                del dt_content['base'][s]
+            else:
+                util.debugLog(self, "rm_server_from_daft_top: WARNING: {} not found in daft top".format(s))
+        with open(daft_top, 'w') as f:
+            util.debugLog(self, "rm_server_from_daft_top: writing file")
+            f.write(yaml.safe_dump(dt_content, default_flow_style=False))
+        lock.release()
+        return "success"
+
+    def rm_gitdeploy_yaml(self, gitdeploy):
+        name = gitdeploy['name']
+        app = gitdeploy['application']
+        filename = self.get_gd_file_name(app, name)
+        util.debugLog(self, "rm_gitdeploy_yaml: gitdeploy: {}/{}".format(app, name))
+        util.debugLog(self, "rm_gitdeploy_yaml: filename: {}".format(filename))
+        if not os.path.isfile(filename):
+            util.debugLog(self, "rm_gitdeploy_yaml: WARNING: file not found!")
+            return
+        lock = lockfile.FileLock(filename)
+        util.debugLog(self, "rm_gitdeploy_yaml: acquiring lock on {}".format(filename))
+        lock.acquire(timeout=60)
+        os.unlink(filename)
+        lock.release()
 
     def new_gitdeploy_yaml(self, gitdeploy):
         '''Adds new gitdeploy to existing YAML file or creates new YAML file.'''

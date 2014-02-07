@@ -310,6 +310,7 @@ class GitDataService(GenericChildDataService):
         new_gd = {
             'name': name,
             'application': app_name,
+            'servers': list(),
             'options': {
                 'favor': 'ours',
                 'ignore-whitespace': 'true',
@@ -342,6 +343,7 @@ class GitDataService(GenericChildDataService):
             '_class': "GitDeploy",
             'name': gd.name,
             'application': gd.application,
+            'servers': gd.servers,
             'package': gd.package,
             'attributes': gd.attributes,
             'options': gd.options,
@@ -373,6 +375,9 @@ class GitDataService(GenericChildDataService):
         if 'actions' in doc:
             util.change_dict_keys(doc['actions'], '.', EMBEDDED_YAML_DOT_REPLACEMENT)
         self.parent.UpdateAppObject(name, doc, 'gitdeploys', "GitDeploy", app)
+
+    def DeleteGitDeploy(self, app, name):
+        self.parent.DeleteObject(self.root['app'][app]['gitdeploys'], name, 'gitdeploys')
 
     def GetGitProviders(self, objs=False):
         if objs:
@@ -723,6 +728,7 @@ class GitDeploy(GenericDataModel):
         'application': None,
         'server': bson.DBRef("", None),
         'package': 'master',
+        'servers': list(),
         'attributes': dict(),
         'options': {
             'favor': 'ours',

@@ -785,6 +785,7 @@ class GitDeployView(GenericView):
                 'package': gddoc['package'],
                 'application': gddoc['application'],
                 'attributes': gddoc['attributes'],
+                'servers': gddoc['servers'] if 'servers' in gddoc else "(not found)",
                 'options': gddoc['options'],
                 'actions': gddoc['actions'],
                 'location': {
@@ -799,6 +800,25 @@ class GitDeployView(GenericView):
                 }
             }
         }
+
+    def check_servers_list(self, body):
+        if "servers" not in body:
+            return False, self.Error("initialization requested but 'servers' not found")
+        servers = body['servers']
+        eservers = self.datasvc.serversvc.GetServers()
+        if isinstance(servers, list):
+            sset = set(eservers)
+            sset_r = set(servers)
+            if not sset.issuperset(sset_r):
+                return False, self.Error("unknown servers: {}".format(list(sset_r-sset)))
+        else:
+            sglob = servers
+            servers = fnmatch.filter(eservers, servers)
+            if len(servers) == 0:
+                return False, self.Error("no servers matched pattern: {}".format(sglob))
+        self.servers = servers
+        return True, None
+
 
     def update(self, body):
         keys = {'attributes', 'options', 'package', 'actions', 'location'}
@@ -818,28 +838,35 @@ class GitDeployView(GenericView):
         return self.status_ok({'update_gitdeploy': {'name': self.context.name, 'object': body, 'message': msg}})
 
     def initialize(self, body):
-        if "servers" not in body:
-            return self.Error("initialization requested but 'servers' not found")
-        servers = body['servers']
-        eservers = self.datasvc.serversvc.GetServers()
-        if isinstance(servers, list):
-            sset = set(eservers)
-            sset_r = set(servers)
-            if not sset.issuperset(sset_r):
-                return self.Error("unknown servers: {}".format(list(sset_r-sset)))
-        else:
-            sglob = servers
-            servers = fnmatch.filter(eservers, servers)
-            if len(servers) == 0:
-                return self.Error("no servers matched pattern: {}".format(sglob))
+        ok, err = self.check_servers_list(body)
+        if not ok:
+            return err
         #we need to get the fully dereferenced doc
         gddoc = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
         msg = self.run_async('initialize_gitdeploy_servers', gitservice.initialize_gitdeploy, {'gitdeploy': gddoc,
-                                                                                               'server_list': servers})
+                                                                                               'server_list': self.servers})
         return self.status_ok({
             'initialize_gitdeploy': {
+                'application': self.context.application,
                 'name': self.context.name,
-                'servers': servers,
+                'servers': self.servers,
+                'msg': msg
+            }
+        })
+
+    def deinitialize(self, body):
+        ok, err = self.check_servers_list(body)
+        if not ok:
+            return err
+        gddoc = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
+        msg = self.run_async('deinitialize_gitdeploy_servers', gitservice.deinitialize_gitdeploy, {
+            'gitdeploy': gddoc, 'server_list': self.servers
+        })
+        return self.status_ok({
+            'deinitialize_gitdeploy': {
+                'application': self.context.application,
+                'name': self.context.name,
+                'servers': self.servers,
                 'msg': msg
             }
         })
@@ -851,8 +878,25 @@ class GitDeployView(GenericView):
             return self.Error("invalid body object (problem deserializing, bad JSON?)")
         if "initialize" in self.req.params and self.req.params['initialize'] in AFFIRMATIVE_SYNONYMS:
             return self.initialize(body)
+        elif "deinitialize" in self.req.params and self.req.params['deinitialize'] in AFFIRMATIVE_SYNONYMS:
+            return self.deinitialize(body)
         else:
             return self.update(body)
+
+    def DELETE(self):
+        gddoc = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
+        msg = self.run_async('remove_deinitialize_gitdeploy', gitservice.remove_and_deinitialize_gitdeploy,
+                             {'gitdeploy': gddoc})
+        return self.status_ok({
+            'delete_deinitialize_gitdeploy': {
+                'application': gddoc['application'],
+                'name': gddoc['name'],
+                'servers': gddoc['servers'] if 'servers' in gddoc else list(),
+                'msg': msg
+            }
+        })
+
+
 
 
 
