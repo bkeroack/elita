@@ -80,9 +80,12 @@ def initialize_gitdeploy(datasvc, gitdeploy, server_list):
             return {'error': "server '{}' not accessible via salt".format(s)}
     gdm = GitDeployManager(gitdeploy, datasvc)
     res = gdm.initialize(server_list)
-    servers = server_list if 'servers' not in gitdeploy or len(gitdeploy['servers']) == 0 else server_list + \
-                                                                                               gitdeploy['servers']
-    datasvc.gitsvc.UpdateGitDeploy(gitdeploy['application'], gitdeploy['name'], {'servers': servers})
+    if 'servers' not in gitdeploy:
+        gitdeploy['servers'] = list()
+    sset = set(tuple(gitdeploy['servers']))
+    for s in server_list:
+        sset.add(s)
+    datasvc.gitsvc.UpdateGitDeploy(gitdeploy['application'], gitdeploy['name'], {'servers': list(sset)})
     return res
 
 def deinitialize_gitdeploy(datasvc, gitdeploy, server_list):

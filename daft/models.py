@@ -976,6 +976,7 @@ class DataValidator:
         self.check_apps()
         self.check_jobs()
         self.check_servers()
+        self.check_gitdeploys()
         self.SaveRoot()
 
     def SaveRoot(self):
@@ -1145,6 +1146,45 @@ class DataValidator:
 
     def check_servers(self):
         pass
+
+    def check_gitdeploys(self):
+        dlist = list()
+        fixlist = list()
+        for d in self.db['gitdeploys'].find():
+            delete = False
+            for k in ('application', 'name', 'package', 'location'):
+                if k not in d:
+                    util.debugLog(self, "WARNING: mandatory key '{}' not found under gitdeploy {}; removing".
+                                  format(k, d['_id']))
+                    dlist.append(d['_id'])
+                    delete = True
+            fix = False
+            if 'attributes' not in d and not delete:
+                util.debugLog(self, "WARNING: attributes not found under gitdeploy {}; fixing".format(d['_id']))
+                d['attributes'] = dict()
+                fix = True
+            if 'actions' not in d and not delete:
+                util.debugLog(self, "WARNING: actions not found under gitdeploy {}; fixing".format(d['_id']))
+                d['actions'] = {
+                    'prepull': dict(),
+                    'postpull': dict()
+                }
+                fix = True
+            if 'servers' not in d and not delete:
+                util.debugLog(self, "WARNING: servers not found under gitdeploy {}; fixing".format(d['_id']))
+                d['servers'] = list()
+                fix = True
+            if len([x for x, y in collections.Counter(d['servers']).items() if y > 1]) > 0 and not delete:
+                util.debugLog(self, "WARNING: duplicate server entries found in gitdeploy {}; fixing".format(d['_id']))
+                d['servers'] = list(set(tuple(d['servers'])))
+                fix = True
+            if fix:
+                fixlist.append(d)
+        for f in fixlist:
+            self.db['gitdeploys'].find_and_modify(query={'_id': f['_id']}, update=f, upsert=True,
+                                                  new=True)
+        for dl in dlist:
+            self.db['gitdeploys'].remove({'_id': dl})
 
     def check_toplevel(self):
         top_levels = {
