@@ -238,7 +238,9 @@ class SaltController:
         if 'base' not in dt_content or not dt_content['base']:
             dt_content['base'] = dict()
         for s in server_list:
-            dt_content['base'][s].append(gdentry)
+            gdset = set(tuple(dt_content['base'][s]))
+            gdset.add(gdentry)
+            dt_content['base'][s] = list(gdset)
         with open(fname, 'w') as f:
             util.debugLog(self, "add_server_to_daft_top: writing file")
             f.write(yaml.safe_dump(dt_content, default_flow_style=False))
