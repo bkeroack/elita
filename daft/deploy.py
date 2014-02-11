@@ -83,14 +83,28 @@ class DeployController:
         self.add_msg("Starting highstate deployment on server_spec: {}".format(self.servers))
         res = self.rc.highstate(self.servers)
         errors = dict()
+        successes = dict()
         for host in res:
             for cmd in res[host]:
                 if "gitdeploy" in cmd:
                     if "result" in res[host][cmd]:
                         if not res[host][cmd]["result"]:
                             errors[host] = res[host][cmd]["changes"] if "changes" in res[host][cmd] else res[host][cmd]
+                        else:
+                            if host not in successes:
+                                successes[host] = dict()
+                            module, state, command, subcommand = str(cmd).split('|')
+                            if state not in successes[host]:
+                                successes[host][state] = dict()
+                            successes[host][state][command] = {
+                                "stdout": res[host][cmd]["changes"]["stdout"],
+                                "stderr": res[host][cmd]["changes"]["stderr"],
+                                "retcode": res[host][cmd]["changes"]["retcode"],
+                            }
         if len(errors) > 0:
             self.add_msg({"highstate_errors": errors})
+        if len(successes) > 0:
+            self.add_msg({"highstate_successes": successes})
         #self.add_msg({"highstate_result": res}) #too verbose
         self.add_msg("Finished highstate deployment on server_spec: {}".format(self.servers))
 
