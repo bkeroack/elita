@@ -238,6 +238,8 @@ class SaltController:
         if 'base' not in dt_content or not dt_content['base']:
             dt_content['base'] = dict()
         for s in server_list:
+            if s not in dt_content['base']:
+                dt_content['base'][s] = list()
             gdset = set(tuple(dt_content['base'][s]))
             gdset.add(gdentry)
             dt_content['base'][s] = list(gdset)
