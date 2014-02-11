@@ -475,6 +475,16 @@ class DeploymentContainerView(GenericView):
                 return self.Error("server spec doesn't match anything: {}".format(sspecs['spec']))
         else:
             servers = sspecs['spec']
+        #verify that all servers have the requested gitdeploys initialized on them
+        uninit_gd = dict()
+        for gd in sspecs['gitdeploys']:
+            gddoc = self.datasvc.gitsvc.GetGitDeploy(app, gd)
+            init_servers = set(tuple(gddoc['servers']))
+            req_servers = set(tuple(servers))
+            if not init_servers.issuperset(req_servers):
+                uninit_gd[gd] = list(req_servers - init_servers)
+        if len(uninit_gd) > 0:
+            return self.Error({"gitdeploy not initialized on servers": uninit_gd})
         dpo = self.datasvc.deploysvc.NewDeployment(app, build_name, sspecs)
         d_id = dpo['NewDeployment']['id']
         msg = self.run_async('deploy_{}_{}'.format(app,  build_name), deploy.run_deploy, {
