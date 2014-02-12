@@ -1145,6 +1145,9 @@ class DataValidator:
         }
         for a in self.root['app']:
             if a[0] != '_':
+                if 'action' in self.root['app'][a]:
+                    util.debugLog(self, "WARNING: found old 'action' container under app {}; deleting".format(a))
+                    del self.root['app'][a]['action']
                 for sl in app_sublevels:
                     if sl not in self.root['app'][a]:
                         util.debugLog(self, "WARNING: '{}' not found under {}".format(sl, a))
