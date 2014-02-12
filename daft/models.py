@@ -249,7 +249,7 @@ class JobDataService(GenericChildDataService):
         util.debugLog(self, "NewAction: app_name: {}".format(app_name))
         util.debugLog(self, "NewAction: action_name: {}".format(action_name))
         self.parent.refresh_root()
-        self.root['app'][app_name]['action'][action_name] = Action(app_name, action_name, params, self)
+        self.root['app'][app_name]['actions'][action_name] = Action(app_name, action_name, params, self)
         if app_name in self.parent.appsvc.GetApplications():
             self.parent.refresh_root()
             self.root['app'][app_name]['actions'][action_name] = Action(app_name, action_name, params, self)
