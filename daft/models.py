@@ -992,7 +992,7 @@ class DataValidator:
 
     def SaveRoot(self):
         if '_id' in self.root:
-        self.db['root_tree'].update({"_id": self.root['_id']}, self.root)
+            self.db['root_tree'].update({"_id": self.root['_id']}, self.root)
         else:
             self.db['root_tree'].insert(self.root)
 
