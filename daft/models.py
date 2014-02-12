@@ -633,7 +633,7 @@ class DataService:
     def DeleteObject(self, container, key, collection):
         id = container[key].doc['_id']
         self.db[collection].remove({'_id': id})
-        self.parent.refresh_root()
+        self.refresh_root()
         del container[key]
 
     def Dereference(self, dbref):
