@@ -248,7 +248,7 @@ class JobDataService(GenericChildDataService):
     def NewAction(self, app_name, action_name, params):
         util.debugLog(self, "NewAction: app_name: {}".format(app_name))
         util.debugLog(self, "NewAction: action_name: {}".format(action_name))
-        self.refresh_root()
+        self.parent.refresh_root()
         self.root['app'][app_name]['action'][action_name] = Action(app_name, action_name, params, self)
         if app_name in self.parent.appsvc.GetApplications():
             self.parent.refresh_root()
@@ -633,7 +633,7 @@ class DataService:
     def DeleteObject(self, container, key, collection):
         id = container[key].doc['_id']
         self.db[collection].remove({'_id': id})
-        self.refresh_root()
+        self.parent.refresh_root()
         del container[key]
 
     def Dereference(self, dbref):
