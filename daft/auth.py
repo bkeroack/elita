@@ -14,7 +14,7 @@ class ValidatePermissionsObject:
     def verify_top_keys(self):
         for t in self.permissions:
             try:
-                assert (t == "apps") or (t == "actions")
+                assert (t == "apps") or (t == "actions") or (t == "servers")
             except AssertionError:
                 return False
         return True
@@ -42,24 +42,24 @@ class ValidatePermissionsObject:
 
 
 class UserPermissions:
-    def __init__(self, datasvc, token):
-        self.datasvc = datasvc
+    def __init__(self, usersvc, token):
+        self.usersvc = usersvc
         self.token = token
         self.userobj = False
         self.valid_token = False
         if self.validate_token():
             self.valid_token = True
             util.debugLog(self, "valid token")
-            self.username = self.datasvc.GetUserFromToken(token)
+            self.username = self.usersvc.GetUserFromToken(token)
             util.debugLog(self, "username: {}".format(self.username))
 
     def validate_token(self):
-        return self.token in self.datasvc.GetAllTokens()
+        return self.token in self.usersvc.GetAllTokens()
 
     def get_action_permissions(self, app, action):
         util.debugLog(self, "get_action_permissions: {}: {}".format(app, action))
-        if self.valid_token and self.username in self.datasvc.GetUsers():
-            userobj = self.datasvc.GetUser(self.username)
+        if self.valid_token and self.username in self.usersvc.GetUsers():
+            userobj = self.usersvc.GetUser(self.username)
             if userobj.name == 'admin':
                 util.debugLog(self, "returning admin permissions")
                 return "execute"
@@ -80,8 +80,8 @@ class UserPermissions:
 
     def get_app_permissions(self, app):
         util.debugLog(self, "get_permissions: app: {}".format(app))
-        if self.valid_token and self.username in self.datasvc.GetUsers():
-            userobj = self.datasvc.GetUser(self.username)
+        if self.valid_token and self.username in self.usersvc.GetUsers():
+            userobj = self.usersvc.GetUser(self.username)
             if userobj.name == 'admin':
                 util.debugLog(self, "returning admin permissions")
                 return "read;write"
@@ -93,7 +93,7 @@ class UserPermissions:
         return ""
 
     def validate_pw(self, username, password):
-        userobj = self.datasvc.GetUser(username)
+        userobj = self.usersvc.GetUser(username)
         return userobj.validate_password(password)
 
 

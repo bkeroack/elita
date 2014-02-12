@@ -13,12 +13,21 @@ requires = [
     'pyramid',
     'gunicorn',
     'gevent',
+    'unittest2',
     'pymongo',
-    'celery'
+    'celery',
+    'requests',
+    'python-slugify',
+    'salt',
+    'M2Crypto',
+    'PyYAML',
+    'lockfile',
+    'sh',
+    'simplejson'
     ]
 
 setup(name='daft',
-      version="0.66",
+      version="0.76",
       description='daft',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[
