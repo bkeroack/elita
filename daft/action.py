@@ -99,15 +99,20 @@ class RegisterActions:
         util.debugLog(self, "register")
 
         from pkg_resources import iter_entry_points
+        apps = self.datasvc.appsvc.GetApplications()
+
         for obj in iter_entry_points(group="daft.modules", name="register_actions"):
             util.debugLog(self, "register: found obj: {}".format(obj))
             actions = (obj.load())()
             util.debugLog(self, "actions: {}".format(actions))
             for app in actions:
-                if app not in self.actionmap:
-                    self.actionmap[app] = dict()
-                for a in actions[app]:
-                    action_name = a['callable'].__name__
-                    self.actionmap[app][action_name] = a
-                    util.debugLog(self, "NewAction: app: {}; action_name: {}; params: {}".format(app, action_name, a['params']))
-                    self.datasvc.jobsvc.NewAction(app, action_name, a['params'])
+                if app not in apps:
+                    util.debugLog(self, "WARNING: application not found: {}".format(app))
+                else:
+                    if app not in self.actionmap:
+                        self.actionmap[app] = dict()
+                    for a in actions[app]:
+                        action_name = a['callable'].__name__
+                        self.actionmap[app][action_name] = a
+                        util.debugLog(self, "NewAction: app: {}; action_name: {}; params: {}".format(app, action_name, a['params']))
+                        self.datasvc.jobsvc.NewAction(app, action_name, a['params'])
