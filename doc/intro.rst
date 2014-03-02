@@ -24,8 +24,9 @@ Security
 daft has a robust, granular permissions system which can be used to whitelist/blacklist resources on a per-application
 basis.
 
-Due to using stateless authorization tokens, daft *must* be tunnelled through SSL/TLS. By default, the application listens
-to port 2718 on localhost only. An example nginx.conf for SSL proxying is included.
+.. IMPORTANT::
+   Due to using stateless authorization tokens, daft *must* be tunnelled through SSL/TLS. By default, the application listens
+   to port 2718 on localhost only. An example nginx.conf for SSL proxying is included.
 
 
 =======================

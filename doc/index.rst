@@ -12,7 +12,7 @@ Contents:
    :maxdepth: 2
 
    intro.rst
-   global.rst
+   endpoints.rst
    applications
    builds
    actions
