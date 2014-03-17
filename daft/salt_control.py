@@ -171,6 +171,7 @@ class SaltController:
         if not os.path.isfile(top_sls):
             util.debugLog(self, "WARNING: default salt top.sls not found! (check base file roots setting)")
             open(top_sls, 'a').close()
+        util.debugLog(self, "acquiring lock on top.sls")
         lock = lockfile.FileLock(top_sls)
         lock.acquire(timeout=60)
         with open(top_sls, 'r') as f:
