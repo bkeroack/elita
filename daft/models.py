@@ -377,7 +377,7 @@ class GitDataService(GenericChildDataService):
         doc['location']['gitrepo']['keypair'] = self.db.dereference(doc['location']['gitrepo']['keypair'])
         assert doc['location']['gitrepo']['keypair'] is not None
         doc['location']['gitrepo']['gitprovider'] = self.db.dereference(doc['location']['gitrepo']['gitprovider'])
-        assert doc['location']['gitprovider'] is not None
+        assert doc['location']['gitrepo']['gitprovider'] is not None
         return {k: doc[k] for k in doc if k[0] != '_'}
 
     def UpdateGitDeploy(self, app, name, doc):
