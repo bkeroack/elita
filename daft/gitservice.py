@@ -402,10 +402,13 @@ class GitDeployManager:
     def inspect_latest_diff(self):
         repo = git.Repo(self.get_path())
         m = repo.heads.master
-        util.debugLog(self, "Got commit hash: {}".format(m.commit.hexsha))
+        util.debugLog(self, "commit hash: {}".format(m.commit.hexsha))
         s = m.commit.stats
-        self.run_commit_diffhook(s.files)
-        return {"inspect_latest_diff": {"files": s.files}}
+        files = s.files
+        return {
+            "files": files,
+            "commit_diff_hook": self.run_commit_diffhook(files)
+        }
 
     def checkout_default_branch(self):
         branch = self.gitdeploy['location']['default_branch']
