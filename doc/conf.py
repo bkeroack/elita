@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# daft documentation build configuration file, created by
+# elita documentation build configuration file, created by
 # sphinx-quickstart on Tue Nov 26 17:11:52 2013.
 #
 # This file is execfile()d with the current directory set to its
@@ -44,7 +44,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'daft'
+project = u'elita'
 copyright = u'2013, B. Keroack'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -179,7 +179,7 @@ html_static_path = ['_static']
 #html_file_suffix = None
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'daftdoc'
+htmlhelp_basename = 'elitadoc'
 
 
 # -- Options for LaTeX output ---------------------------------------------
@@ -199,7 +199,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-  ('index', 'daft.tex', u'daft Documentation',
+  ('index', 'elita.tex', u'Elita Documentation',
    u'B. Keroack', 'manual'),
 ]
 
@@ -229,7 +229,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'daft', u'daft Documentation',
+    ('index', 'elita', u'Elita Documentation',
      [u'B. Keroack'], 1)
 ]
 
@@ -243,8 +243,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('index', 'daft', u'daft Documentation',
-   u'B. Keroack', 'daft', 'One line description of project.',
+  ('index', 'elita', u'Elita Documentation',
+   u'B. Keroack', 'elita', 'One line description of project.',
    'Miscellaneous'),
 ]
 
