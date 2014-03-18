@@ -67,6 +67,8 @@ class DeployController:
             self.add_msg("committing changes")
             res = gdm.commit_to_repo(self.build_name)
             self.add_msg("git commit result: {}".format(res))
+            res = gdm.inspect_latest_diff()
+            self.add_msg("inspect latest diff: {}".format(res))
             self.add_msg("pushing changes to git provider")
             res = gdm.push_repo()
             self.add_msg("git push result: {}".format(res))
