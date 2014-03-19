@@ -23,7 +23,8 @@ requires = [
     'PyYAML',
     'lockfile',
     'sh',
-    'simplejson'
+    'simplejson',
+    'gitpython>=0.3.2.RC1'
     ]
 
 setup(name='daft',

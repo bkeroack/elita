@@ -64,7 +64,8 @@ DefaultHookMap = {
     'GITDEPLOY_INIT_PRE': None,
     'GITDEPLOY_INIT_POST': None,
     'GITDEPLOY_DEINIT_PRE': None,
-    'GITDEPLOY_DEINIT_POST': None
+    'GITDEPLOY_DEINIT_POST': None,
+    'GITDEPLOY_COMMIT_DIFF': None
 }
 
 class RegisterHooks:

@@ -6,6 +6,7 @@ import shutil
 import stat
 import sh
 import lockfile
+import git
 
 import util
 import salt_control
@@ -275,28 +276,32 @@ class GitDeployManager:
             'posthook': self.run_deinit_posthook(server_list)
         }
 
-    def run_hook(self, hook, server_list):
+    def run_hook(self, hook, **kwargs):
         self.datasvc.jobsvc.NewJobData({'status': 'running hook {}'.format(hook)})
         args = {
             'hook_parameters':
                 {
-                    'gitdeploy': self.gitdeploy,
-                    'server_list': server_list
+                    'gitdeploy': self.gitdeploy
                 }
         }
+        for k in kwargs:
+            args['hook_parameters'][k] = kwargs[k]
         return self.datasvc.actionsvc.hooks.run_hook(self.gitdeploy['application'], hook, args)
 
     def run_init_prehook(self, server_list):
-        return self.run_hook("GITDEPLOY_INIT_PRE", server_list)
+        return self.run_hook("GITDEPLOY_INIT_PRE", server_list=server_list)
 
     def run_init_posthook(self, server_list):
-        return self.run_hook("GITDEPLOY_INIT_POST", server_list)
+        return self.run_hook("GITDEPLOY_INIT_POST", server_list=server_list)
 
     def run_deinit_prehook(self, server_list):
-        return self.run_hook("GITDEPLOY_DEINIT_PRE", server_list)
+        return self.run_hook("GITDEPLOY_DEINIT_PRE", server_list=server_list)
 
     def run_deinit_posthook(self, server_list):
-        return self.run_hook("GITDEPLOY_DEINIT_POST", server_list)
+        return self.run_hook("GITDEPLOY_DEINIT_POST", server_list=server_list)
+
+    def run_commit_diffhook(self, files):
+        return self.run_hook("GITDEPLOY_COMMIT_DIFF", files=files)
 
     def add_sls(self):
         self.sc.new_gitdeploy_yaml(self.gitdeploy)
@@ -393,6 +398,17 @@ class GitDeployManager:
     def git_obj(self):
         path = self.get_path()
         return sh.git.bake(_cwd=path)
+
+    def inspect_latest_diff(self):
+        repo = git.Repo(self.get_path())
+        m = repo.heads.master
+        util.debugLog(self, "commit hash: {}".format(m.commit.hexsha))
+        s = m.commit.stats
+        files = s.files
+        return {
+            "files": files,
+            "commit_diff_hook": self.run_commit_diffhook(files)
+        }
 
     def checkout_default_branch(self):
         branch = self.gitdeploy['location']['default_branch']

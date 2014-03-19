@@ -67,6 +67,8 @@ class DeployController:
             self.add_msg("committing changes")
             res = gdm.commit_to_repo(self.build_name)
             self.add_msg("git commit result: {}".format(res))
+            res = gdm.inspect_latest_diff()
+            self.add_msg("inspect latest diff: {}".format(res))
             self.add_msg("pushing changes to git provider")
             res = gdm.push_repo()
             self.add_msg("git push result: {}".format(res))
@@ -125,7 +127,11 @@ class DeployController:
         self.add_msg("Beginning gitdeploy: build: {}; application: {}; server spec: {}".format(self.build_name,
                                                                                                self.application,
                                                                                                self.servers))
+        self.add_msg("Deploying gitdeploys ({}): {}".format(len(self.gitdeploys), [gd['name'] for gd in self
+                                                            .gitdeploys]))
+
         for gd in self.gitdeploys:
+            self.add_msg("Processing gitdeploy: {}".format(gd['name']))
             gddoc = self.datasvc.gitsvc.GetGitDeploy(self.application, gd)
             self.push_to_gitdeploy(gddoc)
             self.salt_checkout_branch(gddoc)
