@@ -127,11 +127,10 @@ class DeployController:
         self.add_msg("Beginning gitdeploy: build: {}; application: {}; server spec: {}".format(self.build_name,
                                                                                                self.application,
                                                                                                self.servers))
-        self.add_msg("Deploying gitdeploys ({}): {}".format(len(self.gitdeploys), [gd['name'] for gd in self
-                                                            .gitdeploys]))
+        self.add_msg("Deploying gitdeploys ({}): {}".format(len(self.gitdeploys),self.gitdeploys))
 
         for gd in self.gitdeploys:
-            self.add_msg("Processing gitdeploy: {}".format(gd['name']))
+            self.add_msg("Processing gitdeploy: {}".format(gd))
             gddoc = self.datasvc.gitsvc.GetGitDeploy(self.application, gd)
             self.push_to_gitdeploy(gddoc)
             self.salt_checkout_branch(gddoc)
