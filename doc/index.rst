@@ -12,7 +12,9 @@ Contents:
    :maxdepth: 2
 
    intro.rst
+   gitdeploy.rst
    endpoints.rst
+   urlmap.rst
    applications
    builds
    actions

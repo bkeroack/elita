@@ -141,6 +141,55 @@ Users
       $ curl -XDELETE '/global/users/joe'
 
 
+.. http:get::   /global/tokens
+
+   Get list of issued auth tokens
+
+   **Example request**
+
+   .. sourcecode:: http
+
+      $ curl -XGET '/global/tokens'
+
+
+.. http:get::   /global/tokens/(string:token)
+
+   Get information about token (associated user and time of issuance).
+
+   .. NOTE::
+      This endpoint is auth-less. The token is the secret.
+
+   **Example request**
+
+   .. sourcecode:: http
+
+      $ curl -XGET
+      '/global/tokens/NWFoNzkwNWQ4M2QyNzY5MWJjMjVlJdu7ODMwM2E1M2EyMzBiZDIyMmMyMGE9Idjn4Yzg2ZjYwODQ1ZWYyNTVmM9'
+
+
+.. http:get::   /global/gitproviders
+
+   Get list of gitproviders.
+
+   **Example request**
+
+   .. sourcecode:: http
+
+      $ curl -XGET '/global/gitproviders'
+
+
+.. http:get::   /global/gitproviders/(string:gitprovider)
+
+   Get information about gitprovider.
+
+   **Example request**
+
+   .. sourcecode:: http
+
+      $ curl -XGET '/global/gitproviders/mygitprovider'
+
+
+
 ======
 Tokens
 ======
