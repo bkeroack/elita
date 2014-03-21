@@ -495,17 +495,17 @@ class GitDataService(GenericChildDataService):
         self.parent.DeleteObject(self.root['app'][app]['gitrepos'], name, 'gitrepos')
 
 class DeploymentDataService(GenericChildDataService):
-    def NewDeployment(self, app, build_name, server_specs):
+    def NewDeployment(self, app, build_name, deploy):
         dpo = Deployment({
             'application': app,
             'build_name': build_name,
-            'server_specs': server_specs
+            'deploy': deploy
         })
         did = self.db['deployments'].insert({
             '_class': 'Deployment',
             'application': dpo.application,
             'build_name': dpo.build_name,
-            'server_specs': dpo.server_specs,
+            'deploy': dpo.deploy,
             'results': {}
         })
         self.parent.refresh_root()
@@ -766,9 +766,8 @@ class Deployment(GenericDataModel):
     default_values = {
         'application': None,
         'build_name': None,
-        'server_specs': {
-            'type': None,
-            'spec': [],
+        'deploy': {
+            'servers': None,
             'gitdeploys': []
         },
         'results': {

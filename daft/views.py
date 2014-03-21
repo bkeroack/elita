@@ -462,22 +462,19 @@ class DeploymentContainerView(GenericView):
         try:
             body = self.req.json_body
         except:
-            return self.Error("invalid server specs object (problem deserializing, bad JSON?)")
-        if 'server_specs' not in body:
-            return self.Error("invalid server specs object ('server_specs' key not found)")
-        sspecs = body['server_specs']
-        ok, msg = deploy.validate_server_specs(sspecs)
+            return self.Error("invalid deployment object (problem deserializing, bad JSON?)")
+        ok, msg = deploy.validate_server_specs(body)
         if not ok:
-            return self.Error("invalid server specs object ({})".format(msg))
-        if sspecs['type'] == 'glob':
-            servers = fnmatch.filter(self.datasvc.serversvc.GetServers(), sspecs['spec'])
+            return self.Error("invalid deployment object ({})".format(msg))
+        if isinstance(body['servers'], str):
+            servers = fnmatch.filter(self.datasvc.serversvc.GetServers(), body['servers'])
             if len(servers) == 0:
-                return self.Error("server spec doesn't match anything: {}".format(sspecs['spec']))
+                return self.Error("servers glob pattern doesn't match anything: {}".format(body['servers']))
         else:
-            servers = sspecs['spec']
+            servers = body['servers']
         #verify that all servers have the requested gitdeploys initialized on them
         uninit_gd = dict()
-        for gd in sspecs['gitdeploys']:
+        for gd in body['gitdeploys']:
             gddoc = self.datasvc.gitsvc.GetGitDeploy(app, gd)
             init_servers = set(tuple(gddoc['servers']))
             req_servers = set(tuple(servers))
@@ -485,13 +482,13 @@ class DeploymentContainerView(GenericView):
                 uninit_gd[gd] = list(req_servers - init_servers)
         if len(uninit_gd) > 0:
             return self.Error({"gitdeploy not initialized on servers": uninit_gd})
-        dpo = self.datasvc.deploysvc.NewDeployment(app, build_name, sspecs)
+        dpo = self.datasvc.deploysvc.NewDeployment(app, build_name, body)
         d_id = dpo['NewDeployment']['id']
         msg = self.run_async('deploy_{}_{}'.format(app,  build_name), deploy.run_deploy, {
             'application': app,
             'build_name': build_name,
             'servers': servers,
-            'gitdeploys': sspecs['gitdeploys'],
+            'gitdeploys': body['gitdeploys'],
             'deployment': d_id
         })
         self.datasvc.deploysvc.UpdateDeployment(app, d_id, {'results': {'status': 'running', 'job_id': msg['job_id']}})
@@ -500,7 +497,7 @@ class DeploymentContainerView(GenericView):
                 'deployment_id': dpo['NewDeployment']['id'],
                 'application': app,
                 'build': build_name,
-                'server_spec': sspecs,
+                'deploy': body,
                 'message': msg
             }
         })

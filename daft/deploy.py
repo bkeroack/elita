@@ -13,21 +13,15 @@ def run_deploy(datasvc, application, build_name, servers, gitdeploys, deployment
     datasvc.deploysvc.UpdateDeployment(application, deployment, {"results": "complete"})
     return {"deploy_status": "complete"}
 
-def validate_server_specs(server_specs):
-    if not isinstance(server_specs, dict):
+def validate_server_specs(deploy_obj):
+    if not isinstance(deploy_obj, dict):
         return False, "must be dict"
-    for k in ('type', 'spec', 'gitdeploys'):
-        if k not in server_specs:
-            return False, "server spec dict must have '{}' key".format(k)
-    if server_specs['type'] != 'list' and type != 'glob':
-        return False, "type must be 'list' or 'glob'"
-    if server_specs['type'] == 'list':
-        if not isinstance(server_specs['spec'], list):
-            return False, "invalid spec for type 'list' [need list]"
-    elif server_specs['type'] == 'glob':
-        if not isinstance(server_specs['spec'], str):
-            return False, "invalid spec for type 'glob' [need str]"
-    if not isinstance(server_specs['gitdeploys'], list):
+    for k in ('servers', 'gitdeploys'):
+        if k not in deploy_obj:
+            return False, "deploy dict must have '{}' key".format(k)
+    if not (isinstance(deploy_obj['servers'], list) or isinstance(deploy_obj['servers'], str)):
+        return False, "servers must be a list or string"
+    if not isinstance(deploy_obj['gitdeploys'], list):
         return False, "invalid gitdeploys [need list]"
     return True, None
 
