@@ -263,10 +263,15 @@ class SaltController:
         assert 'base' in dt_content
         for s in server_list:
             if s in dt_content['base']:
-                util.debugLog(self, "rm_server_from_daft_top: deleting {} from daft top".format(s))
-                del dt_content['base'][s]
+                if "daft.{}.{}".format(app, gd_name) in dt_content['base'][s]:
+                    util.debugLog(self, "rm_server_from_daft_top: deleting gitdeploy {} from server {} in daft top".
+                                  format(gd_name, s))
+                    del dt_content['base'][s]
+                else:
+                    util.debugLog(self, "rm_server_from_daft_top: WARNING: gitdeploy {} not found in daft top".
+                                  format(gd_name))
             else:
-                util.debugLog(self, "rm_server_from_daft_top: WARNING: {} not found in daft top".format(s))
+                util.debugLog(self, "rm_server_from_daft_top: WARNING: server {} not found in daft top".format(s))
         with open(daft_top, 'w') as f:
             util.debugLog(self, "rm_server_from_daft_top: writing file")
             f.write(yaml.safe_dump(dt_content, default_flow_style=False))

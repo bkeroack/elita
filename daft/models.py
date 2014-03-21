@@ -495,17 +495,17 @@ class GitDataService(GenericChildDataService):
         self.parent.DeleteObject(self.root['app'][app]['gitrepos'], name, 'gitrepos')
 
 class DeploymentDataService(GenericChildDataService):
-    def NewDeployment(self, app, build_name, server_specs):
+    def NewDeployment(self, app, build_name, deploy):
         dpo = Deployment({
             'application': app,
             'build_name': build_name,
-            'server_specs': server_specs
+            'deploy': deploy
         })
         did = self.db['deployments'].insert({
             '_class': 'Deployment',
             'application': dpo.application,
             'build_name': dpo.build_name,
-            'server_specs': dpo.server_specs,
+            'deploy': dpo.deploy,
             'results': {}
         })
         self.parent.refresh_root()
@@ -766,9 +766,8 @@ class Deployment(GenericDataModel):
     default_values = {
         'application': None,
         'build_name': None,
-        'server_specs': {
-            'type': None,
-            'spec': [],
+        'deploy': {
+            'servers': None,
             'gitdeploys': []
         },
         'results': {
@@ -989,6 +988,7 @@ class DataValidator:
         self.check_global()
         self.check_apps()
         self.check_jobs()
+        self.check_deployments()
         self.check_servers()
         self.check_gitdeploys()
         self.SaveRoot()
@@ -1168,6 +1168,21 @@ class DataValidator:
 
     def check_servers(self):
         pass
+
+    def check_deployments(self):
+        update_list = list()
+        for d in self.db['deployments'].find():
+            if 'server_specs' in d:
+                util.debugLog(self, "WARING: found deployment with old-style server_specs object: {}; fixing".format(
+                    d['_id']))
+                d['deploy'] = {
+                    'servers': d['server_specs']['spec'],
+                    'gitdeploys': d['server_specs']['gitdeploys']
+                }
+                update_list.append(d)
+        for d in update_list:
+            del d['server_specs']
+            self.db['deployments'].save(d)
 
     def check_gitdeploys(self):
         dlist = list()
