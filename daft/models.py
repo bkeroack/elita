@@ -988,6 +988,7 @@ class DataValidator:
         self.check_global()
         self.check_apps()
         self.check_jobs()
+        self.check_deployments()
         self.check_servers()
         self.check_gitdeploys()
         self.SaveRoot()
@@ -1167,6 +1168,21 @@ class DataValidator:
 
     def check_servers(self):
         pass
+
+    def check_deployments(self):
+        update_list = list()
+        for d in self.db['deployments'].find():
+            if 'server_specs' in d:
+                util.debugLog(self, "WARING: found deployment with old-style server_specs object: {}; fixing".format(
+                    d['_id']))
+                d['deploy'] = {
+                    'servers': d['server_specs']['spec'],
+                    'gitdeploys': d['server_specs']['gitdeploys']
+                }
+                update_list.append(d)
+        for d in update_list:
+            del d['server_specs']
+            self.db['deployments'].save(d)
 
     def check_gitdeploys(self):
         dlist = list()
