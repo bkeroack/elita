@@ -1,6 +1,11 @@
-====================
+=========
+Endpoints
+=========
+
+.. contents:: Contents
+
 Top-Level Containers
-====================
+--------------------
 
 The following top-level containers are available:
 
@@ -9,18 +14,38 @@ The following top-level containers are available:
 * ``/job`` - Asynchronous jobs
 * ``/server`` - Server objects
 
+In general, Elita distinguishes between two primary resource types: containers and objects (some special cases like
+/app are both). You generally issue a PUT on a container to create an object (because the object doesn't exist yet,
+you can't do a PUT directly on it). You issue a PATCH on an object to change it, a DELETE to remove it or a POST to
+trigger some action (such as the deployment or action objects). For legacy purposes,
+most containers also support DELETE with URL parameters to specify removal of child objects (ie,
+the inverse of the PUT operation).
+
 Documentation:
 
 .. toctree::
 
+   urlmap.rst
    app.rst
    global.rst
    job.rst
    server.rst
 
-=================
+
+HTTP Verbs
+----------
+
+Elita supports the following HTTP Verbs:
+
+* GET       -   Retrieve a resource.
+* PUT       -   Create a resource.
+* DELETE    -   Remove a resource.
+* PATCH     -   Change a resource.
+* POST      -   Trigger an action or procedure.
+
+
 Common Parameters
-=================
+-----------------
 
 The following parameters are available on all endpoints for all verbs:
 
@@ -31,9 +56,9 @@ The following parameters are available on all endpoints for all verbs:
    For readability, hostname/port and auth_token parameter are excluded from all example URIs and API calls.
    Keep in mind, every resource requires some form of authentication (auth_token in the majority of cases or password)
 
-================
+
 Case Sensitivity
-================
+----------------
 
 daft URIs are case-sensitive. The following two endpoints are not equivalent:
 
@@ -44,5 +69,6 @@ Contrasted with...
    ``/app/exampleapp/actions/scriptedaction``  Not the same!
 
 .. NOTE::
-   URIs are considered case sensitive according to `W3C <http://www.w3.org/TR/WD-html40-970708/htmlweb.html>`_.
-   According to `RFC 4343 <http://tools.ietf.org/html/rfc4343>`_, domain names are not case sensitive.
+   References:
+   *   `W3C <http://www.w3.org/TR/WD-html40-970708/htmlweb.html>`_
+   *   `RFC 4343 <http://tools.ietf.org/html/rfc4343>`_

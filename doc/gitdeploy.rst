@@ -22,10 +22,10 @@ or bytecode applications like Java or .NET).
    individual files that exceed this approximate threshold, expect increased git metadata size or
    consider other deployment methodologies.
 
+.. contents:: Contents
 
-=================
 General Mechanism
-=================
+-----------------
 
    #.   The specified *package* in the gitdeploy (defaults to master) associated with the *build* being deployed is
         decompressed to the central repository working copy on the elita server.
@@ -39,9 +39,8 @@ General Mechanism
    There are also various hook points during this process where custom routines from plugins can execute.
 
 
-===========
 API Objects
-===========
+-----------
 
 Follow is a list of the associated API objects (endpoints):
 
