@@ -1,10 +1,9 @@
-===================
-General API URL Map
-===================
+====================
+General Resource Map
+====================
 
-.. sourcecode:: http
 
-   app/
+app/
 
          example_app/
 
@@ -21,11 +20,11 @@ General API URL Map
                 actions/
                         - CustomScriptedAction
 
-   server/
+server/
         - server001
         - server002
 
-   global/
+global/
 
         users/
                 - john_smith
@@ -41,6 +40,6 @@ General API URL Map
         gitproviders/
                 - mygitprovider
 
-   job/
+job/
         - 25892e17-80f6-415f-9c65-7395632f0223
 

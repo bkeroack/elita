@@ -8,6 +8,9 @@ Global Endpoints
 Users
 -----
 
+View Users
+^^^^^^^^^^
+
 .. http:get::   /global/users
 
    Returns terse list of users
@@ -34,7 +37,9 @@ Users
 
 .. http:get::   /global/users/(string:username)
 
-   Get a user and create and return an auth token (if necessary).
+   Get a user and create and return an auth token (if necessary). This will create a new auth token if one does not
+   currently exist.
+
    This can be considered the equivalent to "logging in".
 
    :param password: Password (URL-encoded if necessary)
@@ -74,6 +79,59 @@ Users
                }
           }
       }
+
+
+Create User
+^^^^^^^^^^^
+
+.. http:put:: /global/users
+
+   Creates a new user or modifies an existing user.
+
+   :param username: Username (URL-encoded)
+   :param password: Password (URL-encoded, optional with auth_token)
+   :param auth_token: Auth token (optional if password provided)
+   :jsonparam string body: JSON object containing permissions object and optional attributes object.
+   :type username: string
+   :type password: string
+   :type auth_token: string
+
+   **Example request**
+
+   .. sourcecode:: http
+
+      $ curl -XPOST '/global/users?username=joe&password=1234' -d '
+      {
+        "attributes": {
+            "address": "123 Spring Street, Knoxville, TN 012345"
+         },
+         "permissions": {
+            "apps": {
+                "*": "read/write",
+                "newapp": ""
+            },
+            "actions" {
+                "newapp": {
+                    "ScriptedAction": "execute"
+                },
+                "otherapp": {
+                    "*": "execute"
+                }
+            },
+            "servers": ""
+         }
+      }'
+
+   This grants the following permissions:
+
+* Give user read/write access to all applications EXCEPT newapp
+* Give execute permission to "ScriptedAction" only under newapp
+* Give execute permission to all actions under otherapp
+* Do not give any permissions to any servers
+
+
+Modify User
+^^^^^^^^^^^
 
 .. http:patch::   /global/users/(string:username)
 
@@ -120,51 +178,9 @@ Users
           }
       }
 
-.. http:put:: /global/users
 
-   Creates a new user or modifies an existing user.
-
-   :param username: Username (URL-encoded)
-   :param password: Password (URL-encoded, optional with auth_token)
-   :param auth_token: Auth token (optional if password provided)
-   :jsonparam string body: JSON object containing permissions object and optional attributes object.
-   :type username: string
-   :type password: string
-   :type auth_token: string
-
-   **Example request**
-
-   .. sourcecode:: http
-
-      $ curl -XPOST '/global/users?username=joe&password=1234' -b '
-      {
-        "attributes": {
-            "address": "123 Spring Street, Knoxville, TN 012345"
-         },
-         "permissions": {
-            "apps": {
-                "*": "read/write",
-                "newapp": ""
-            },
-            "actions" {
-                "newapp": {
-                    "ScriptedAction": "execute"
-                },
-                "otherapp": {
-                    "*": "execute"
-                }
-            },
-            "servers": ""
-         }
-      }'
-
-   This grants the following permissions:
-
-* Give user read/write access to all applications EXCEPT newapp
-* Give execute permission to "ScriptedAction" only under newapp
-* Give execute permission to all actions under otherapp
-* Do not give any permissions to any servers
-
+Delete User
+^^^^^^^^^^^
 
 .. http:delete::    /global/users/(string:username)
 
@@ -184,8 +200,12 @@ Users
 
       $ curl -XDELETE '/global/users/joe'
 
+
 Tokens
 ------
+
+View Tokens
+^^^^^^^^^^^
 
 .. http:get::   /global/tokens
 
@@ -203,7 +223,7 @@ Tokens
    Get information about token (associated user and time of issuance).
 
    .. NOTE::
-      This endpoint is auth-less. The token is the secret.
+      This endpoint does not require authentication. The token is the secret.
 
    **Example request**
 
@@ -212,12 +232,16 @@ Tokens
       $ curl -XGET
       '/global/tokens/NWFoNzkwNWQ4M2QyNzY5MWJjMjVlJdu7ODMwM2E1M2EyMzBiZDIyMmMyMGE9Idjn4Yzg2ZjYwODQ1ZWYyNTVmM9'
 
+
+Delete Token
+^^^^^^^^^^^^
+
 .. http:delete::   /global/tokens/(string:token)
 
    Delete an auth token. This is the equivalent of "logging out".
 
    .. NOTE::
-      This endpoint is auth-less. The token is the secret.
+      This endpoint does not require authentication. The token is the secret.
 
    **Example request**
 
@@ -228,6 +252,9 @@ Tokens
 
 Gitproviders
 ------------
+
+View Gitproviders
+^^^^^^^^^^^^^^^^^
 
 .. http:get::   /global/gitproviders
 
@@ -250,6 +277,9 @@ Gitproviders
 
       $ curl -XGET '/global/gitproviders/mygitprovider'
 
+
+Create Gitprovider
+^^^^^^^^^^^^^^^^^^
 
 .. http:put::   /global/gitproviders
 
@@ -283,6 +313,10 @@ Gitproviders
           }
       }'
 
+
+Modify Gitprovider
+^^^^^^^^^^^^^^^^^^
+
 .. http:patch::   /global/gitproviders/(string:gitprovider)
 
    :jsonparam string body: JSON object containing gitprovider fields to modify
@@ -302,6 +336,9 @@ Gitproviders
           }
        }'
 
+Delete Gitprovider
+^^^^^^^^^^^^^^^^^^
+
 .. http:delete::   /global/gitproviders/(string:gitprovider)
 
    Remove gitprovider.
@@ -314,6 +351,9 @@ Gitproviders
 
 Keypairs
 --------
+
+View Keypairs
+^^^^^^^^^^^^^
 
 .. http:get::   /global/keypairs
 
@@ -337,6 +377,9 @@ Keypairs
       $ curl -XGET '/global/keypairs/mykeypair'
 
 
+Create Keypair
+^^^^^^^^^^^^^^
+
 .. http:put::   /global/keypairs/(string:keypair)
 
    :param name: keypair name (URL-encoded)
@@ -350,7 +393,7 @@ Keypairs
    **Example JSON body**
 
    .. NOTE::
-      Key data omitted from examples for brevity.
+      Key data omitted from examples.
 
    .. sourcecode:: http
 
@@ -368,6 +411,10 @@ Keypairs
           "public_key": "ssh-rsa ... foo@bar.com\\n"
       }'
 
+
+Modify Keypair
+^^^^^^^^^^^^^^
+
 .. http:patch::   /global/keypairs/(string:keypair)
 
    :jsonparam string body: JSON object containing key(s) to modify
@@ -383,6 +430,10 @@ Keypairs
           "private_key": "-----BEGIN RSA PRIVATE KEY-----\\n...\\n-----END RSA PRIVATE KEY-----\\n",
           "public_key": "ssh-rsa ... foo@bar.com\\n"
        }'
+
+
+Delete Keypair
+^^^^^^^^^^^^^^
 
 .. http:delete::   /global/keypairs/(string:keypair)
 

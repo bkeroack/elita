@@ -8,6 +8,9 @@ Application Endpoints
 Applications
 ------------
 
+View Applications
+^^^^^^^^^^^^^^^^^
+
 .. http:get::   /app
 
    Returns terse list of applications
@@ -18,6 +21,9 @@ Applications
    .. sourcecode:: http
 
       $ curl -XGET '/app'
+
+Create Application
+^^^^^^^^^^^^^^^^^^
 
 .. http:put::   /app
 
@@ -32,6 +38,10 @@ Applications
    .. sourcecode:: http
 
       $ curl -XPUT '/app?app_name=widgetmaker'
+
+
+Delete Application
+^^^^^^^^^^^^^^^^^^
 
 .. http:delete::   /app/(string: app_name)
 
@@ -50,6 +60,9 @@ Applications
 Builds
 ------
 
+View Builds
+^^^^^^^^^^^
+
 .. http:get::   /app/(string: app_name)/builds
 
    Returns list of all application builds.
@@ -61,6 +74,9 @@ Builds
 
       $ curl -XGET '/app/widgetmaker/builds'
 
+
+Create Build
+^^^^^^^^^^^^
 
 .. http:put::   /app/(string: app_name)/builds
 
@@ -75,6 +91,10 @@ Builds
    .. sourcecode:: http
 
       $ curl -XPUT '/app/widgetmakers/builds?build_name=1-master' -d '{ "attributes": { "branch_name": "master" } }'
+
+
+Modify Build
+^^^^^^^^^^^^
 
 .. http:patch::   /app/(string: app_name)/builds/(string: build_name)
 
@@ -92,15 +112,9 @@ Builds
 
       $ curl -XPATCH '/app/widgetmakers/builds/1-master' -d '{ "attributes": { "branch_name": "something-else" } }'
 
-.. http:delete::   /app/(string: app_name)/builds/(string: build_name)
 
-   Remove a new build object.
-
-   **Example request**:
-
-   .. sourcecode:: http
-
-      $ curl -XDELETE '/app/widgetmakers/builds/1-master'
+Upload Build
+^^^^^^^^^^^^
 
 .. http:post::   /app/(string: app_name)/builds/(string: build_name)
 
@@ -128,5 +142,18 @@ Builds
       # indirect upload from http://foobar.com/build.zip
       $ curl -XPOST '/app/widgetmakers/builds/1-master?file_type=zip&indirect_url=http%3A%2F%2Ffoobar.com%2Fbuild.zip'
 
+
+Delete Build
+^^^^^^^^^^^^
+
+.. http:delete::   /app/(string: app_name)/builds/(string: build_name)
+
+   Remove a new build object.
+
+   **Example request**:
+
+   .. sourcecode:: http
+
+      $ curl -XDELETE '/app/widgetmakers/builds/1-master'
 
 
