@@ -9,41 +9,43 @@ actually
 runs the code (production and QA/staging servers, supporting machines, etc.). It uses `salt <http://www.saltstack
 .org>`_ remote execution and a plugin architecture to allow custom actions and hook routines.
 
-It can be used to process builds, execute arbitrary setup, provision servers, deploy code (either automatically or
-manually) or perform any programmed set of actions.
-
 .. contents:: Contents
 
 Design Goals
 ------------
 
 * RESTful
+* Flexibility (plugins for hooks/actions)
 * Security (user-based with granular permissions)
-* Application/Site-agnostic (see below)
+* Application-agnostic
 * UI independent
+
+Flexibility
+-----------
+
+Elita exposes hook points and has a "named action" object type which allows plugins to implement custom
+routines and code.
 
 Security
 --------
 
-Elita has a granular permissions system which can be used to whitelist/blacklist resources on a per-application
-basis.
+Elita has a granular permissions system which can be used to whitelist/blacklist resources on a per-user and
+per-application basis.
 
 .. IMPORTANT::
    Due to using stateless authorization tokens, Elita *must* be tunnelled through SSL/TLS. By default, the application listens
-   to port 2718 on localhost only. An example nginx.conf for SSL proxying is included.
-
+   to port 2718 on localhost only.
 
 Application Agnosticism
 -----------------------
 
-All custom activity is confined to python modules loaded at runtime. Modules register actions and hook callbacks.
-
+Built-in functionality is generic and useful for all application types.
 
 UI independence
 ---------------
 
 No UI is required. All functionality can be accessed via REST endpoints. Endpoints and JSON output are intended to be
-as automation-friendly as possible to facilitate UI development.
+automation-friendly to facilitate UI development.
 
 salt Interaction
 ----------------

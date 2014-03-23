@@ -125,8 +125,11 @@ Upload Build
    Upload a build. This can be done either directly by including file data in a form post,
    or indirectly by providing a URL-encoded location that elita can download the build from.
 
+   .. ATTENTION::
+      The build object must created first (via PUT; see above) before data can be uploaded to it.
+
    .. NOTE::
-      If indirect_url is provided it will always be used, even if the form parameter file is also provided in the
+      If indirect_url is specified it will always be used, even if the form parameter *file* is also provided in the
       same request.
 
    **Example request (direct)**:
@@ -148,7 +151,7 @@ Delete Build
 
 .. http:delete::   /app/(string: app_name)/builds/(string: build_name)
 
-   Remove a new build object.
+   Remove a build object. This will delete all uploaded data associated with this object.
 
    **Example request**:
 

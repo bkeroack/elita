@@ -11,6 +11,9 @@ app/
                         - build001
                         - build002
 
+                deployments/
+                        - 248c325f-3093-427c-a3b5-a6f011e2b2ce
+
                 gitrepos/
                         - repo1
 
