@@ -41,7 +41,7 @@ you may have a monolithic sourcecode tree that contains a number of individual a
 or you may want to repackage an application in different ways for different environments.
 
 The default package is called "master" and is present on every uploaded build--it is identical to the originally
-uploaded file. By default only the master package is present. Using plugin routines (via the BUILD_UPLOADED_SUCCESS
+uploaded file. By default only the master package is present. Using plugin routines (via the BUILD_UPLOAD_SUCCESS
 hook) you can create any needed packages. Your hook routine would take a group of files from the uploaded master
 package, modify them in whatever way was desired, compress them into a new package file and return the
 information about the new packages when finished. These packages can then be deployed via different gitdeploys in
