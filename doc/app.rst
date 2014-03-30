@@ -120,7 +120,7 @@ Upload Build
 
    :param file_type: file type (either "zip", "tar.gz" or "tar.bz2")
    :param indirect_url: URL-encoded location to download the build from (optional, only for indirect uploads)
-   :formparameter file: File data (optional, only if indirect_url isn't specified)
+   :formparameter build: File data (optional, only if indirect_url isn't specified)
 
    Upload a build. This can be done either directly by including file data in a form post,
    or indirectly by providing a URL-encoded location that elita can download the build from.
@@ -129,14 +129,14 @@ Upload Build
       The build object must created first (via PUT; see above) before data can be uploaded to it.
 
    .. NOTE::
-      If indirect_url is specified it will always be used, even if the form parameter *file* is also provided in the
+      If indirect_url is specified it will always be used, even if the form parameter *build* is also provided in the
       same request.
 
    **Example request (direct)**:
 
    .. sourcecode:: http
 
-      $ curl -XPOST '/app/widgetmakers/builds/1-master?file_type=zip' -F "file=@/home/user/build.zip"
+      $ curl -XPOST '/app/widgetmakers/builds/1-master?file_type=zip' -F "build=@/home/user/build.zip"
 
    **Example request (indirect)**:
 
