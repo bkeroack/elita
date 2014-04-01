@@ -120,9 +120,20 @@ class UserDataService(GenericChildDataService):
             "salt": userobj.salt,
             "permissions": userobj.permissions
         })
+        pid = self.db['userpermissions'].insert({
+            "_class": "UserPermissions",
+            "username": userobj.name,
+            "applications": list(),
+            "actions": dict(),
+            "servers": list()
+        })
         self.parent.refresh_root()
         self.root['global']['users'][userobj.name] = {
             "_doc": bson.DBRef("users", id)
+        }
+        self.parent.refresh_root()
+        self.root['global']['users'][userobj.name]['permissions'] = {
+            '_doc': bson.DBRef("userpermissions", pid)
         }
 
     def SaveUser(self, userobj):
@@ -828,6 +839,15 @@ class User(GenericDataModel):
     def change_password(self, new_pw):
         self.hashed_pw = self.hash_pw(new_pw)
 
+#dummy model. Values are computed for each request
+class UserPermissions(GenericDataModel):
+    default_values = {
+        'username': None,
+        'applications': None,
+        'actions': None,
+        'servers': None
+    }
+
 class Token(GenericDataModel):
     default_values = {
         'username': None,
@@ -986,6 +1006,8 @@ class DataValidator:
         self.check_doc_consistency()
         self.check_toplevel()
         self.check_global()
+        self.check_users()
+        self.check_user_permissions()
         self.check_apps()
         self.check_jobs()
         self.check_deployments()
@@ -1112,6 +1134,49 @@ class DataValidator:
             self.root['global']['users']['admin'] = {
                 '_doc': bson.DBRef('users', id)
             }
+
+    def check_users(self):
+        for u in self.root['global']['users']:
+            if u != '_doc':
+                if "permissions" not in self.root['global']['users'][u]:
+                    util.debugLog(self, "WARNING: permissions container object not found under user {} in root tree; "
+                                        "fixing".format(u))
+                    pid = self.db['userpermissions'].insert({
+                            "_class": "UserPermissions",
+                            "username": u,
+                            "applications": list(),
+                            "actions": dict(),
+                            "servers": list()
+                    })
+                    self.root['global']['users'][u]['permissions'] = {
+                        '_doc': bson.DBRef('userpermissions', pid)
+                    }
+
+    def check_user_permissions(self):
+        for u in self.db['users'].find():
+            if 'permissions' not in u:
+                util.debugLog(self, "WARNING: permissions object not found for user {}; fixing with empty obj"
+                              .format(u['name']))
+                u['permissions'] = {
+                    'apps': {},
+                    'actions': {},
+                    'servers': []
+                }
+            for o in ('apps', 'actions', 'servers'):
+                if o not in u['permissions']:
+                    util.debugLog(self, "WARNING: {} not found in permissions object for user {}; fixing with empty "
+                                        "obj".format(o, u['name']))
+                    u['permissions'][o] = list() if o == 'servers' else dict()
+            if not isinstance(u['permissions']['servers'], list):
+                util.debugLog(self, "WARNING: servers key under permissions object for user {} is not a list; fixing"
+                              .format(u['name']))
+                u['permissions']['servers'] = list(u['permissions']['servers'])
+            for o in ('apps', 'actions'):
+                if not isinstance(u['permissions'][o], dict):
+                    util.debugLog(self, "WARNING: {} key under permissions object for user {} is not a dict; invalid "
+                                        "so replacing with empty dict".format(o, u['name']))
+                    u['permissions'][o] = dict()
+            self.db['users'].save(u)
 
     def check_jobs(self):
         djs = list()
