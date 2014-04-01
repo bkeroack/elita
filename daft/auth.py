@@ -74,9 +74,7 @@ class UserPermissions:
                 perms_dict[perm].update(apps)
             else:
                 perms_dict[perm] = set(apps)
-        #collapse back to list of lists
-        util.debugLog(self, "get_allowed_apps: perms_dict: {}".format(perms_dict))
-        return [[k, list(perms_dict[k])] for k in perms_dict]
+        return {k: list(perms_dict[k]) for k in perms_dict}
 
     def get_allowed_actions(self, username):
         '''Returns list of tuples: (appname, actionname). If present, 'execute' permission is implicit'''
@@ -92,7 +90,7 @@ class UserPermissions:
                     app_actions_allowed.update(tuple(fnmatch.filter(self.datasvc.jobsvc.GetAllActions(app),
                                                                action_pattern)))
                 allowed_actions[app] = list(app_actions_allowed)
-        return allowed_actions.items()
+        return allowed_actions
 
     def get_allowed_servers(self, username):
         '''Returns list'''
@@ -100,7 +98,7 @@ class UserPermissions:
         assert self.datasvc is not None
         util.debugLog(self, "get_allowed_servers: username: {}".format(username))
         servers = self.datasvc.serversvc.GetServers()
-        return [fnmatch.filter(servers, s) for s in userobj.permissions['servers']]
+        return [fnmatch.filter(servers, s) for s in userobj.permissions['servers']][0]
 
     def get_action_permissions(self, app, action):
         util.debugLog(self, "get_action_permissions: {}: {}".format(app, action))
