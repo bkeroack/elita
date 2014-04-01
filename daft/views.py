@@ -1053,6 +1053,33 @@ class UserView(GenericView):
         else:
             return self.Error("incorrect request type '{}'".format(self.req.params['request']))
 
+class UserPermissionsView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request, allow_pw_auth=True)
+        self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
+
+    def compute_app_perms(self):
+        return auth.UserPermissions(self.datasvc.usersvc, None, datasvc=self.datasvc).get_allowed_apps(self.context
+                                                                                                       .username)
+
+    def compute_action_perms(self):
+        return auth.UserPermissions(self.datasvc.usersvc, None, datasvc=self.datasvc).get_allowed_actions(self
+                                                                                                          .context
+                                                                                                          .username)
+
+    def compute_server_perms(self):
+        return auth.UserPermissions(self.datasvc.usersvc, None, datasvc=self.datasvc).get_allowed_servers(self
+                                                                                                          .context
+                                                                                                          .username)
+
+    def GET(self):
+        return {
+            'username': self.context.username,
+            'applications': self.compute_app_perms(),
+            'actions': self.compute_action_perms(),
+            'servers': self.compute_server_perms()
+        }
+
 
 class TokenContainerView(GenericView):
     def __init__(self, context, request):

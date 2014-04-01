@@ -1,8 +1,7 @@
 __author__ = 'bkeroack'
 
-import models
 import util
-import re
+import fnmatch
 
 class ValidatePermissionsObject:
     def __init__(self, permissions):
@@ -42,11 +41,12 @@ class ValidatePermissionsObject:
 
 
 class UserPermissions:
-    def __init__(self, usersvc, token):
+    def __init__(self, usersvc, token, datasvc=None):
         self.usersvc = usersvc
         self.token = token
         self.userobj = False
         self.valid_token = False
+        self.datasvc = datasvc
         if self.validate_token():
             self.valid_token = True
             util.debugLog(self, "valid token")
@@ -55,6 +55,52 @@ class UserPermissions:
 
     def validate_token(self):
         return self.token in self.usersvc.GetAllTokens()
+
+    def get_allowed_apps(self, username):
+        '''Returns list of tuples: (appname, permissions ('read;write'))'''
+        userobj = self.usersvc.GetUser(username)
+        assert self.datasvc is not None
+        apps = self.datasvc.appsvc.GetApplications()
+        apps.append('_global') #not returned by GetApplications()
+        util.debugLog(self, "get_allowed_apps: username: {}".format(username))
+        raw_app_list = [(fnmatch.filter(apps, a),
+                 userobj.permissions['apps'][a]) for a in userobj.permissions['apps']]
+        util.debugLog(self, "get_allowed_apps: raw_app_list: {}".format(raw_app_list))
+        perms_dict = dict()
+        for l in raw_app_list:  # coalesce the list, really wish this could be a dict comprehension
+            perm = l[1]
+            apps = l[0]
+            if perm in perms_dict:
+                perms_dict[perm].update(apps)
+            else:
+                perms_dict[perm] = set(apps)
+        #collapse back to list of lists
+        util.debugLog(self, "get_allowed_apps: perms_dict: {}".format(perms_dict))
+        return [[k, list(perms_dict[k])] for k in perms_dict]
+
+    def get_allowed_actions(self, username):
+        '''Returns list of tuples: (appname, actionname). If present, 'execute' permission is implicit'''
+        userobj = self.usersvc.GetUser(username)
+        assert self.datasvc is not None
+        util.debugLog(self, "get_allowed_actions: username: {}".format(username))
+        allowed_actions = dict()
+        for a in userobj.permissions['actions']:
+            app_list = fnmatch.filter(self.datasvc.appsvc.GetApplications(), a)
+            for app in app_list:
+                app_actions_allowed = set()
+                for action_pattern in userobj.permissions['actions'][a]:
+                    app_actions_allowed.update(tuple(fnmatch.filter(self.datasvc.jobsvc.GetAllActions(app),
+                                                               action_pattern)))
+                allowed_actions[app] = list(app_actions_allowed)
+        return allowed_actions.items()
+
+    def get_allowed_servers(self, username):
+        '''Returns list'''
+        userobj = self.usersvc.GetUser(username)
+        assert self.datasvc is not None
+        util.debugLog(self, "get_allowed_servers: username: {}".format(username))
+        servers = self.datasvc.serversvc.GetServers()
+        return [fnmatch.filter(servers, s) for s in userobj.permissions['servers']]
 
     def get_action_permissions(self, app, action):
         util.debugLog(self, "get_action_permissions: {}: {}".format(app, action))
