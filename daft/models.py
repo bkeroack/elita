@@ -276,12 +276,13 @@ class JobDataService(GenericChildDataService):
 
 class ServerDataService(GenericChildDataService):
     def GetServers(self):
-        return [k for k in self.root['server'].keys() if k[0] != '_']
+        return [k for k in self.root['server'].keys() if k[0] != '_' and k != 'environments']
 
-    def NewServer(self, name, attribs, existing=False):
+    def NewServer(self, name, attribs, environment, existing=False):
         try:
             server = Server({
                 'name': name,
+                'environment': environment,
                 'attributes': attribs
             })
         except daft_exceptions.SaltServerNotAccessible:
@@ -296,6 +297,7 @@ class ServerDataService(GenericChildDataService):
         }, update={
             '_class': "Server",
             'name': server.name,
+            'environment': server.environment,
             'gitdeploys': [],
             'attributes': server.attributes
         }, upsert=True, new=True)
@@ -324,6 +326,28 @@ class ServerDataService(GenericChildDataService):
                 self.db['servers'].remove({'_id': s['_id']})
         s['gitdeploys'] = [self.db.dereference(d) for d in s['gitdeploys']]
         return [{'application': gd['application'], 'gitdeploy_name': gd['name']} for gd in s['gitdeploys']]
+
+    def GetEnvironments(self):
+        environments = dict()
+        srvs = self.GetServers()
+        print(srvs)
+        for s in srvs:
+            server = [d for d in self.db['servers'].find({'name': s})]
+            print("server: {}".format(server))
+            print("s: {}".format(s))
+            if len(server) > 1:
+                util.debugLog(self, "(Server->)GetEnvironments: more than one doc found for server {}".format(s))
+            doc = server[0]
+            print("doc: {}".format(doc))
+            env = doc['environment']
+            print("env: {}".format(env))
+            if env in environments:
+                environments[env].update([s])
+            else:
+                environments[env] = {s}
+        print("environments: {}".format(environments))
+        return {k: list(environments[k]) for k in environments}
+
 
 class GitDataService(GenericChildDataService):
     def NewGitDeploy(self, name, app_name, package, options, actions, location, attributes):
@@ -726,11 +750,16 @@ class Server(GenericDataModel):
     default_values = {
         "name": None,
         "server_type": None,
+        "environment": None,
         "attributes": dict(),
         "gitdeploys": [bson.DBRef("", None)],
         "salt_key": bson.DBRef("", None)
     }
 
+class Environment(GenericDataModel):
+    default_values = {
+        "environments": None
+    }
 
 class GitProvider(GenericDataModel):
     default_values = {
@@ -1239,13 +1268,20 @@ class DataValidator:
                         del self.root['app'][a][sl][d]
 
     def check_servers(self):
-        pass
+        update_list = list()
+        for d in self.db['servers'].find():
+            if 'environment' not in d:
+                util.debugLog(self, "WARNING: environment field not found for server {}; fixing".format(d['_id']))
+                d['environment'] = ""
+                update_list.append(d)
+        for d in update_list:
+            self.db['servers'].save(d)
 
     def check_deployments(self):
         update_list = list()
         for d in self.db['deployments'].find():
             if 'server_specs' in d:
-                util.debugLog(self, "WARING: found deployment with old-style server_specs object: {}; fixing".format(
+                util.debugLog(self, "WARNING: found deployment with old-style server_specs object: {}; fixing".format(
                     d['_id']))
                 d['deploy'] = {
                     'servers': d['server_specs']['spec'],
@@ -1315,6 +1351,16 @@ class DataValidator:
                 util.debugLog(self, "WARNING: '{}' not found under root".format(tl))
                 self.root[tl] = dict()
                 self.root[tl]['_doc'] = self.NewContainer(top_levels[tl]['class'], tl, "")
+            if tl == 'server':
+                if "environments" not in self.root[tl] or isinstance(self.root[tl]['environments'], bson.DBRef):
+                    util.debugLog(self, "WARNING: environments endpoint not found under servers container; fixing")
+                    eid = self.db['environments'].insert({
+                        '_class': "Environment",
+                        'environments': ""
+                    })
+                    self.root[tl]['environments'] = {
+                        "_doc": bson.DBRef("environments", eid)
+                    }
 
     def check_root(self):
         self.root = dict() if self.root is None else self.root

@@ -26,11 +26,13 @@ app/
 server/
         - server001
         - server002
+        - **environments**
 
 global/
 
         users/
                 - john_smith
+                    - **permissions**
                 - jane_doe
 
         tokens/

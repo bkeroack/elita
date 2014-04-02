@@ -382,7 +382,7 @@ class BuildView(GenericView):
 class ServerContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request)
-        self.set_params({"GET": [], "PUT": ['name', 'existing'], "POST": [], "DELETE": ['name']})
+        self.set_params({"GET": [], "PUT": ['name', 'environment', 'existing'], "POST": [], "DELETE": ['name']})
 
     def GET(self):
         return {
@@ -391,13 +391,14 @@ class ServerContainerView(GenericView):
 
     def PUT(self):
         name = self.req.params['name']
+        environment = self.req.params['environment']
         attribs = self.deserialize_attributes()
         existing = self.req.params['existing'] in AFFIRMATIVE_SYNONYMS
         if not attribs[0]:
             return attribs[1]
         else:
             attribs = attribs[1]
-        res = self.datasvc.serversvc.NewServer(name, attribs)
+        res = self.datasvc.serversvc.NewServer(name, attribs, environment)
         if not existing:
             msg = {"error": "server provisioning not implemented yet!"}
         else:
@@ -406,6 +407,7 @@ class ServerContainerView(GenericView):
             return self.status_ok({
                 "new_server": {
                     "server_name": name,
+                    "environment": environment,
                     "attributes": attribs,
                     "message": msg
                 }
@@ -431,8 +433,19 @@ class ServerView(GenericView):
         return {
             'server_name': self.context.name,
             'created_datetime': self.get_created_datetime_text(),
+            'environment': self.context.environment,
             'attributes': self.context.attributes,
             'gitdeploys': self.datasvc.serversvc.GetGitDeploys(self.context.name)
+        }
+
+class EnvironmentView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request)
+        self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
+
+    def GET(self):
+        return {
+            'environments': self.datasvc.serversvc.GetEnvironments()
         }
 
 class DeploymentContainerView(GenericView):

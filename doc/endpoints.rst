@@ -21,6 +21,10 @@ trigger some action (such as the deployment or action objects). For legacy purpo
 most containers also support DELETE with URL parameters to specify removal of child objects (in other words,
 the inverse of the PUT operation that created it).
 
+Kind of a weird convention (for no particular reason other than consistency) is that all top-level containers are
+singular ('app', 'global', 'job', etc.) but any sub-containers are plural ( '/app/builds',
+etc.). There's no good reason but we're sticking with it.
+
 Documentation:
 
 .. toctree::

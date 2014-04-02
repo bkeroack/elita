@@ -1,6 +1,10 @@
+.. _gitdeploy-explanation:
+
 ==========
 Gitdeploys
 ==========
+
+For associated API endpoints, see: :ref:`Gitdeploy Endpoints <gitdeploy-endpoints>`
 
 .. contents:: Contents
 

@@ -160,3 +160,11 @@ Delete Build
       $ curl -XDELETE '/app/widgetmakers/builds/1-master'
 
 
+Gitrepos
+--------
+
+.. _gitdeploy-endpoints:
+
+Gitdeploys
+----------
+

@@ -15,9 +15,6 @@ Contents:
    gitdeploy.rst
    endpoints.rst
    urlmap.rst
-   applications
-   builds
-   actions
 
 
 Indices and tables
