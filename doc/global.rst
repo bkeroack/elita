@@ -81,6 +81,49 @@ View Users
       }
 
 
+View Computed User Permissions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. http:get::   /global/users/(string:username)/permissions
+
+   Get all current applications, actions and servers the user has permissions to access,
+   computed according to the permissions object associated with the user.
+
+   **Example request**
+
+   .. sourcecode:: http
+
+      $ curl -XGET '/global/users/joe/permissions'
+
+   **Example response**
+
+   .. sourcecode:: http
+
+      {
+            "username": "joe",
+            "applications": {
+                "read/write": [
+                    "widgetmaker",
+                    "widget2"
+                ],
+                "read": [
+                    "_global"
+                ]
+            },
+            "actions": {
+                "widgetmaker": [
+                    "ExampleAction",
+                    "SpecialDeploymentAction",
+                    "CleanupBuilds"
+                ]
+            },
+            "servers": [
+                "server01",
+                "server02"
+            ]
+      }
+
+
 Create User
 ^^^^^^^^^^^
 
@@ -95,6 +138,34 @@ Create User
    :type username: string
    :type password: string
    :type auth_token: string
+
+   **Permissions JSON object**
+
+   The permissions JSON object consists of three name/value pairs: apps, actions, servers.
+
+   The "apps" value consists of one subobject with an arbitrary number of name/value pairs.
+   The name is treated as a glob pattern matching against application names. The value is the permissions to grant
+   applications which match the pattern. Valid permissions are "read" and "write" (delimited with '/' for both).
+   Note that order is not significant ("read/write" is the same as "write/read") and the '/' delimiter is
+   simple convention. Only the existence of "read" and "write" substrings are checked,
+   so "read;write" would work equally well.
+
+   "read" allows access to the GET verb for all endpoints associated with that application while "write" allows
+   access to all verbs which change state (PUT, POST, PATCH, DELETE).
+
+   The "actions" value contains an object with an arbitrary number of nested subobjects,
+   each treated as a glob pattern matching application names. The value associated with any pattern is a subobject
+   with the names treated as glob patterns matching action names of that application. Finally,
+   the value associated with the action glob is tested for the substring "execute". If it exists,
+   permission is granted to execute that action. If it does not, permission is denied. Execute permission allows
+   access to all verbs for that action.
+
+   .. NOTE::
+      Conflicting permissions statements have undefined behavior (it depends upon the order of evaluation which
+      is not guaranteed).
+
+   The "servers" value consists of a simple list of glob patterns which match server names. The user will be
+   granted full permission to any servers matching any of the patterns.
 
    **Example request**
 
@@ -118,7 +189,7 @@ Create User
                     "*": "execute"
                 }
             },
-            "servers": ""
+            "servers": []
          }
       }'
 
@@ -173,7 +244,7 @@ Modify User
                           "*": "execute"
                       }
                   },
-                  "servers": "*"
+                  "servers": ["*"]
                }
           }
       }
