@@ -120,4 +120,5 @@ class RegisterActions:
                         action_name = a['callable'].__name__
                         self.actionmap[app][action_name] = a
                         util.debugLog(self, "NewAction: app: {}; action_name: {}; params: {}".format(app, action_name, a['params']))
-                        self.datasvc.jobsvc.NewAction(app, action_name, a['params'])
+                        params = a['params'].keys()
+                        self.datasvc.jobsvc.NewAction(app, action_name, params)

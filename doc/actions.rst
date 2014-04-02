@@ -45,6 +45,9 @@ View Action Detail
 
    Returns information about a specific action, including required parameters.
 
+   .. NOTE::
+      Parameter types are not enforced. They exist for documentation purposes only.
+
 
    **Example request**:
 
@@ -58,11 +61,16 @@ View Action Detail
 
       {
             "action": {
-                "post_parameters": [
-                    "delete",
-                    "days",
-                    "auth_token"
-                ],
+                "post_parameters": {
+                    "days": {
+                        "type": "integer",
+                        "description": "clean builds older than this many days"
+                    },
+                    "delete": {
+                        "type": "boolean (string)",
+                        "description": "delete builds (true or false)"
+                    }
+                },
                 "name": "CleanupAction"
             },
             "application": "widgetmaker"
