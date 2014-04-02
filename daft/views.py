@@ -79,29 +79,26 @@ class GenericView:
 
     def __call__(self):
         g, p = self.check_params()
-        if self.is_action:
-            return self.call_action()
-        r = False
+        bad_verb = False
         if not g:
             return self.Error("Required parameter is missing: {}".format(p))
         if self.req.method == 'GET':
             if 'read' in self.permissions:
-                r = self.GET()
+                return self.GET()
         elif self.req.method == 'POST':
+            if 'write' in self.permissions or (self.is_action and 'execute' in self.permissions):
+                return self.POST()
+        elif self.req.method == 'PUT' and not self.is_action:
             if 'write' in self.permissions:
-                r = self.POST()
-        elif self.req.method == 'PUT':
+                return self.PUT()
+        elif self.req.method == 'DELETE' and not self.is_action:
             if 'write' in self.permissions:
-                r = self.PUT()
-        elif self.req.method == 'DELETE':
-            if 'write' in self.permissions:
-                r = self.DELETE()
+                return self.DELETE()
         else:
-            r = self.UNKNOWN_VERB()
-        if not r:
-            r = self.Error('insufficient permissions')
-
-        return r
+            bad_verb = True
+        if bad_verb:
+            return self.UNKNOWN_VERB()
+        return self.Error('insufficient permissions')
 
     def check_params(self):
         if not self.permissionless and not self.allow_pw_auth:
@@ -124,7 +121,7 @@ class GenericView:
             return
         if 'auth_token' in self.req.params:
             token = self.req.params['auth_token']
-            if self.is_action:
+            if self.is_action and self.req.method == 'POST':
                 self.permissions = auth.UserPermissions(self.datasvc.usersvc, token).get_action_permissions(app_name,
                                                                                       self.context.action_name)
             else:
@@ -241,29 +238,24 @@ class ActionView(GenericView):
     def __init__(self, context, request):
         self.app_name = context.app_name
         GenericView.__init__(self, context, request, app_name=self.app_name, is_action=True)
-        params = {"GET": [], "PUT": [], "POST": [], "DELETE": []}
-        for p in self.context.params:
-            params[p] = self.context.params[p]
-        self.set_params(params)
+        self.set_params({"GET": [], "PUT": [], "POST": self.context.params, "DELETE": []})
 
     def execute(self):
-        if self.req.method not in self.context.params:
-            return self.Error("not implemented")
-        params = dict() #we need a plain dict so we can serialize to celery
-        for p in self.req.params:
-            params[p] = self.req.params[p]
-        return self.status_ok(self.context.execute(params, self.req.method))
+        #we need a plain dict so we can serialize to celery
+        params = {k: self.req.params[k] for k in self.req.params}
+        return self.status_ok(self.context.execute(params))
 
     def GET(self):
-        return self.execute()
+        return {
+            "application": self.context.app_name,
+            "action": {
+                "name": self.context.action_name,
+                "post_parameters": self.context.details()['params']
+            }
+        }
+
     def POST(self):
         return self.execute()
-    def PUT(self):
-        return self.execute()
-    def DELETE(self):
-        return self.execute()
-
-
 
 class BuildContainerView(GenericView):
     def __init__(self, context, request):

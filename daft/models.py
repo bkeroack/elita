@@ -212,6 +212,10 @@ class JobDataService(GenericChildDataService):
         if 'actions' in self.root['app'][app_name]:
             return [action for action in self.root['app'][app_name]['actions'] if action[0] != '_']
 
+    def GetAction(self, app_name, action_name):
+        actions = self.parent.actionsvc.get_action_details(app_name, action_name)
+        return {k: actions[k] for k in actions if k is not "callable"}
+
     def NewJob(self, name):
         job = Job({
             'status': "running",
@@ -267,8 +271,8 @@ class JobDataService(GenericChildDataService):
         else:
             util.debugLog(self, "NewAction: application '{}' not found".format(app_name))
 
-    def ExecuteAction(self, app_name, action_name, params, verb):
-        return self.parent.actionsvc.async(app_name, action_name, params, verb)
+    def ExecuteAction(self, app_name, action_name, params):
+        return self.parent.actionsvc.async(app_name, action_name, params)
 
 class ServerDataService(GenericChildDataService):
     def GetServers(self):
@@ -806,8 +810,11 @@ class Action:
         self.params = params
         self.datasvc = datasvc
 
-    def execute(self, params, verb):
-        return self.datasvc.ExecuteAction(self.app_name, self.action_name, params, verb)
+    def execute(self, params):
+        return self.datasvc.ExecuteAction(self.app_name, self.action_name, params)
+
+    def details(self):
+        return self.datasvc.GetAction(self.app_name, self.action_name)
 
 class Application(GenericDataModel):
     default_values = {

@@ -28,6 +28,7 @@ Documentation:
    urlmap.rst
    app.rst
    global.rst
+   actions.rst
    job.rst
    server.rst
 

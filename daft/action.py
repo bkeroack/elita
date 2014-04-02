@@ -50,12 +50,16 @@ class ActionService:
         self.actions = RegisterActions(self.datasvc)
         self.actions.register()
 
-    def async(self, app, action_name, params, verb):
+    def get_action_details(self, app, action_name):
+        return self.actions.actionmap[app][action_name] if app in self.actions.actionmap and action_name in self\
+            .actions.actionmap[app] else None
+
+    def async(self, app, action_name, params):
         action = self.actions.actionmap[app][action_name]['callable']
-        util.debugLog(self, "action: {}, params: {}, verb: {}".format(action, params, verb))
+        util.debugLog(self, "action: {}, params: {}".format(action, params))
         job = self.datasvc.jobsvc.NewJob(action_name)
         job_id = str(job.job_id)
-        run_job.apply_async((self.datasvc.settings, action, {'params': params, 'verb': verb}), task_id=job_id)
+        run_job.apply_async((self.datasvc.settings, action, {'params': params}), task_id=job_id)
         return {"action": action_name, "job_id": job_id, "status": "async/running"}
 
 
