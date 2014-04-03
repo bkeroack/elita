@@ -130,6 +130,7 @@ class UserPermissions:
                 util.debugLog(self, "returning admin permissions")
                 return "read;write"
             elif "*" in userobj.permissions['apps']:
+                util.debugLog(self, "found wildcard perms")
                 return userobj.permissions['apps']['*']
             elif app in userobj.permissions['apps']:
                 util.debugLog(self, "returning perms: {}".format(userobj.permissions['apps'][app]))

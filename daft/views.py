@@ -2,12 +2,12 @@ from pyramid.view import view_config
 import pyramid.exceptions
 import pyramid.response
 import logging
-import urllib2
 import pprint
 import traceback
 import sys
 import fnmatch
 import tempfile
+import json
 
 import models
 import builds
@@ -171,7 +171,10 @@ class NotFoundView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, permissionless=True)
     def notfound(self):
-        return self.Error("404 not found")
+        body = {
+            "error": "not found (404)"
+        }
+        return pyramid.response.Response(status_int=404, content_type="application/json", body=json.dumps(body))
     def GET(self):
         return self.notfound()
     def POST(self):
@@ -186,11 +189,12 @@ class NotFoundView(GenericView):
 def ExceptionView(exc, request):
     exc_type, exc_obj, tb = sys.exc_info()
     logger.exception("")
-    return {
+    body = {
         "fatal_application_error": {
             "unhandled_exception": traceback.format_exception(exc_type, exc_obj, tb)
         }
     }
+    return pyramid.response.Response(status_int=500, content_type="application/json", body=json.dumps(body))
 
 class ApplicationContainerView(GenericView):
     def __init__(self, context, request):
