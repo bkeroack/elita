@@ -500,7 +500,7 @@ class DeploymentContainerView(GenericView):
             'gitdeploys': body['gitdeploys'],
             'deployment': d_id
         })
-        self.datasvc.deploysvc.UpdateDeployment(app, d_id, {'results': {'status': 'running', 'job_id': msg['job_id']}})
+        self.datasvc.deploysvc.UpdateDeployment(app, d_id, {'status': 'running', 'job_id': msg['job_id']})
         return self.status_ok({
             'deployment': {
                 'deployment_id': dpo['NewDeployment']['id'],
@@ -520,9 +520,13 @@ class DeploymentView(GenericView):
     def GET(self):
         return {
             'deployment': {
+                'id': self.context.name,
+                'job_id': self.context.job_id,
                 'created_datetime': self.get_created_datetime_text(),
                 'application': self.context.application,
-                'status': self.context.results
+                'deploy': self.context.deploy,
+                'build': self.context.build_name,
+                'status': self.context.status
             }
         }
 

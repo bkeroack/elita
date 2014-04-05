@@ -536,17 +536,26 @@ class GitDataService(GenericChildDataService):
 class DeploymentDataService(GenericChildDataService):
     def NewDeployment(self, app, build_name, deploy):
         dpo = Deployment({
+            'name': "",
             'application': app,
             'build_name': build_name,
-            'deploy': deploy
+            'deploy': deploy,
+            'status': 'created',
+            'job_id': ''
         })
         did = self.db['deployments'].insert({
             '_class': 'Deployment',
+            'name': dpo.name,
             'application': dpo.application,
             'build_name': dpo.build_name,
             'deploy': dpo.deploy,
-            'results': {}
+            'status': dpo.status,
+            'job_id': dpo.job_id
         })
+        # we don't know the deployment 'name' until it's inserted
+        doc = self.db['deployments'].find_one({'_id': did})
+        doc['name'] = str(did)
+        self.db['deployments'].save(doc)
         self.parent.refresh_root()
         self.root['app'][app]['deployments'][str(did)] = {
             '_doc': bson.DBRef('deployments', did)
@@ -808,16 +817,15 @@ class GitDeploy(GenericDataModel):
 
 class Deployment(GenericDataModel):
     default_values = {
+        'name': None,  # "name" for consistency w/ other models, even though it's really id
         'application': None,
         'build_name': None,
         'deploy': {
             'servers': None,
             'gitdeploys': []
         },
-        'results': {
-            'status': 'pending',
-            'job_id': None
-        }
+        'status': None,
+        'job_id': None
     }
 
 class Build(GenericDataModel):
@@ -1288,9 +1296,40 @@ class DataValidator:
                     'gitdeploys': d['server_specs']['gitdeploys']
                 }
                 update_list.append(d)
+            if 'job_id' not in d:
+                util.debugLog(self, "WARNING: found deployment without job_id: {}; fixing with blank job".format(d[
+                    '_id']))
+                d['job_id'] = ""
+                update_list.append(d)
+            if 'results' in d:
+                util.debugLog(self, "WARNING: found deployment with old-style results field: {}; removing"
+                              .format(d['_id']))
+                update_list.append(d)
+            if 'status' not in d:
+                util.debugLog(self, "WARNING: found deployment without status: {}; fixing with blank".format(d['_id']))
+                d['status'] = ""
+                update_list.append(d)
         for d in update_list:
-            del d['server_specs']
+            if 'server_specs' in d:
+                del d['server_specs']
+            if 'results' in d:
+                del d['results']
             self.db['deployments'].save(d)
+
+        update_list = list()
+        for a in self.root['app']:
+            if a[0] != '_':
+                for d in self.root['app'][a]['deployments']:
+                    if d[0] != '_':
+                        doc = self.db.dereference(self.root['app'][a]['deployments'][d]['_doc'])
+                        assert doc is not None
+                        if 'name' not in doc:
+                            util.debugLog(self, "WARNING: name not found under deployment {}; fixing".format(d))
+                            doc['name'] = d
+                            update_list.append(doc)
+        if len(update_list) > 0:
+            for d in update_list:
+                self.db['deployments'].save(d)
 
     def check_gitdeploys(self):
         dlist = list()

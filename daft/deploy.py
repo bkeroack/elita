@@ -1,5 +1,8 @@
 __author__ = 'bkeroack'
 
+import sys
+import traceback
+
 import util
 import gitservice
 import salt_control
@@ -9,8 +12,22 @@ def run_deploy(datasvc, application, build_name, servers, gitdeploys, deployment
     sc = salt_control.SaltController(datasvc.settings)
     rc = salt_control.RemoteCommands(sc)
     dc = DeployController(datasvc, rc)
-    dc.run(application, build_name, servers, gitdeploys)
-    datasvc.deploysvc.UpdateDeployment(application, deployment, {"results": "complete"})
+    # normally there's a higher level try/except block for all async actions
+    # we want to make sure the error is saved in the deployment object as well, not just the job
+    # so we duplicate the functionality here
+    try:
+        dc.run(application, build_name, servers, gitdeploys)
+    except:
+        exc_type, exc_obj, tb = sys.exc_info()
+        f_exc = traceback.format_exception(exc_type, exc_obj, tb)
+        results = {
+            "error": "unhandled exception during callable!",
+            "exception": f_exc
+        }
+        util.debugLog(run_deploy, "EXCEPTION: {}".format(f_exc))
+        datasvc.deploysvc.UpdateDeployment(application, deployment, {"status": "error"})
+        return {"deploy_status": "error", "details": results}
+    datasvc.deploysvc.UpdateDeployment(application, deployment, {"status": "complete"})
     return {"deploy_status": "complete"}
 
 def validate_server_specs(deploy_obj):
@@ -30,53 +47,100 @@ class DeployController:
         self.datasvc = datasvc
         self.rc = remote_controller
         self.sc = remote_controller.sc
+        self.total_steps = 0
+        self.current_step = 0
 
-    def add_msg(self, msg):
+    def _push_msg(self, status, msg):
         util.debugLog(self, msg)
         self.datasvc.jobsvc.NewJobData({
             "DeployController": {
+                "status": status,
+                "current_step": self.current_step,
+                "total_steps": self.total_steps,
                 "message": msg
             }
         })
 
+    def add_msg(self, desc, data):
+        self._push_msg("ok", {
+            "description": desc,
+            "data": data
+        })
+
+    def error_msg(self, desc, data):
+        self._push_msg("error", {
+            "description": desc,
+            "data": data
+        })
+
+    def done_msg(self, msg):
+        self._push_msg("complete", msg)
+
     def push_to_gitdeploy(self, gddoc):
-        self.add_msg("Starting push to gitdeploy '{}' for application '{}'".format(gddoc['name'], self.application))
+        self.add_msg(desc="Starting push to gitdeploy", data={
+            "gitdeploy": gddoc['name'],
+            "application": self.application
+        })
         package = gddoc['package']
         package_doc = self.build_doc['packages'][package]
         gdm = gitservice.GitDeployManager(gddoc, self.datasvc)
-        self.add_msg("checking out default git branch")
-        res = gdm.checkout_default_branch()
-        self.add_msg("git checkout result: {}".format(res))
-        self.add_msg("decompressing package to master gitdeploy repo")
+        self.current_step += 1
+        self.add_msg(desc="Checking out default git branch", data={})
+        self.add_msg(desc="git checkout complete", data={
+            "output": str(gdm.checkout_default_branch())
+        })
+        self.current_step += 1
+        self.add_msg(desc="Decompressing package to master gitdeploy repo", data={})
         gdm.decompress_to_repo(package_doc)
-        self.add_msg("checking for changes")
+        self.current_step += 1
+        self.add_msg(desc="Checking for changes", data={})
         res = gdm.check_repo_status()
-        self.add_msg("git status result: {}".format(res))
+        self.add_msg(desc="git status results", data={
+            "output": str(res)
+        })
         if "nothing to commit" in res:
-            self.add_msg("no changes to commit/push")
+            self.current_step += 4
+            self.add_msg(desc="No changes to commit/push", data={})
         else:
-            self.add_msg("adding changed files to commit")
-            res = gdm.add_files_to_repo()
-            self.add_msg("git add result: {}".format(res))
-            self.add_msg("committing changes")
-            res = gdm.commit_to_repo(self.build_name)
-            self.add_msg("git commit result: {}".format(res))
-            res = gdm.inspect_latest_diff()
-            self.add_msg("inspect latest diff: {}".format(res))
-            self.add_msg("pushing changes to git provider")
-            res = gdm.push_repo()
-            self.add_msg("git push result: {}".format(res))
-        self.add_msg("Finished gitdeploy push")
+            self.current_step += 1
+            self.add_msg(desc="Adding changed files to commit", data={})
+            self.add_msg(desc="git add result", data={
+                "output": str(gdm.add_files_to_repo())
+            })
+            self.current_step += 1
+            self.add_msg(desc="Committing changes", data={})
+            self.add_msg(desc="git commit result", data={
+                "output": str(gdm.commit_to_repo(self.build_name))
+            })
+            self.current_step += 1
+            self.add_msg(desc="Inspect latest diff results", data={
+                "output": gdm.inspect_latest_diff()
+            })
+            self.current_step += 1
+            self.add_msg(desc="Pushing changes to git provider", data={})
+            self.add_msg(desc="git push result", data={
+                "output": str(gdm.push_repo())
+            })
+        self.add_msg(desc="Finished gitdeploy push", data={})
 
     def salt_checkout_branch(self, gddoc):
         branch = gddoc['location']['default_branch']
         path = gddoc['location']['path']
-        self.add_msg("Checking out branch: {} on path: {}".format(branch, path))
-        res = self.rc.checkout_branch(self.servers, path, branch)
-        self.add_msg("git checkout {} result: {}".format(branch, res))
+        self.current_step += 1
+        self.add_msg(desc="Checking out gideploy branch", data={
+            "branch": branch,
+            "path": path
+        })
+        self.add_msg(desc="git checkout result", data={
+            "branch": branch,
+            "output": self.rc.checkout_branch(self.servers, path, branch)
+        })
 
     def salt_highstate_server(self):
-        self.add_msg("Starting highstate deployment on server_spec: {}".format(self.servers))
+        self.current_step += 1
+        self.add_msg(desc="Starting highstate deployment", data={
+            "servers": self.servers
+        })
         res = self.rc.highstate(self.servers)
         errors = dict()
         successes = dict()
@@ -98,11 +162,20 @@ class DeployController:
                                 "retcode": res[host][cmd]["changes"]["retcode"],
                             }
         if len(errors) > 0:
-            self.add_msg({"highstate_errors": errors})
+            self.error_msg(desc="Errors detected in highstate call", data={
+                "success_servers": successes.keys(),
+                "error_servers": errors.keys(),
+                "error_responses": errors
+            })
         if len(successes) > 0:
-            self.add_msg({"highstate_successes": successes})
-        #self.add_msg({"highstate_result": res}) #too verbose
-        self.add_msg("Finished highstate deployment on server_spec: {}".format(self.servers))
+            self.add_msg(desc="Successfull highstate calls detected", data={
+                "success_servers": successes.keys(),
+                "success_responses": successes
+            })
+        self.current_step += 1
+        self.add_msg(desc="Finished highstate call", data={
+            "servers": self.servers
+        })
 
     def run(self, app_name, build_name, servers, gitdeploys):
         '''
@@ -117,20 +190,30 @@ class DeployController:
         self.build_doc = self.datasvc.buildsvc.GetBuildDoc(app_name, build_name)
         self.servers = servers
         self.gitdeploys = gitdeploys
+        self.total_steps = (len(self.gitdeploys)*8)+3
 
-        self.add_msg("Beginning gitdeploy: build: {}; application: {}; server spec: {}".format(self.build_name,
-                                                                                               self.application,
-                                                                                               self.servers))
-        self.add_msg("Deploying gitdeploys ({}): {}".format(len(self.gitdeploys),self.gitdeploys))
+        self.current_step += 1
+        self.add_msg(desc="Beginning deployment", data={
+            "application": self.application,
+            "build": self.build_name,
+            "servers": self.servers,
+            "gitdeploys": self.gitdeploys
+        })
 
         for gd in self.gitdeploys:
-            self.add_msg("Processing gitdeploy: {}".format(gd))
+            self.add_msg(desc="Processing gitdeploy", data={"name": gd})
             gddoc = self.datasvc.gitsvc.GetGitDeploy(self.application, gd)
             self.push_to_gitdeploy(gddoc)
             self.salt_checkout_branch(gddoc)
 
         self.salt_highstate_server()
 
-        self.add_msg("Finished gitdeploy: build: {}; application: {}; server spec: {}".format(self.build_name,
-                                                                                               self.application,
-                                                                                               self.servers))
+        self.current_step = self.total_steps
+        self.add_msg(desc="Finished deployment", data={
+            "application": self.application,
+            "build": self.build_name,
+            "servers": self.servers,
+            "gitdeploys": self.gitdeploys
+        })
+
+        self.done_msg("done")
