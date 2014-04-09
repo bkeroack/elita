@@ -228,7 +228,8 @@ class ApplicationView(GenericView):
 
     def GET(self):
         return {"application": self.context.app_name,
-                "created": self.get_created_datetime_text()}
+                "created": self.get_created_datetime_text(),
+                "child_resources": self.datasvc.GetAppKeys(self.context.app_name)}
 
 class ActionContainerView(GenericView):
     def __init__(self, context, request):
@@ -925,7 +926,7 @@ class GlobalContainerView(GenericView):
         GenericView.__init__(self, context, request, permissionless=True)
 
     def GET(self):
-        return {"global": ["users", "tokens"]}
+        return {"global": self.datasvc.GetGlobalKeys()}
 
 
 class UserContainerView(GenericView):

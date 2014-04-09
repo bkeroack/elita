@@ -607,6 +607,7 @@ class KeyDataService(GenericChildDataService):
         kpo = self.db['keypairs'].find_and_modify(query={
             'name': kp_obj.name
         }, update={
+            '_class': "KeyPair",
             'name': kp_obj.name,
             'attributes': kp_obj.attributes,
             'key_type': kp_obj.key_type,
@@ -689,6 +690,12 @@ class DataService:
 
     def Dereference(self, dbref):
         return self.db.dereference(dbref)
+
+    def GetAppKeys(self, app):
+        return [k for k in self.root['app'][app] if k[0] != '_']
+
+    def GetGlobalKeys(self):
+        return [k for k in self.root['global'] if k[0] != '_']
 
 class SupportedFileType:
     TarGz = 'tar.gz'
@@ -1276,6 +1283,14 @@ class DataValidator:
                         del self.root['app'][a][sl][d]
 
     def check_servers(self):
+        ds = list()
+        for s in self.root['server']:
+            if s[0] != '_':
+                if self.db.dereference(self.root['server'][s]['_doc']) is None:
+                    util.debugLog(self, "WARNING: found dangling server ref in root tree: {}; deleting".format(s))
+                    ds.append(s)
+        for s in ds:
+            del self.root['server'][s]
         update_list = list()
         for d in self.db['servers'].find():
             if 'environment' not in d:
