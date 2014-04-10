@@ -31,6 +31,7 @@ class RemoteCommands:
 
     def get_os(self, server):
         resp = self.sc.salt_command(server, 'grains.item', ["os"])
+        util.debugLog(self, "get_os: resp: {}".format(resp))
         return OSTypes.Windows if resp[server]['os'] == "Windows" else OSTypes.Unix_like
 
     def create_directory(self, server_list, path):
