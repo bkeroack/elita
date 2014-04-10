@@ -78,12 +78,14 @@ class RegisterHooks:
         self.hookmap = dict()
 
     def register(self):
+        #first load all defaults
+        for app in self.datasvc.appsvc.GetApplications():
+            self.hookmap[app] = DefaultHookMap
         from pkg_resources import iter_entry_points
         for obj in iter_entry_points(group="daft.modules", name="register_hooks"):
             hooks = (obj.load())()  # returns: { app: { "HOOK_NAME": <callable> } }
             for app in hooks:
                 for a in hooks[app]:
-                    self.hookmap[app] = DefaultHookMap
                     self.hookmap[app][a] = hooks[app][a]
             util.debugLog(self, "HookMap: {}".format(self.hookmap))
 
