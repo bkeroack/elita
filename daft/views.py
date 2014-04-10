@@ -1184,7 +1184,22 @@ class RootView(GenericView):
 import pkg_resources
 @view_config(name="about", renderer='json')
 def About(request):
-    return {'about': {'name': 'daft', 'version': pkg_resources.require("daft")[0].version}}
+    apps = request.datasvc.appsvc.GetApplications()
+    return {
+        'about': {
+            'name': 'daft',
+            'version': pkg_resources.require("daft")[0].version,
+            'tagline': "You Know, for DevOps"
+        },
+        'stats': {
+            'applications': len(apps),
+            'servers': len(request.datasvc.serversvc.GetServers()),
+            'builds': {a: len(request.datasvc.buildsvc.GetBuilds(a)) for a in apps},
+            'gitrepos': {a: len(request.datasvc.gitsvc.GetGitRepos(a)) for a in apps},
+            'gitdeploys': {a: len(request.datasvc.gitsvc.GetGitDeploys(a)) for a in apps},
+            'users': len(request.datasvc.usersvc.GetUsers())
+        }
+    }
 
 
 
