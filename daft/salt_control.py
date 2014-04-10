@@ -142,7 +142,7 @@ class SaltController:
 
         self.load_salt_info()
 
-    def salt_command(self, target, cmd, arg, opts={}, timeout=120):
+    def salt_command(self, target, cmd, arg, opts=None, timeout=120):
         return self.salt_client.cmd(target, cmd, arg, kwarg=opts, timeout=timeout, expr_form='list')
 
     def run_command(self, target, cmd, shell, timeout=120):
