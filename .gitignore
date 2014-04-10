@@ -7,3 +7,4 @@ dist/
 daft.egg-info/
 doc/_build
 celerybeat-schedule*
+atlassian-ide-plugin.xml

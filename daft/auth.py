@@ -98,7 +98,7 @@ class UserPermissions:
         assert self.datasvc is not None
         util.debugLog(self, "get_allowed_servers: username: {}".format(username))
         servers = self.datasvc.serversvc.GetServers()
-        return [fnmatch.filter(servers, s) for s in userobj.permissions['servers']][0]
+        return ([fnmatch.filter(servers, s) for s in userobj.permissions['servers']])
 
     def get_action_permissions(self, app, action):
         util.debugLog(self, "get_action_permissions: {}: {}".format(app, action))

@@ -1056,6 +1056,7 @@ class DataValidator:
         self.check_root()
         self.check_doc_consistency()
         self.check_toplevel()
+        self.check_containers()
         self.check_global()
         self.check_users()
         self.check_user_permissions()
@@ -1415,6 +1416,16 @@ class DataValidator:
                     self.root[tl]['environments'] = {
                         "_doc": bson.DBRef("environments", eid)
                     }
+
+    def check_containers(self):
+        update_list = list()
+        for c in self.db['containers'].find():
+            if c['_class'] == 'AppContainer':
+                util.debugLog(self, "WARNING: found Application container with incorrect 'AppContainer' class; fixing")
+                c['_class'] = 'ApplicationContainer'
+                update_list.append(c)
+        for c in update_list:
+            self.db['containers'].save(c)
 
     def check_root(self):
         self.root = dict() if self.root is None else self.root
