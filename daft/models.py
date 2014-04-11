@@ -75,6 +75,17 @@ class BuildDataService(GenericChildDataService):
             "_doc": bson.DBRef("builds", id)
         }
 
+    def AddPackages(self, app, build, packages):
+        bobj = self.GetBuild(app, build)
+        packages = dict(bobj.packages.items() + packages.items())
+        #generate files from packages (avoid dupes)
+        files = [{"file_type": packages[p]['file_type'], "path": packages[p]['filename']} for p in packages]
+        self.UpdateBuild(app, {
+            "build_name": bobj.build_name,
+            "packages": packages,
+            "files": files
+        })
+
     def UpdateBuild(self, app, doc):
         util.debugLog(self, "UpdateBuild: app: {}; doc: {}".format(app, doc))
         self.parent.UpdateGenericObject(doc['build_name'], doc, "builds", "Build", {'build_name': doc['build_name'],
