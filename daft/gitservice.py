@@ -7,6 +7,7 @@ import stat
 import sh
 import lockfile
 import git
+import copy
 
 import util
 import salt_control
@@ -405,9 +406,13 @@ class GitDeployManager:
         util.debugLog(self, "commit hash: {}".format(m.commit.hexsha))
         s = m.commit.stats
         files = s.files
+        #replace all '.' with underscore to make Mongo happy
+        #make copy for the hook
+        orig_files = copy.deepcopy(files)
+        util.change_dict_keys(files, '.', '_')
         return {
             "files": files,
-            "commit_diff_hook": self.run_commit_diffhook(files)
+            "commit_diff_hook": self.run_commit_diffhook(orig_files)
         }
 
     def checkout_default_branch(self):
