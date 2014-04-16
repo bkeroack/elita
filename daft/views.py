@@ -98,7 +98,7 @@ class GenericView:
             bad_verb = True
         if bad_verb:
             return self.UNKNOWN_VERB()
-        return self.Error('insufficient permissions')
+        return self.UNAUTHORIZED()
 
     def check_params(self):
         if not self.permissionless and not self.allow_pw_auth:
@@ -143,8 +143,9 @@ class GenericView:
     def Success(self):
         return {'status': 'success'}
 
-    def Error(self, message):
-        return {'status': 'error', 'message': message}
+    def Error(self, code, message):
+        body = {'status': 'error', 'error': message}
+        return pyramid.response.Response(status_int=code, content_type="application/json", body=json.dumps(body))
 
     def GET(self):
         return self.UNIMPLEMENTED()
@@ -159,11 +160,13 @@ class GenericView:
         return self.UNIMPLEMENTED()
 
     def UNKNOWN_VERB(self):
-        return self.Error("unknown/unsupported HTTP verb")
+        return self.Error(501, "unknown/unsupported HTTP verb")
 
     def UNIMPLEMENTED(self):
-        return self.Error("HTTP verb '{}' not implemented for this resource".format(self.req.method))
+        return self.Error(405, "HTTP verb '{}' not implemented for this resource".format(self.req.method))
 
+    def UNAUTHORIZED(self):
+        return self.Error(401, "insufficient permissions")
 
 
 @view_config(context=pyramid.exceptions.HTTPNotFound, renderer='json')
@@ -171,10 +174,7 @@ class NotFoundView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, permissionless=True)
     def notfound(self):
-        body = {
-            "error": "not found (404)"
-        }
-        return pyramid.response.Response(status_int=404, content_type="application/json", body=json.dumps(body))
+        return self.Error(404, "not found (404)")
     def GET(self):
         return self.notfound()
     def POST(self):
@@ -190,7 +190,8 @@ def ExceptionView(exc, request):
     exc_type, exc_obj, tb = sys.exc_info()
     logger.exception("")
     body = {
-        "fatal_application_error": {
+        "status": "error",
+        "error": {
             "unhandled_exception": traceback.format_exception(exc_type, exc_obj, tb)
         }
     }
