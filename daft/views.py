@@ -60,7 +60,7 @@ class GenericView:
             try:
                 attribs = self.req.json_body
             except:
-                return False, self.Error("invalid attributes object (problem deserializing, bad JSON?)")
+                return False, self.Error(400, "invalid attributes object (problem deserializing, bad JSON?)")
             return True, attribs
         else:
             return True, {}
@@ -68,12 +68,12 @@ class GenericView:
     def call_action(self):
         g, p = self.check_params()
         if not g:
-            return self.Error("Required parameter is missing: {}".format(p))
+            return self.MISSING_PARAMETER(p)
         if self.req.method == 'POST':
             if 'execute' in self.permissions:
                 return self.POST()
             else:
-                return self.Error('insufficient permissions')
+                return self.UNAUTHORIZED()
         else:
             return self.UNIMPLEMENTED()
 
@@ -81,7 +81,7 @@ class GenericView:
         g, p = self.check_params()
         bad_verb = False
         if not g:
-            return self.Error("Required parameter is missing: {}".format(p))
+            return self.MISSING_PARAMETER()
         if self.req.method == 'GET':
             if 'read' in self.permissions:
                 return self.GET()
@@ -166,7 +166,10 @@ class GenericView:
         return self.Error(405, "HTTP verb '{}' not implemented for this resource".format(self.req.method))
 
     def UNAUTHORIZED(self):
-        return self.Error(401, "insufficient permissions")
+        return self.Error(403, "insufficient permissions")
+
+    def MISSING_PARAMETER(self, p):
+        return self.Error(400, "Required parameter is missing: {}".format(p))
 
 
 @view_config(context=pyramid.exceptions.HTTPNotFound, renderer='json')
@@ -214,7 +217,7 @@ class ApplicationContainerView(GenericView):
     def DELETE(self):
         app_name = self.req.params["app_name"]
         if not self.validate_app_name(app_name):
-            return self.Error("app name '{}' not found".format(app_name))
+            return self.Error(400, "app name '{}' not found".format(app_name))
         self.datasvc.appsvc.DeleteApplication(app_name)
         return self.return_action_status({"delete_application": app_name})
 
@@ -310,7 +313,7 @@ class BuildContainerView(GenericView):
     def DELETE(self):
         build_name = self.req.params["build_name"]
         if not self.validate_build_name(build_name):
-            return self.Error("build name '{}' not found".format(build_name))
+            return self.Error(400, "build name '{}' not found".format(build_name))
         self.datasvc.buildsvc.DeleteBuild(self.app_name, build_name)
         return self.return_action_status({"delete_build": {"application": self.app_name, "build_name": build_name}})
 
@@ -354,7 +357,7 @@ class BuildView(GenericView):
                 f.write(self.req.POST['build'].file.read(-1))
             return self.run_build_storage_direct(temp_file)
         else:
-            return self.Error("build data not found in POST body")
+            return self.Error(400, "build data not found in POST body")
 
     def indirect_upload(self):
         return self.run_build_storage_indirect(self.req.params['indirect_url'])
@@ -362,7 +365,7 @@ class BuildView(GenericView):
     def POST(self):
         self.build_name = self.context.build_name
         if self.req.params["file_type"] not in models.SupportedFileType.types:
-            return self.Error("file type not supported")
+            return self.Error(400, "file type not supported")
         self.file_type = self.req.params["file_type"]
 
         if "indirect_url" in self.req.params:
@@ -374,7 +377,7 @@ class BuildView(GenericView):
         if "package" in self.req.params:
             pkg = self.req.params['package']
             if pkg not in self.context.packages:
-                return self.Error("package type '{}' not found".format(pkg))
+                return self.Error(400, "package type '{}' not found".format(pkg))
             return pyramid.response.FileResponse(self.context.packages[pkg]['filename'], request=self.req,
                                                  cache_max_age=0)
         else:
@@ -419,7 +422,7 @@ class ServerContainerView(GenericView):
                 }
             })
         else:
-            return self.Error(res)
+            return self.Error(500, res)
 
     def DELETE(self):
         name = self.req.params['name']
@@ -469,18 +472,18 @@ class DeploymentContainerView(GenericView):
         app = self.context.parent
         build_name = self.req.params['build_name']
         if build_name not in self.datasvc.buildsvc.GetBuilds(app):
-            return self.Error("unknown build '{}'".format(build_name))
+            return self.Error(400, "unknown build '{}'".format(build_name))
         try:
             body = self.req.json_body
         except:
-            return self.Error("invalid deployment object (problem deserializing, bad JSON?)")
+            return self.Error(400, "invalid deployment object (problem deserializing, bad JSON?)")
         ok, msg = deploy.validate_server_specs(body)
         if not ok:
-            return self.Error("invalid deployment object ({})".format(msg))
+            return self.Error(400, "invalid deployment object ({})".format(msg))
         if isinstance(body['servers'], str):
             servers = fnmatch.filter(self.datasvc.serversvc.GetServers(), body['servers'])
             if len(servers) == 0:
-                return self.Error("servers glob pattern doesn't match anything: {}".format(body['servers']))
+                return self.Error(400, "servers glob pattern doesn't match anything: {}".format(body['servers']))
         else:
             servers = body['servers']
         #verify that all servers have the requested gitdeploys initialized on them
@@ -492,7 +495,7 @@ class DeploymentContainerView(GenericView):
             if not init_servers.issuperset(req_servers):
                 uninit_gd[gd] = list(req_servers - init_servers)
         if len(uninit_gd) > 0:
-            return self.Error({"gitdeploy not initialized on servers": uninit_gd})
+            return self.Error(400, {"message": "gitdeploy not initialized on servers", "servers": uninit_gd})
         dpo = self.datasvc.deploysvc.NewDeployment(app, build_name, body)
         d_id = dpo['NewDeployment']['id']
         msg = self.run_async('deploy_{}_{}'.format(app,  build_name), deploy.run_deploy, {
@@ -549,21 +552,21 @@ class KeyPairContainerView(GenericView):
         try:
             info = self.req.json_body
         except:
-            return self.Error("invalid keypair info object (problem deserializing, bad JSON?)")
+            return self.Error(400, "invalid keypair info object (problem deserializing, bad JSON?)")
         attributes = info['attributes'] if 'attributes' in info else dict()
         if 'private_key' not in info:
-            return self.Error("private_key missing")
+            return self.Error(400, "private_key missing")
         else:
             private_key = info['private_key']
         if 'public_key' not in info:
-            return self.Error("public_key missing")
+            return self.Error(400, "public_key missing")
         else:
             public_key = info['public_key']
         ret = self.datasvc.keysvc.NewKeyPair(name, attributes, key_type, private_key, public_key)
         if ret['NewKeyPair']['status'] == 'ok':
             return self.status_ok({'new_keypair': {'name': name, 'key_type': key_type}})
         else:
-            return self.Error(ret)
+            return self.Error(500, ret)
 
     def POST(self):
         return self.PUT()
@@ -591,7 +594,7 @@ class KeyPairView(GenericView):
         try:
             info = self.req.json_body
         except:
-            return self.Error("invalid keypair info object (problem deserializing, bad JSON?)")
+            return self.Error(400, "invalid keypair info object (problem deserializing, bad JSON?)")
         self.datasvc.keysvc.UpdateKeyPair(self.context.name, info)
         return self.status_ok({'update_keypair': self.datasvc.keysvc.GetKeyPair(self.context.name)})
 
@@ -615,13 +618,13 @@ class GitProviderContainerView(GenericView):
         try:
             info = self.req.json_body
         except:
-            return self.Error("invalid gitprovider info object (problem deserializing, bad JSON?)")
+            return self.Error(400, "invalid gitprovider info object (problem deserializing, bad JSON?)")
         if 'auth' not in info or 'type' not in info:
-            return self.Error("invalid gitprovider info object (valid JSON but missing one or more of: auth, type)")
+            return self.Error(400, "invalid gitprovider info object (valid JSON but missing one or more of: auth, type)")
         gp_type = info['type']
         auth = info['auth']
         if gp_type not in gitservice.ValidRepoTypes.type_names:
-            return self.Error("gitprovider type not supported")
+            return self.Error(400, "gitprovider type not supported")
         self.datasvc.gitsvc.NewGitProvider(name, gp_type, auth)
         return self.status_ok({
             'new_gitprovider': {
@@ -639,7 +642,7 @@ class GitProviderContainerView(GenericView):
             self.datasvc.gitsvc.DeleteGitProvider(name)
             return self.status_ok({'delete_gitprovider': {'name': name}})
         else:
-            return self.Error("gitprovider '{}' not found".format(name))
+            return self.Error(400, "gitprovider '{}' not found".format(name))
 
 
 class GitProviderView(GenericView):
@@ -687,7 +690,7 @@ class GitRepoContainerView(GenericView):
         name = self.req.params['name']
         ret = self.datasvc.gitsvc.NewGitRepo(self.context.parent, name, keypair, gitprovider)
         if ret['NewGitRepo'] != 'ok':
-            return self.Error(ret)
+            return self.Error(500, ret)
         else:
             if not existing:
                 kp = self.datasvc.keysvc.GetKeyPair(keypair)
@@ -695,7 +698,7 @@ class GitRepoContainerView(GenericView):
                 logger.debug("GitRepoContainerView: gp_doc: {}".format(gp_doc))
                 repo_callable = gitservice.create_repo_callable_from_type(gp_doc['type'])
                 if not repo_callable:
-                    return self.Error("gitprovider type not supported ({})".format(gp_doc['type']))
+                    return self.Error(400, "gitprovider type not supported ({})".format(gp_doc['type']))
                 msg = self.run_async("create_repository", repo_callable, {'gitprovider': gp_doc, 'name': name,
                                                                           'application': self.context.parent,
                                                                           'keypair': kp})
@@ -717,7 +720,7 @@ class GitRepoContainerView(GenericView):
             self.datasvc.gitsvc.DeleteGitRepo(name)
             return self.status_ok({'delete_gitrepo': {'name': name}})
         else:
-            return self.Error("gitrepo '{}' not found".format(name))
+            return self.Error(400, "gitrepo '{}' not found".format(name))
 
 class GitRepoView(GenericView):
     def __init__(self, context, request):
@@ -747,7 +750,7 @@ class GitRepoView(GenericView):
             gp_doc = self.datasvc.Dereference(self.context.gitprovider)
             del_callable = gitservice.delete_repo_callable_from_type(gp_doc['type'])
             if not del_callable:
-                return self.Error("git provider type not supported ({})".format(gp_doc['type']))
+                return self.Error(400, "git provider type not supported ({})".format(gp_doc['type']))
             msg = self.run_async("delete_repository", del_callable, {'gitprovider': gp_doc, 'name': self.context.name})
             resp['message'] = { 'delete_repository': msg}
         return self.status_ok(resp)
@@ -770,7 +773,7 @@ class GitDeployContainerView(GenericView):
         try:
             location_attribs = self.req.json_body
         except:
-            return self.Error("invalid location/attributes object (problem deserializing, bad JSON?)")
+            return self.Error(400, "invalid location/attributes object (problem deserializing, bad JSON?)")
         attribs = location_attribs['attributes'] if 'attributes' in location_attribs else {}
         options = location_attribs['options'] if 'options' in location_attribs else None
         actions = location_attribs['actions'] if 'actions' in location_attribs else None
@@ -778,16 +781,16 @@ class GitDeployContainerView(GenericView):
         if 'location' in location_attribs:
             location = location_attribs['location']
         else:
-            return self.Error("invalid location object (valid JSON, 'location' key not found)")
+            return self.Error(400, "invalid location object (valid JSON, 'location' key not found)")
         try:
             assert 'path' in location
             assert 'gitrepo' in location
             assert 'default_branch' in location
         except AssertionError:
-            return self.Error("invalid location object: one or more of ('path', 'gitrepo', 'default_branch') not found")
+            return self.Error(400, "invalid location object: one or more of ('path', 'gitrepo', 'default_branch') not found")
         res = self.datasvc.gitsvc.NewGitDeploy(name, app, package, options, actions, location, attribs)
         if 'error' in res:
-            return self.Error({"NewGitDeploy": res})
+            return self.Error(500, {"NewGitDeploy": res})
         gd = self.datasvc.gitsvc.GetGitDeploy(app, name)
         msg = self.run_async("create_gitdeploy", gitservice.create_gitdeploy, {'gitdeploy': gd})
         return self.status_ok({'create_gitdeploy': {'name': name, 'message': msg}})
@@ -825,19 +828,19 @@ class GitDeployView(GenericView):
 
     def check_servers_list(self, body):
         if "servers" not in body:
-            return False, self.Error("initialization requested but 'servers' not found")
+            return False, self.Error(400, "initialization requested but 'servers' not found")
         servers = body['servers']
         eservers = self.datasvc.serversvc.GetServers()
         if isinstance(servers, list):
             sset = set(eservers)
             sset_r = set(servers)
             if not sset.issuperset(sset_r):
-                return False, self.Error("unknown servers: {}".format(list(sset_r-sset)))
+                return False, self.Error(400, "unknown servers: {}".format(list(sset_r-sset)))
         else:
             sglob = servers
             servers = fnmatch.filter(eservers, servers)
             if len(servers) == 0:
-                return False, self.Error("no servers matched pattern: {}".format(sglob))
+                return False, self.Error(400, "no servers matched pattern: {}".format(sglob))
         self.servers = servers
         return True, None
 
@@ -845,7 +848,7 @@ class GitDeployView(GenericView):
     def update(self, body):
         keys = {'attributes', 'options', 'package', 'actions', 'location'}
         if "location" not in body:
-            return self.Error("invalid location object (valid JSON, 'location' key not found)")
+            return self.Error(400, "invalid location object (valid JSON, 'location' key not found)")
         #verify no unknown/incorrect location keys
         body_keys = {k for k in body.keys()}
         if not keys.issuperset(body_keys):
@@ -853,7 +856,7 @@ class GitDeployView(GenericView):
             u_i = len(diff)
             word = "key"
             word += "s" if u_i > 1 else ""
-            return self.Error("invalid {}: {}".format(word, diff))
+            return self.Error(400, "invalid {}: {}".format(word, diff))
         self.datasvc.gitsvc.UpdateGitDeploy(self.context.application, self.context.name, body)
         gd = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
         msg = self.run_async("create_gitdeploy", gitservice.create_gitdeploy, {'gitdeploy': gd})
@@ -897,7 +900,7 @@ class GitDeployView(GenericView):
         try:
             body = self.req.json_body
         except:
-            return self.Error("invalid body object (problem deserializing, bad JSON?)")
+            return self.Error(400, "invalid body object (problem deserializing, bad JSON?)")
         if "initialize" in self.req.params and self.req.params['initialize'] in AFFIRMATIVE_SYNONYMS:
             return self.initialize(body)
         elif "deinitialize" in self.req.params and self.req.params['deinitialize'] in AFFIRMATIVE_SYNONYMS:
@@ -942,7 +945,7 @@ class UserContainerView(GenericView):
         try:
             perms_attribs = self.req.json_body
         except:
-            return self.Error("invalid user attributes object (problem deserializing, bad JSON?)")
+            return self.Error(400, "invalid user attributes object (problem deserializing, bad JSON?)")
         if "permissions" in perms_attribs:
             perms = perms_attribs['permissions']
             attribs = perms_attribs['attributes'] if 'attributes' in perms_attribs else dict()
@@ -951,9 +954,9 @@ class UserContainerView(GenericView):
                 return self.status_ok({"user_created": {"username": name, "password": "(hidden)",
                                                         "permissions": perms, "attributes": attribs}})
             else:
-                return self.Error("invalid permissions object (valid JSON but semantically incorrect)")
+                return self.Error(400, "invalid permissions object (valid JSON but semantically incorrect)")
         else:
-            return self.Error("invalid user attributes object (missing permissions)")
+            return self.Error(400, "invalid user attributes object (missing permissions)")
 
     def GET(self):
         return {"users": self.datasvc.usersvc.GetUsers()}
@@ -967,7 +970,7 @@ class UserContainerView(GenericView):
             self.datasvc.usersvc.DeleteUser(name)
             return self.status_ok({"user_deleted": {"username": name}})
         else:
-            return self.Error("unknown user")
+            return self.Error(400, "unknown user")
 
 class JobView(GenericView):
     def __init__(self, context, request):
@@ -1025,9 +1028,9 @@ class UserView(GenericView):
     def GET(self):  # return active
         if 'password' in self.req.params:
             if not self.context.validate_password(self.req.params['password']):
-                return self.Error("incorrect password")
+                return self.Error(403, "incorrect password")
         elif 'auth_token' not in self.req.params:
-            return self.Error("password or auth token required")
+            return self.Error(403, "password or auth token required")
         name = self.context.name
         if len(self.datasvc.usersvc.GetUserTokens(name)) == 0:
             self.datasvc.usersvc.NewToken(name)
@@ -1036,7 +1039,7 @@ class UserView(GenericView):
     def POST(self):
         if 'password' in self.req.params:
             if not self.context.validate_password(self.req.params['password']):
-                return self.Error("incorrect password")
+                return self.Error(403, "incorrect password")
         update = self.req.params['update'] if 'update' in self.req.params else 'token'
         if update == "token":
             self.datasvc.usersvc.NewToken(self.context.name)
@@ -1046,27 +1049,27 @@ class UserView(GenericView):
                 self.change_password(self.req.params['new_password'])
                 return self.status_ok("password changed")
             else:
-                return self.Error("parameter new_password required")
+                return self.Error(400, "parameter new_password required")
         elif update == "attributes":
             try:
                 attribs = self.req.json_body
             except:
-                return self.Error("problem deserializing attributes object")
+                return self.Error(400, "problem deserializing attributes object")
             self.change_attributes(attribs)
             return self.status_ok({"new_attributes": attribs})
         elif update == "permissions":
             try:
                 perms = self.req.json_body
             except:
-                return self.Error("problem deserializing permissions object (bad JSON?)")
+                return self.Error(400, "problem deserializing permissions object (bad JSON?)")
             perms = perms['permissions'] if 'permissions' in perms else perms
             if auth.ValidatePermissionsObject(perms).run():
                 self.change_permissions(perms)
                 return self.status_ok({"new_permissions": perms})
             else:
-                return self.Error("invalid permissions object (valid JSON but semantically incorrect)")
+                return self.Error(400, "invalid permissions object (valid JSON but semantically incorrect)")
         else:
-            return self.Error("incorrect request type '{}'".format(self.req.params['request']))
+            return self.Error(400, "incorrect request type '{}'".format(self.req.params['request']))
 
 class UserPermissionsView(GenericView):
     def __init__(self, context, request):
@@ -1109,9 +1112,9 @@ class TokenContainerView(GenericView):
             if len(tokens) > 0:
                 return self.status_ok({"username": username, "token": tokens})
             else:
-                return self.Error("no token found for '{}'".format(username))
+                return self.Error(400, "no token found for '{}'".format(username))
         else:
-            return self.Error("incorrect password")
+            return self.Error(403, "incorrect password")
 
     def DELETE(self):
         token = self.req.params['token']
@@ -1120,7 +1123,7 @@ class TokenContainerView(GenericView):
             self.datasvc.usersvc.DeleteToken(token)
             return self.status_ok({"token_deleted": {"username": username, "token": token}})
         else:
-            return self.Error("unknown token")
+            return self.Error(400, "unknown token")
 
 class TokenView(GenericView):
     def __init__(self, context, request):
