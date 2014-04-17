@@ -4,7 +4,7 @@
 Data.fs*
 build/
 dist/
-daft.egg-info/
+elita.egg-info/
 doc/_build
 celerybeat-schedule*
 atlassian-ide-plugin.xml

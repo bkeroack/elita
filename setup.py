@@ -1,8 +1,5 @@
 import os
 
-from ez_setup import use_setuptools
-use_setuptools()
-
 from setuptools import setup, find_packages
 
 here = os.path.abspath(os.path.dirname(__file__))
@@ -31,20 +28,20 @@ setup(name='elita',
       version="0.79",
       description='Continuous deployment (continuous delivery) and infrastructure management REST framework',
       long_description=README + '\n\n' + CHANGES,
+      license='Apache',
       classifiers=[
         "Programming Language :: Python",
         "Framework :: Pyramid",
         "Topic :: Internet :: WWW/HTTP",
         "Topic :: Internet :: WWW/HTTP :: WSGI :: Application",
         "Topic :: System :: Systems Administration",
-        "Topic :: Software Development :: Build Tools",
-        "Topic :: Software Development :: Deployment Tools"
+        "Topic :: Software Development :: Build Tools"
         ],
       author='Benjamen Keroack',
       author_email='ben@elita.io',
-      url='',
+      url='https://elita.io/',
       keywords='continuous deployment delivery REST automation devops',
-      packages=find_packages(),
+      packages=find_packages(exclude=['tests*']),
       include_package_data=True,
       zip_safe=False,
       install_requires=requires,
