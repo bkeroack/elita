@@ -1,3 +1,3 @@
 #!/bin/bash
 
-~/.virtualenvs/daft/bin/celery -A daft.celeryinit worker -l DEBUG -c 2 -B
+~/.virtualenvs/elita/bin/celery -A elita.celeryinit worker -l DEBUG -c 3 -f /var/log/elita/elita-celery-worker.log

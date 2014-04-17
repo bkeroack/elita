@@ -1,0 +1,18 @@
+/var/log/elita/elita.log
+{
+	rotate 7
+	daily
+	missingok
+	notifempty
+	delaycompress
+}
+
+/var/log/elita/elita-celery-worker.log
+{
+	rotate 7
+	daily
+	missingok
+	notifempty
+	delaycompress
+}
+

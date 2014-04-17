@@ -6,7 +6,7 @@ use_setuptools()
 from setuptools import setup, find_packages
 
 here = os.path.abspath(os.path.dirname(__file__))
-README = open(os.path.join(here, 'README.txt')).read()
+README = open(os.path.join(here, 'README.rst')).read()
 CHANGES = open(os.path.join(here, 'CHANGES.txt')).read()
 
 requires = [
@@ -27,28 +27,31 @@ requires = [
     'gitpython>=0.3.2.RC1'
     ]
 
-setup(name='daft',
-      version="0.76",
-      description='daft',
+setup(name='elita',
+      version="0.79",
+      description='Continuous deployment (continuous delivery) and infrastructure management REST framework',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[
         "Programming Language :: Python",
         "Framework :: Pyramid",
         "Topic :: Internet :: WWW/HTTP",
         "Topic :: Internet :: WWW/HTTP :: WSGI :: Application",
+        "Topic :: System :: Systems Administration",
+        "Topic :: Software Development :: Build Tools",
+        "Topic :: Software Development :: Deployment Tools"
         ],
-      author='B. Keroack',
-      author_email='bkeroack@gmail.com',
+      author='Benjamen Keroack',
+      author_email='ben@elita.io',
       url='',
-      keywords='web pylons pyramid deployment automation',
+      keywords='continuous deployment delivery REST automation devops',
       packages=find_packages(),
       include_package_data=True,
       zip_safe=False,
       install_requires=requires,
       tests_require=requires,
-      test_suite="daft",
+      test_suite="elita",
       entry_points="""\
       [paste.app_factory]
-      main = daft:main
+      main = elita:main
       """,
       )
