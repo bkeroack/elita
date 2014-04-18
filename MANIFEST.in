@@ -1,3 +1,3 @@
 include *.txt *.ini *.cfg *.rst
-recursive_include util
+recursive-include util *
 

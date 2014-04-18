@@ -42,9 +42,9 @@ setup(name='elita',
       url='https://elita.io/',
       keywords='continuous deployment delivery REST automation devops',
       packages=find_packages(exclude=['test*']),
-      package_data={
-          'elita': ['util/*', '*.ini', '*.txt', '*.rst', '*.cfg']
-      },
+#      package_data={
+#          'elita': ['util/*', '*.ini', '*.txt', '*.rst', '*.cfg']
+#      },
       include_package_data=True,
       zip_safe=False,
       install_requires=requires,
