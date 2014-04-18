@@ -28,8 +28,8 @@ def mk_etc_dir_posix():
                 sys.exit(1)
 
 def cp_prod_ini_posix():
-    ini_location = os.path.join(get_root_dir(), "production.ini")
-    cp_file_checkperms(ini_location, '/etc/elita/production.ini')
+    ini_location = os.path.join(get_root_dir(), "elita.ini")
+    cp_file_checkperms(ini_location, '/etc/elita/elita.ini')
 
 
 def InstallUbuntu():
@@ -43,7 +43,7 @@ def InstallUbuntu():
     service("start", "elita")
 
     #create /etc/elita/
-    #copy production.ini to /etc/elita/
+    #copy elita.ini to /etc/elita/
     #copy upstart file to /etc/init/
     #service start elita
 
