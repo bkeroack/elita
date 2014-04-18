@@ -48,7 +48,6 @@ setup(name='elita',
       include_package_data=True,
       zip_safe=False,
       install_requires=requires,
-      console_scripts=None,
       entry_points={
           'past.app_factory': ['main = elita:main'],
           'console_scripts': [
