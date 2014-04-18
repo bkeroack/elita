@@ -48,10 +48,10 @@ setup(name='elita',
       include_package_data=True,
       zip_safe=False,
       install_requires=requires,
-      tests_require=requires,
-      test_suite="elita",
-      entry_points="""\
-      [paste.app_factory]
-      main = elita:main
-      """,
-      )
+      console_scripts=None,
+      entry_points={
+          'past.app_factory': ['main = elita:main'],
+          'console_scripts': [
+              'elita_install = elita_install:Install'
+          ]
+      })
