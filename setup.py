@@ -21,7 +21,8 @@ requires = [
     'lockfile',
     'sh',
     'simplejson',
-    'gitpython>=0.3.2.RC1'
+    'gitpython>=0.3.2.RC1',
+    'clint'
     ]
 
 setup(name='elita',

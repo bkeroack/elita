@@ -2,6 +2,7 @@ __author__ = 'bkeroack'
 
 import os
 import platform
+from clint.textui import puts, indent, colored
 
 import linux
 import darwin
@@ -12,12 +13,22 @@ def Install():
     os_name = os.name
     p_name = platform.system()
 
-    if os_name == 'posix':
-        if p_name == 'Linux':
-            return linux.InstallLinux()
-        elif p_name == 'Darwin':
-            return darwin.InstallOSX()
+    puts("Installing Elita")
+
+    with indent(4, quote=colored.blue('> ')):
+
+        if os_name == 'posix':
+            if p_name == 'Linux':
+                puts("OS: {}".format(colored.green("Linux")))
+                return linux.InstallLinux()
+            elif p_name == 'Darwin':
+                puts("OS: {}".format(colored.green("Darwin")))
+                return darwin.InstallOSX()
+            else:
+                puts("{}: Unknown/unsupported POSIX-like OS: {}".format(colored.red("ERROR"), p_name))
+        if os_name == 'nt':
+            puts(colored.magenta("LOL Windows."))
+            puts("Um, No.")
         else:
-            print("Unknown POSIX-like os: {}".format(p_name))
-    else:
-        print("Unknown/Unsupported OS: {}; {}".format(os_name, p_name))
+            puts("{}: Unsupported OS: {}".format(colored.red("ERROR"), p_name))
+    return 1
