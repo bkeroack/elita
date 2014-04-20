@@ -15,7 +15,7 @@ requires = [
     'celery',
     'requests',
     'python-slugify',
-    'salt',
+    'salt<=2014.1.1',
     #'M2Crypto',
     'PyYAML',
     'lockfile',
