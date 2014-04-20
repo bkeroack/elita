@@ -16,7 +16,7 @@ requires = [
     'requests',
     'python-slugify',
     'salt',
-    'M2Crypto',
+    #'M2Crypto',
     'PyYAML',
     'lockfile',
     'sh',
