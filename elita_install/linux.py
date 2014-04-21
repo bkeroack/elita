@@ -17,6 +17,8 @@ ELITA_ETC = "/etc/elita"
 ELITA_INITD = "/etc/init.d/elita"
 ELITA_DEFAULTS = "/etc/default/elita"
 
+LOGROTATE_DIR = "/etc/logrotate.d"
+
 def get_root_dir():
     return os.path.abspath(os.path.dirname(__file__))
 
@@ -37,12 +39,19 @@ def mk_dir(dirname):
             sys.exit(1)
 
 def cp_prod_ini_posix():
-    ini_location = os.path.join(get_root_dir(), "util/elita.ini")
-    cp_file_checkperms(ini_location, '{}/elita.ini'.format(ELITA_ETC))
+    ini_location = os.path.join(get_root_dir(), "util", "elita.ini")
+    cp_file_checkperms(ini_location, os.path.join(ELITA_ETC, "elita.ini"))
 
 def cp_initd_defaults():
-    defaults_location = os.path.join(get_root_dir(), "util/init.d-defaults")
+    defaults_location = os.path.join(get_root_dir(), "util", "init.d-defaults")
     cp_file_checkperms(defaults_location, ELITA_DEFAULTS)
+
+def cp_logrotate():
+    if os.path.isdir(LOGROTATE_DIR):
+        logrotate_location = os.path.join(get_root_dir(), "util", "logrotate")
+        cp_file_checkperms(logrotate_location, os.path.join(LOGROTATE_DIR, "elita"))
+    else:
+        puts(colored.yellow("Logrotate directory not found!"))
 
 def chmod_ax_initd():
     os.chmod(ELITA_INITD, stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
@@ -65,6 +74,8 @@ def InstallUbuntu():
     do_step("Creating user and group 'elita'", create_user_and_group)
 
     do_step("Creating log directory: {}".format(ELITA_LOG_DIR), mk_dir, [ELITA_LOG_DIR])
+
+    do_step("Copying logrotate script", cp_logrotate)
 
     do_step("Creating config directory: {}".format(ELITA_ETC), mk_dir, [ELITA_ETC])
 
