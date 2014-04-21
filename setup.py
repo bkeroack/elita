@@ -51,7 +51,7 @@ setup(name='elita',
       zip_safe=False,
       install_requires=requires,
       entry_points={
-          'past.app_factory': ['main=elita:main'],
+          'paste.app_factory': ['main=elita:main'],
           'console_scripts': [
               'elita_install=elita_install:Install'
           ]
