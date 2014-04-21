@@ -49,7 +49,7 @@ def InstallUbuntu():
     do_step("Creating service (upstart)", cp_file_checkperms, [upstart_location, '/etc/init/elita.conf'])
 
     puts("Starting service...")
-    service("start", "elita")
+    service("elita", "start")
 
     puts(colored.green("Done!"))
 
