@@ -22,35 +22,36 @@ DEFAULTS="/etc/default/elita"
 PSERVE=$(which pserve)
 CELERY=$(which celery)
 
-test -f "${PSERVE}" || exit 1
-test -f "${CELERY}" || exit 1
+test -f "${PSERVE}" || (log_failure_msg "pserve not found"; exit 1)
+test -f "${CELERY}" || (log_failure_msg "celery not found"; exit 1)
 
 id elita > /dev/null
-if [ $? > 0 ]; then
+if [ $? -gt 0 ]; then
     log_failure_msg "User 'elita' not found"
     exit 1
 fi
 
-test -f "${HOME_DIR}" || exit 1
-test -f "${LOG_DIR}" || exit 1
+test -d "${HOME_DIR}" || (log_failure_msg "${HOME_DIR} not found"; exit 1)
+test -d "${LOG_DIR}" || (log_failure_msg "${LOG_DIR} not found"; exit 1)
 
 ELITA_UID=$(id elita |cut -d" " -f 1 |cut -d= -f2 |cut -d'(' -f1)
 ELITA_GID=$(id elita |cut -d" " -f 2 |cut -d= -f2 |cut -d'(' -f1)
 
-CELERY_COMMAND="${CELERY} -D -B --uid=${ELITA_UID} --gid=${ELITA_GID} -A elita.celeryinit worker -l DEBUG -c ${ASYNC_WORKERS} -f ${ASYNC_LOG}"
-PSERVE_COMMAND="${PSERVE} --daemon --log-file=${SYNC_LOG} --group=elita --user=elita ${INI_FILE} start"
+CELERY_OPTIONS="-D -B --uid=${ELITA_UID} --gid=${ELITA_GID} -A elita.celeryinit worker -l DEBUG -c ${ASYNC_WORKERS} -f ${ASYNC_LOG}"
+PSERVE_OPTIONS="--daemon --log-file=${SYNC_LOG} --group=elita --user=elita ${INI_FILE} start"
 
-CELERY_KILL="$(which python) -m celery worker"
+#echo "${CELERY_COMMAND}"
+#echo "${PSERVE_COMMAND}"
 
 
 case "$1" in
   start)
     cd "${HOME_DIR}"
     log_begin_msg "Starting Celery workers..."
-    start-stop-daemon --start --quiet --oknodo --exec "$CELERY_COMMAND" -- $OPTIONS
+    start-stop-daemon --start --quiet --oknodo --exec "$CELERY" -- $CELERY_OPTIONS
     log_end_msg $?
     log_begin_msg "Starting Elita..."
-    start-stop-daemon --start --quiet --oknodo --exec "$PSERVE_COMMAND" -- $OPTIONS
+    start-stop-daemon --start --quiet --oknodo --exec "$PSERVE" -- $PSERVE_OPTIONS
     log_end_msg $?
     ;;
   stop)
