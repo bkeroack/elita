@@ -37,17 +37,13 @@ test -d "${LOG_DIR}" || (log_failure_msg "${LOG_DIR} not found"; exit 1)
 ELITA_UID=$(id elita |cut -d" " -f 1 |cut -d= -f2 |cut -d'(' -f1)
 ELITA_GID=$(id elita |cut -d" " -f 2 |cut -d= -f2 |cut -d'(' -f1)
 
-CELERY_OPTIONS="-D -B --uid=${ELITA_UID} --gid=${ELITA_GID} -A elita.celeryinit worker -l DEBUG -c ${ASYNC_WORKERS} -f ${ASYNC_LOG}"
-PSERVE_OPTIONS="--daemon --log-file=${SYNC_LOG} --group=elita --user=elita ${INI_FILE} start"
-
-#echo "${CELERY_COMMAND}"
-#echo "${PSERVE_COMMAND}"
-
+CELERY_OPTIONS="-D -B --uid=${ELITA_UID} --gid=${ELITA_GID} -A elita.celeryinit worker -l DEBUG -c ${ASYNC_WORKERS} -f ${ASYNC_LOG} --workdir=${HOME_DIR}"
+PSERVE_OPTIONS="--daemon --pid-file=${HOME_DIR}/pyramid.pid --log-file=${SYNC_LOG} --group=elita --user=elita ${INI_FILE} start"
 
 case "$1" in
   start)
     cd "${HOME_DIR}"
-    log_begin_msg "Starting Celery workers..."
+    log_begin_msg "Starting Elita Celery workers..."
     start-stop-daemon --start --quiet --oknodo --exec "$CELERY" -- $CELERY_OPTIONS
     log_end_msg $?
     log_begin_msg "Starting Elita..."
@@ -55,7 +51,7 @@ case "$1" in
     log_end_msg $?
     ;;
   stop)
-    log_begin_msg "Stopping Celery workers..."
+    log_begin_msg "Stopping Elita Celery workers..."
     start-stop-daemon --stop --quiet --oknodo --retry 2 --pidfile "${HOME_DIR}/celeryd.pid"
     log_end_msg $?
     log_begin_msg "Stopping Elita..."
