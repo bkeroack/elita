@@ -15,7 +15,8 @@ requires = [
     'celery',
     'requests',
     'python-slugify',
-    'salt<=2014.1.1',
+    'pyzmq',    # needed until salt's deps get fixed
+    'salt',
     #'M2Crypto',
     'PyYAML',
     'lockfile',
