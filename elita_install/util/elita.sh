@@ -1,0 +1,76 @@
+#!/bin/bash
+
+### BEGIN INIT INFO
+# Provides: elita
+# Required-Start: $remote_fs $network $syslog mongodb rabbitmq-server
+# Required-Stop: $remote_fs $network $syslog
+# Default-Start: 2 3 4 5
+# Default-Stop: 0 1 6
+# Short-Description: Elita Continuous Deployment
+# Description: https://elita.io
+### END INIT INFO
+
+set -e
+
+DEFAULTS="/etc/default/elita"
+
+[ -r "$DEFAULTS" ] && . "$DEFAULTS"
+
+# Get lsb functions
+. /lib/lsb/init-functions
+
+PSERVE=$(which pserve)
+CELERY=$(which celery)
+
+test -f "${PSERVE}" || exit 1
+test -f "${CELERY}" || exit 1
+
+id elita > /dev/null
+if [ $? > 0 ]; then
+    log_failure_msg "User 'elita' not found"
+    exit 1
+fi
+
+test -f "${HOME_DIR}" || exit 1
+test -f "${LOG_DIR}" || exit 1
+
+ELITA_UID=$(id elita |cut -d" " -f 1 |cut -d= -f2 |cut -d'(' -f1)
+ELITA_GID=$(id elita |cut -d" " -f 2 |cut -d= -f2 |cut -d'(' -f1)
+
+CELERY_COMMAND="${CELERY} -D -B --uid=${ELITA_UID} --gid=${ELITA_GID} -A elita.celeryinit worker -l DEBUG -c ${ASYNC_WORKERS} -f ${ASYNC_LOG}"
+PSERVE_COMMAND="${PSERVE} --daemon --log-file=${SYNC_LOG} --group=elita --user=elita ${INI_FILE} start"
+
+CELERY_KILL="$(which python) -m celery worker"
+
+
+case "$1" in
+  start)
+    cd "${HOME_DIR}"
+    log_begin_msg "Starting Celery workers..."
+    start-stop-daemon --start --quiet --oknodo --exec "$CELERY_COMMAND" -- $OPTIONS
+    log_end_msg $?
+    log_begin_msg "Starting Elita..."
+    start-stop-daemon --start --quiet --oknodo --exec "$PSERVE_COMMAND" -- $OPTIONS
+    log_end_msg $?
+    ;;
+  stop)
+    log_begin_msg "Stopping Celery workers..."
+    start-stop-daemon --stop --quiet --oknodo --retry 2 --pidfile "${HOME_DIR}/celeryd.pid"
+    log_end_msg $?
+    log_begin_msg "Stopping Elita..."
+    start-stop-daemon --stop --quiet --oknodo --retry 2 --pidfile "${HOME_DIR}/pyramid.pid"
+    log_end_msg $?
+    ;;
+  restart)
+    $0 stop
+    sleep 1
+    $0 start
+    ;;
+  status)
+    status_of_proc -p "${HOME_DIR}/celeryd.pid" celery
+    status_of_prod -p "${HOME_DIR}/pyramid.pid" elita
+    ;;
+  *)
+    log_success_msg "Usage: /etc/init.d/elita {start|stop|restart|status}"
+    exit 1
+esac
