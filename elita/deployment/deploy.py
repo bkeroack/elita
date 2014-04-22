@@ -3,7 +3,7 @@ __author__ = 'bkeroack'
 import sys
 import traceback
 
-from elita import util
+import elita.util
 import gitservice
 import salt_control
 
@@ -24,7 +24,7 @@ def run_deploy(datasvc, application, build_name, servers, gitdeploys, deployment
             "error": "unhandled exception during callable!",
             "exception": f_exc
         }
-        util.debugLog(run_deploy, "EXCEPTION: {}".format(f_exc))
+        elita.util.debugLog(run_deploy, "EXCEPTION: {}".format(f_exc))
         datasvc.deploysvc.UpdateDeployment(application, deployment, {"status": "error"})
         return {"deploy_status": "error", "details": results}
     datasvc.deploysvc.UpdateDeployment(application, deployment, {"status": "complete"})
@@ -51,7 +51,7 @@ class DeployController:
         self.current_step = 0
 
     def _push_msg(self, status, msg):
-        util.debugLog(self, msg)
+        elita.util.debugLog(self, msg)
         self.datasvc.jobsvc.NewJobData({
             "DeployController": {
                 "status": status,

@@ -2,9 +2,12 @@ import pymongo
 import sys
 import traceback
 
-from elita import util
-from elita import models
-from elita import celeryinit
+import elita.util
+import elita.models
+import elita.celeryinit
+#from elita import util
+#from elita import models
+#from elita import celeryinit
 
 __author__ = 'bkeroack'
 
@@ -12,11 +15,11 @@ def regen_datasvc(settings, job_id):
     client = pymongo.MongoClient(settings['elita.mongo.host'], int(settings['elita.mongo.port']))
     db = client[settings['elita.mongo.db']]
     tree = db['root_tree'].find_one()
-    updater = models.RootTreeUpdater(tree, db)
-    root = models.RootTree(db, updater, tree, None)
-    return client, models.DataService(settings, db, root, job_id=job_id)
+    updater = elita.models.RootTreeUpdater(tree, db)
+    root = elita.models.RootTree(db, updater, tree, None)
+    return client, elita.models.DataService(settings, db, root, job_id=job_id)
 
-@celeryinit.celery.task(bind=True, name="daft_task_run_job")
+@elita.celeryinit.celery.task(bind=True, name="daft_task_run_job")
 def run_job(self, settings, callable, args):
     ''' Generate new dataservice, run callable, store results
     '''
@@ -31,13 +34,13 @@ def run_job(self, settings, callable, args):
             "error": "unhandled exception during callable!",
             "exception": f_exc
         }
-        util.debugLog(run_job, "EXCEPTION: {}".format(f_exc))
+        elita.util.debugLog(run_job, "EXCEPTION: {}".format(f_exc))
     datasvc.jobsvc.SaveJobResults(results)
     client.close()
 
 #generic interface to run code async (not explicit named actions/hooks)
 def run_async(datasvc, name, callable, args):
-    util.debugLog("run_async", "create new async task: {}; args: {}".format(callable, args))
+    elita.util.debugLog("run_async", "create new async task: {}; args: {}".format(callable, args))
     job = datasvc.jobsvc.NewJob("run_async: {}".format(name))
     job_id = str(job.job_id)
     run_job.apply_async((datasvc.settings, callable, args), task_id=job_id)
@@ -57,7 +60,7 @@ class ActionService:
 
     def async(self, app, action_name, params):
         action = self.actions.actionmap[app][action_name]['callable']
-        util.debugLog(self, "action: {}, params: {}".format(action, params))
+        elita.util.debugLog(self, "action: {}, params: {}".format(action, params))
         job = self.datasvc.jobsvc.NewJob(action_name)
         job_id = str(job.job_id)
         run_job.apply_async((self.datasvc.settings, action, {'params': params}), task_id=job_id)
@@ -91,8 +94,8 @@ class RegisterHooks:
                     for a in hooks[app]:
                         self.hookmap[app][a] = hooks[app][a]
                 else:
-                    util.debugLog(self, "register: WARNING: unknown application '{}'".format(app))
-            util.debugLog(self, "HookMap: {}".format(self.hookmap))
+                    elita.util.debugLog(self, "register: WARNING: unknown application '{}'".format(app))
+            elita.util.debugLog(self, "HookMap: {}".format(self.hookmap))
 
     def run_hook(self, app, name, args):
         hook = self.hookmap[app][name]
@@ -108,24 +111,24 @@ class RegisterActions:
         self.actionmap = dict()
 
     def register(self):
-        util.debugLog(self, "register")
+        elita.util.debugLog(self, "register")
 
         from pkg_resources import iter_entry_points
         apps = self.datasvc.appsvc.GetApplications()
 
         for obj in iter_entry_points(group="elita.modules", name="register_actions"):
-            util.debugLog(self, "register: found obj: {}".format(obj))
+            elita.util.debugLog(self, "register: found obj: {}".format(obj))
             actions = (obj.load())()
-            util.debugLog(self, "actions: {}".format(actions))
+            elita.util.debugLog(self, "actions: {}".format(actions))
             for app in actions:
                 if app not in apps:
-                    util.debugLog(self, "WARNING: application not found: {}".format(app))
+                    elita.util.debugLog(self, "WARNING: application not found: {}".format(app))
                 else:
                     if app not in self.actionmap:
                         self.actionmap[app] = dict()
                     for a in actions[app]:
                         action_name = a['callable'].__name__
                         self.actionmap[app][action_name] = a
-                        util.debugLog(self, "NewAction: app: {}; action_name: {}; params: {}".format(app, action_name, a['params']))
+                        elita.util.debugLog(self, "NewAction: app: {}; action_name: {}; params: {}".format(app, action_name, a['params']))
                         params = a['params'].keys()
                         self.datasvc.jobsvc.NewAction(app, action_name, params)

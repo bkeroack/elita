@@ -8,14 +8,14 @@ import shutil
 import string
 import simplejson as json
 import yaml
-from elita.deployment import gitservice
+import elita.deployment.gitservice
 
 try:
     from yaml import CLoader as Loader, CDumper as Dumper
 except ImportError:
     from yaml import Loader, Dumper
 
-from elita import util
+import elita.util
 
 __author__ = 'bkeroack'
 
@@ -32,7 +32,7 @@ class RemoteCommands:
 
     def get_os(self, server):
         resp = self.sc.salt_command(server, 'grains.item', ["os"])
-        util.debugLog(self, "get_os: resp: {}".format(resp))
+        elita.util.debugLog(self, "get_os: resp: {}".format(resp))
         return OSTypes.Windows if resp[server]['os'] == "Windows" else OSTypes.Unix_like
 
     def create_directory(self, server_list, path):
@@ -70,10 +70,10 @@ class RemoteCommands:
         new_fullpath = "{}/{}".format(root, newname)
         shutil.copy(local_path, new_fullpath)
         salt_uri = 'salt://{}/{}'.format(self.sc.settings['elita.salt.slsdir'], newname)
-        util.debugLog(self, "push_file: salt_uri: {}".format(salt_uri))
-        util.debugLog(self, "push_file: remote_path: {}".format(remote_path))
+        elita.util.debugLog(self, "push_file: salt_uri: {}".format(salt_uri))
+        elita.util.debugLog(self, "push_file: remote_path: {}".format(remote_path))
         res = self.sc.salt_command(target, 'cp.get_file', [salt_uri, remote_path])
-        util.debugLog(self, "push_file: resp: {}".format(res))
+        elita.util.debugLog(self, "push_file: resp: {}".format(res))
         os.unlink(new_fullpath)
         return {'success': {'target': target, 'remote_path': remote_path}}
 
@@ -150,7 +150,7 @@ class SaltController:
         return self.salt_command(target, 'cmd.run', [cmd], opts={"shell": shell}, timeout=timeout)
 
     def load_salt_info(self):
-        util.debugLog(self, "load_salt_info")
+        elita.util.debugLog(self, "load_salt_info")
         master_config = salt.config.master_config(os.environ.get('SALT_MASTER_CONFIG', '/etc/salt/master'))
         self.file_roots = master_config['file_roots']
         for e in self.file_roots:
@@ -168,35 +168,35 @@ class SaltController:
         self.include_daft_top()
 
     def include_daft_top(self):
-        util.debugLog(self, "include_daft_top")
+        elita.util.debugLog(self, "include_daft_top")
         top_sls = "{}/top.sls".format(self.file_roots['base'][0])
         if not os.path.isfile(top_sls):
-            util.debugLog(self, "WARNING: default salt top.sls not found! (check base file roots setting)")
+            elita.util.debugLog(self, "WARNING: default salt top.sls not found! (check base file roots setting)")
             open(top_sls, 'a').close()
-        util.debugLog(self, "acquiring lock on top.sls")
+        elita.util.debugLog(self, "acquiring lock on top.sls")
         lock = lockfile.FileLock(top_sls)
         lock.acquire(timeout=60)
         with open(top_sls, 'r') as f:
             top_content = yaml.load(f, Loader=Loader)
         write = False
         if top_content is None:
-            util.debugLog(self, "include_daft_top: empty file")
+            elita.util.debugLog(self, "include_daft_top: empty file")
             top_content = dict()
             write = True
         if 'include' not in top_content:
-            util.debugLog(self, "include_daft_top: include not in top")
+            elita.util.debugLog(self, "include_daft_top: include not in top")
             top_content['include'] = dict()
             write = True
         if not isinstance(top_content['include'], list):
-            util.debugLog(self, "include_daft_top: creating include list")
+            elita.util.debugLog(self, "include_daft_top: creating include list")
             top_content['include'] = list()
             write = True
         if 'elita' not in top_content['include']:
-            util.debugLog(self, "include_daft_top: adding elita to include")
+            elita.util.debugLog(self, "include_daft_top: adding elita to include")
             top_content['include'].append('elita')
             write = True
         if write:
-            util.debugLog(self, "include_daft_top: writing new top.sls")
+            elita.util.debugLog(self, "include_daft_top: writing new top.sls")
             with open(top_sls, 'w') as f:
                 f.write(yaml.safe_dump(top_content, default_flow_style=False))
         lock.release()
@@ -225,13 +225,13 @@ class SaltController:
             f.write(yaml.dump(content, Dumper=Dumper))
 
     def add_gitdeploy_servers_to_daft_top(self, server_list, app, gd_name):
-        util.debugLog(self, "add_server_to_daft_top: server_list: {}".format(server_list))
+        elita.util.debugLog(self, "add_server_to_daft_top: server_list: {}".format(server_list))
         fname = self.get_daft_top_filename()
         if not os.path.isfile(fname):
             with open(fname, 'w') as f:
                 f.write("\n")  # create if doesn't exist
         gdentry = self.get_gitdeploy_entry_name(app, gd_name)
-        util.debugLog(self, "add_server_to_daft_top: acquiring lock on {}".format(fname))
+        elita.util.debugLog(self, "add_server_to_daft_top: acquiring lock on {}".format(fname))
         lock = lockfile.FileLock(fname)
         lock.acquire(timeout=60)
         with open(fname, 'r') as f:
@@ -247,16 +247,16 @@ class SaltController:
             gdset.add(gdentry)
             dt_content['base'][s] = list(gdset)
         with open(fname, 'w') as f:
-            util.debugLog(self, "add_server_to_daft_top: writing file")
+            elita.util.debugLog(self, "add_server_to_daft_top: writing file")
             f.write(yaml.safe_dump(dt_content, default_flow_style=False))
         lock.release()
         return "success"
 
     def rm_gitdeploy_servers_from_daft_top(self, server_list, app, gd_name):
-        util.debugLog(self, "rm_server_from_daft_top: server_list: {}".format(server_list))
+        elita.util.debugLog(self, "rm_server_from_daft_top: server_list: {}".format(server_list))
         daft_top = self.get_daft_top_filename()
         assert os.path.isfile(daft_top)
-        util.debugLog(self, "rm_server_from_daft_top: acquiring lock on {}".format(daft_top))
+        elita.util.debugLog(self, "rm_server_from_daft_top: acquiring lock on {}".format(daft_top))
         lock = lockfile.FileLock(daft_top)
         lock.acquire(timeout=60)
         with open(daft_top, 'r') as f:
@@ -266,16 +266,16 @@ class SaltController:
         for s in server_list:
             if s in dt_content['base']:
                 if "elita.{}.{}".format(app, gd_name) in dt_content['base'][s]:
-                    util.debugLog(self, "rm_server_from_daft_top: deleting gitdeploy {} from server {} in elita top".
+                    elita.util.debugLog(self, "rm_server_from_daft_top: deleting gitdeploy {} from server {} in elita top".
                                   format(gd_name, s))
                     del dt_content['base'][s]
                 else:
-                    util.debugLog(self, "rm_server_from_daft_top: WARNING: gitdeploy {} not found in elita top".
+                    elita.util.debugLog(self, "rm_server_from_daft_top: WARNING: gitdeploy {} not found in elita top".
                                   format(gd_name))
             else:
-                util.debugLog(self, "rm_server_from_daft_top: WARNING: server {} not found in elita top".format(s))
+                elita.util.debugLog(self, "rm_server_from_daft_top: WARNING: server {} not found in elita top".format(s))
         with open(daft_top, 'w') as f:
-            util.debugLog(self, "rm_server_from_daft_top: writing file")
+            elita.util.debugLog(self, "rm_server_from_daft_top: writing file")
             f.write(yaml.safe_dump(dt_content, default_flow_style=False))
         lock.release()
         return "success"
@@ -284,13 +284,13 @@ class SaltController:
         name = gitdeploy['name']
         app = gitdeploy['application']
         filename = self.get_gd_file_name(app, name)
-        util.debugLog(self, "rm_gitdeploy_yaml: gitdeploy: {}/{}".format(app, name))
-        util.debugLog(self, "rm_gitdeploy_yaml: filename: {}".format(filename))
+        elita.util.debugLog(self, "rm_gitdeploy_yaml: gitdeploy: {}/{}".format(app, name))
+        elita.util.debugLog(self, "rm_gitdeploy_yaml: filename: {}".format(filename))
         if not os.path.isfile(filename):
-            util.debugLog(self, "rm_gitdeploy_yaml: WARNING: file not found!")
+            elita.util.debugLog(self, "rm_gitdeploy_yaml: WARNING: file not found!")
             return
         lock = lockfile.FileLock(filename)
-        util.debugLog(self, "rm_gitdeploy_yaml: acquiring lock on {}".format(filename))
+        elita.util.debugLog(self, "rm_gitdeploy_yaml: acquiring lock on {}".format(filename))
         lock.acquire(timeout=60)
         os.unlink(filename)
         lock.release()
@@ -300,15 +300,15 @@ class SaltController:
         name = gitdeploy['name']
         app = gitdeploy['application']
         filename = self.get_gd_file_name(app, name)
-        util.debugLog(self, "add_gitdeploy_to_yaml: acquiring lock on {}".format(filename))
+        elita.util.debugLog(self, "add_gitdeploy_to_yaml: acquiring lock on {}".format(filename))
         lock = lockfile.FileLock(filename)
         lock.acquire(timeout=60)  # throws exception if timeout
         if os.path.isfile(filename):
-            util.debugLog(self, "add_gitdeploy_to_yaml: existing yaml sls")
+            elita.util.debugLog(self, "add_gitdeploy_to_yaml: existing yaml sls")
             with open(filename, 'r') as f:
                 existing = yaml.load(f, Loader=Loader)
         else:
-            util.debugLog(self, "add_gitdeploy_to_yaml: yaml sls does not exist")
+            elita.util.debugLog(self, "add_gitdeploy_to_yaml: yaml sls does not exist")
             existing = dict()
         slsname = 'gitdeploy_{}'.format(name)
         favor = "theirs" if gitdeploy['options']['favor'] in ('theirs', 'remote') else 'ours'
@@ -333,14 +333,14 @@ class SaltController:
         }
         prepull = gitdeploy['actions']['prepull']
         if prepull is not None:
-            util.change_dict_keys(prepull, gitservice.EMBEDDED_YAML_DOT_REPLACEMENT, '.')
+            elita.util.change_dict_keys(prepull, elita.deployment.gitservice.EMBEDDED_YAML_DOT_REPLACEMENT, '.')
             for k in prepull:
                 top_key = prepull[k].keys()[0]
                 prepull[k][top_key].append({'order': 0})
                 existing[k] = prepull[k]
         postpull = gitdeploy['actions']['postpull']
         if postpull is not None:
-            util.change_dict_keys(postpull, gitservice.EMBEDDED_YAML_DOT_REPLACEMENT, '.')
+            elita.util.change_dict_keys(postpull, elita.deployment.gitservice.EMBEDDED_YAML_DOT_REPLACEMENT, '.')
             for k in postpull:
                 top_key = postpull[k].keys()[0]
                 postpull[k][top_key].append({'order': 'last'})
