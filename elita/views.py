@@ -8,14 +8,14 @@ import sys
 import fnmatch
 import tempfile
 import json
+from elita.actions import action
 
 import models
 import builds
 import auth
-import action
-import gitservice
+from elita.deployment import gitservice
 import elita_exceptions
-import deploy
+from elita.deployment import deploy
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
@@ -511,7 +511,7 @@ class DeploymentContainerView(GenericView):
                 'deployment_id': dpo['NewDeployment']['id'],
                 'application': app,
                 'build': build_name,
-                'deploy': body,
+                'deployment': body,
                 'message': msg
             }
         })
@@ -529,7 +529,7 @@ class DeploymentView(GenericView):
                 'job_id': self.context.job_id,
                 'created_datetime': self.get_created_datetime_text(),
                 'application': self.context.application,
-                'deploy': self.context.deploy,
+                'deployment': self.context.deploy,
                 'build': self.context.build_name,
                 'status': self.context.status
             }

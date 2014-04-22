@@ -8,13 +8,14 @@ import shutil
 import string
 import simplejson as json
 import yaml
+from elita.deployment import gitservice
+
 try:
     from yaml import CLoader as Loader, CDumper as Dumper
 except ImportError:
     from yaml import Loader, Dumper
 
 import util
-import gitservice
 
 __author__ = 'bkeroack'
 

@@ -35,7 +35,7 @@ def validate_server_specs(deploy_obj):
         return False, "must be dict"
     for k in ('servers', 'gitdeploys'):
         if k not in deploy_obj:
-            return False, "deploy dict must have '{}' key".format(k)
+            return False, "deployment dict must have '{}' key".format(k)
     if not (isinstance(deploy_obj['servers'], list) or isinstance(deploy_obj['servers'], str)):
         return False, "servers must be a list or string"
     if not isinstance(deploy_obj['gitdeploys'], list):

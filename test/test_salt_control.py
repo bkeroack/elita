@@ -3,7 +3,7 @@ __author__ = 'bkeroack'
 import unittest2
 import tempfile
 import yaml
-import elita.salt_control
+import elita.deployment.salt_control
 import shutil
 import pprint
 
@@ -106,7 +106,7 @@ class SaltControllerTests(unittest2.TestCase):
                 'default_branch': 'mydefaultbranch'
             }
         }
-        sc = elita.salt_control.SaltController(self.settings)
+        sc = elita.deployment.salt_control.SaltController(self.settings)
         sc.add_gitdeploy_to_yaml(gitdeploy)
         with open(self.tempfile, 'r') as f:
             content = yaml.load(f)

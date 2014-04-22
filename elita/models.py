@@ -10,14 +10,15 @@ import pprint
 import datetime
 import pytz
 
+from salt.exceptions import SaltClientError
+
 import elita
+from elita.crypto import keypair
+from elita.deployment import deploy, salt_control
 import util
-import salt_control
-from gitservice import EMBEDDED_YAML_DOT_REPLACEMENT
-import keypair
+from deployment.gitservice import EMBEDDED_YAML_DOT_REPLACEMENT
 import elita_exceptions
-from action import ActionService
-import deploy
+from elita.actions.action import ActionService
 
 # URL model:
 # root/app/
@@ -550,7 +551,7 @@ class DeploymentDataService(GenericChildDataService):
             'name': "",
             'application': app,
             'build_name': build_name,
-            'deploy': deploy,
+            'deployment': deploy,
             'status': 'created',
             'job_id': ''
         })
@@ -559,7 +560,7 @@ class DeploymentDataService(GenericChildDataService):
             'name': dpo.name,
             'application': dpo.application,
             'build_name': dpo.build_name,
-            'deploy': dpo.deploy,
+            'deployment': dpo.deploy,
             'status': dpo.status,
             'job_id': dpo.job_id
         })
@@ -660,7 +661,11 @@ class DataService:
         #passed in if this is part of an async job
         self.job_id = job_id
         #super ugly below - only exists for plugin access
-        self.salt_controller = salt_control.SaltController(self.settings)
+        try:
+            self.salt_controller = salt_control.SaltController(self.settings)
+        except SaltClientError:
+            util.debugLog(self, "SaltClientExeption detected")
+            
         self.remote_controller = salt_control.RemoteCommands(self.salt_controller)
         self.deploy_controller = deploy.DeployController(self, self.remote_controller)
 
@@ -838,7 +843,7 @@ class Deployment(GenericDataModel):
         'name': None,  # "name" for consistency w/ other models, even though it's really id
         'application': None,
         'build_name': None,
-        'deploy': {
+        'deployment': {
             'servers': None,
             'gitdeploys': []
         },
@@ -1318,7 +1323,7 @@ class DataValidator:
             if 'server_specs' in d:
                 util.debugLog(self, "WARNING: found deployment with old-style server_specs object: {}; fixing".format(
                     d['_id']))
-                d['deploy'] = {
+                d['deployment'] = {
                     'servers': d['server_specs']['spec'],
                     'gitdeploys': d['server_specs']['gitdeploys']
                 }
