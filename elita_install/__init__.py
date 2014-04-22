@@ -28,7 +28,7 @@ def Install():
                 puts("{}: Unknown/unsupported POSIX-like OS: {}".format(colored.red("ERROR"), p_name))
         if os_name == 'nt':
             puts(colored.magenta("LOL Windows."))
-            puts("Um, No.")
+            puts(colored.red("Only Linux/POSIX-like OSes are supported for Elita server installation."))
         else:
             puts("{}: Unsupported OS: {}".format(colored.red("ERROR"), p_name))
     return 1
