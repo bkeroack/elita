@@ -3,7 +3,7 @@ __author__ = 'bkeroack'
 import sys
 import traceback
 
-import util
+from elita import util
 import gitservice
 import salt_control
 

@@ -665,7 +665,7 @@ class DataService:
             self.salt_controller = salt_control.SaltController(self.settings)
         except SaltClientError:
             util.debugLog(self, "SaltClientExeption detected")
-            
+
         self.remote_controller = salt_control.RemoteCommands(self.salt_controller)
         self.deploy_controller = deploy.DeployController(self, self.remote_controller)
 

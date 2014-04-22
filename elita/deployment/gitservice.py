@@ -9,9 +9,9 @@ import lockfile
 import git
 import copy
 
-import util
+from elita import util
 import salt_control
-import builds
+from elita import builds
 
 __author__ = 'bkeroack'
 

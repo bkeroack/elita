@@ -15,7 +15,7 @@ try:
 except ImportError:
     from yaml import Loader, Dumper
 
-import util
+from elita import util
 
 __author__ = 'bkeroack'
 
