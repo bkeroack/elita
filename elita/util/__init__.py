@@ -1,6 +1,6 @@
 __author__ = 'bkeroack'
 
-import views
+from elita import views
 import random
 import string
 
@@ -19,3 +19,4 @@ def change_dict_keys(obj, char, rep):
                 if char in k:
                         obj[k.replace(char, rep)] = obj[k]
                         del obj[k]
+
