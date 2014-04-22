@@ -748,7 +748,7 @@ class GitRepoView(GenericView):
         resp = {'delete_gitrepo': {'application': app, 'name': name}}
         if 'delete' in self.req.params and self.req.params['delete'] in AFFIRMATIVE_SYNONYMS:
             gp_doc = self.datasvc.Dereference(self.context.gitprovider)
-            del_callable = elita.deployment.gitservicedelete_repo_callable_from_type(gp_doc['type'])
+            del_callable = elita.deployment.gitservice.delete_repo_callable_from_type(gp_doc['type'])
             if not del_callable:
                 return self.Error(400, "git provider type not supported ({})".format(gp_doc['type']))
             msg = self.run_async("delete_repository", del_callable, {'gitprovider': gp_doc, 'name': self.context.name})
@@ -792,7 +792,7 @@ class GitDeployContainerView(GenericView):
         if 'error' in res:
             return self.Error(500, {"NewGitDeploy": res})
         gd = self.datasvc.gitsvc.GetGitDeploy(app, name)
-        msg = self.run_async("create_gitdeploy", elita.deployment.gitservicecreate_gitdeploy, {'gitdeploy': gd})
+        msg = self.run_async("create_gitdeploy", elita.deployment.gitservice.create_gitdeploy, {'gitdeploy': gd})
         return self.status_ok({'create_gitdeploy': {'name': name, 'message': msg}})
 
 
@@ -859,7 +859,7 @@ class GitDeployView(GenericView):
             return self.Error(400, "invalid {}: {}".format(word, diff))
         self.datasvc.gitsvc.UpdateGitDeploy(self.context.application, self.context.name, body)
         gd = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
-        msg = self.run_async("create_gitdeploy", elita.deployment.gitservicecreate_gitdeploy, {'gitdeploy': gd})
+        msg = self.run_async("create_gitdeploy", elita.deployment.gitservice.create_gitdeploy, {'gitdeploy': gd})
         return self.status_ok({'update_gitdeploy': {'name': self.context.name, 'object': body, 'message': msg}})
 
     def initialize(self, body):
@@ -868,7 +868,7 @@ class GitDeployView(GenericView):
             return err
         #we need to get the fully dereferenced doc
         gddoc = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
-        msg = self.run_async('initialize_gitdeploy_servers', elita.deployment.gitserviceinitialize_gitdeploy, {'gitdeploy': gddoc,
+        msg = self.run_async('initialize_gitdeploy_servers', elita.deployment.gitservice.initialize_gitdeploy, {'gitdeploy': gddoc,
                                                                                                'server_list': self.servers})
         return self.status_ok({
             'initialize_gitdeploy': {
@@ -884,7 +884,7 @@ class GitDeployView(GenericView):
         if not ok:
             return err
         gddoc = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
-        msg = self.run_async('deinitialize_gitdeploy_servers', elita.deployment.gitservicedeinitialize_gitdeploy, {
+        msg = self.run_async('deinitialize_gitdeploy_servers', elita.deployment.gitservice.deinitialize_gitdeploy, {
             'gitdeploy': gddoc, 'server_list': self.servers
         })
         return self.status_ok({
@@ -910,7 +910,7 @@ class GitDeployView(GenericView):
 
     def DELETE(self):
         gddoc = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
-        msg = self.run_async('remove_deinitialize_gitdeploy', elita.deployment.gitserviceremove_and_deinitialize_gitdeploy,
+        msg = self.run_async('remove_deinitialize_gitdeploy', elita.deployment.gitservice.remove_and_deinitialize_gitdeploy,
                              {'gitdeploy': gddoc})
         return self.status_ok({
             'delete_deinitialize_gitdeploy': {
