@@ -6,7 +6,7 @@ import os.path
 import sys
 import stat
 import sh
-from sh import useradd
+from sh import useradd, chown
 import logging
 from clint.textui import puts, colored
 
@@ -56,6 +56,9 @@ def cp_logrotate():
 def chmod_ax_initd():
     os.chmod(ELITA_INITD, stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
+def chown_home_dir():
+    chown("elita:elita", ELITA_HOME, R=True)  # use shell chown so we don't have to get the numeric UID/GID for 'elita'
+
 def create_user_and_group():
     try:
         useradd("elita", s="/bin/false", d=ELITA_HOME)
@@ -78,6 +81,10 @@ def InstallUbuntu():
     do_step("Copying logrotate script", cp_logrotate)
 
     do_step("Creating config directory: {}".format(ELITA_ETC), mk_dir, [ELITA_ETC])
+
+    do_step("Creating running directory: {}".format(ELITA_HOME), mk_dir, [ELITA_HOME])
+
+    do_step("Setting ownership on running directory", chown_home_dir)
 
     do_step("Copying ini", cp_prod_ini_posix)
 
