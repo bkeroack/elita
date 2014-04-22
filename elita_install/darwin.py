@@ -7,7 +7,7 @@ from linux import do_step, create_user_and_group, mk_dir, chown_dir, cp_prod_ini
 
 def InstallOSX():
 
-    puts("OS Flavor: Ubuntu")
+    puts("OS Flavor: Darwin/OS X")
 
     do_step("Creating user and group 'elita'", create_user_and_group)
 
@@ -28,4 +28,3 @@ def InstallOSX():
     puts(colored.yellow("Elita elita.ini installed to /etc/elita/. Please run celery and pserve manually."))
 
     puts(colored.green("Done!"))
-    
