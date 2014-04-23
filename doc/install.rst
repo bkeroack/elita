@@ -38,8 +38,33 @@ Testing your Installation
 
 To test that your installation is working correctly, do::
 
-    $ curl -XGET http://localhost:2718/
+    $ curl -XGET 'http://localhost:2718/?pretty=true'
 
+
+Administrative User
+-------------------
+
+The default admin user has username 'admin' and password 'elita'. You should change this immediately after
+verifying your installation before exposing it to the public internet.
+
+.. NOTE::
+   The 'admin' user is not treated in any special way, it is just an ordinary user with permissions to access anything.
+   You can create an equivalent user (with any name) by giving it the following permissions object::
+
+       {
+          "apps": {
+             "*": "read/write",
+             "_global": "read/write"
+          },
+          "actions": {
+             "*": {
+                "*": "execute"
+             }
+          },
+          "servers": [ "*" ]
+       }
+   Just be sure that if you change the permissions on 'admin' (or delete it) that you have a different user with full
+   permissions, otherwise you could be locked out of your installation.
 
 Configuration Files
 -------------------
