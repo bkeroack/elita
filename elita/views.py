@@ -8,8 +8,9 @@ import sys
 import fnmatch
 import tempfile
 import json
-from elita.actions import action
+import socket
 
+from elita.actions import action
 import models
 import builds
 import auth
@@ -65,6 +66,24 @@ class GenericView:
         else:
             return True, {}
 
+    def do_patch(self, change_func, change_params, get_func, get_params):
+        try:
+            body = self.req.json_body
+        except:
+            return False, self.Error(400, "problem deserializing JSON body (bad JSON?)")
+        keys = set(body.keys())
+        cur_keys = set([k for k in self.context.doc if k[0] != '_'])
+        if not keys.issubset(cur_keys):
+            return False, self.Error(400, {"unknown modification keys": list(cur_keys - keys)})
+        self.datasvc.appsvc.ChangeApplication(self.context.app_name, body)
+        app_doc = self.datasvc.appsvc.GetApplication(self.context.app_name)
+        return True, self.status_ok({
+            'modified': {
+                'changed': body,
+                'new_object': app_doc
+            }
+        })
+
     def call_action(self):
         g, p = self.check_params()
         if not g:
@@ -81,7 +100,7 @@ class GenericView:
         g, p = self.check_params()
         bad_verb = False
         if not g:
-            return self.MISSING_PARAMETER()
+            return self.MISSING_PARAMETER(p)
         if self.req.method == 'GET':
             if 'read' in self.permissions:
                 return self.GET()
@@ -159,6 +178,9 @@ class GenericView:
     def DELETE(self):
         return self.UNIMPLEMENTED()
 
+    def PATCH(self):
+        return self.UNIMPLEMENTED()
+
     def UNKNOWN_VERB(self):
         return self.Error(501, "unknown/unsupported HTTP verb")
 
@@ -234,6 +256,9 @@ class ApplicationView(GenericView):
         return {"application": self.context.app_name,
                 "created": self.get_created_datetime_text(),
                 "child_resources": self.datasvc.GetAppKeys(self.context.app_name)}
+
+    def PATCH(self):
+        pass
 
 class ActionContainerView(GenericView):
     def __init__(self, context, request):
@@ -1193,7 +1218,8 @@ def About(request):
         'about': {
             'name': 'elita',
             'version': pkg_resources.require("elita")[0].version,
-            'tagline': "You Know, for DevOps"
+            'tagline': "You Know, for DevOps",
+            'hostname': socket.getfqdn()
         },
         'stats': {
             'applications': len(apps),

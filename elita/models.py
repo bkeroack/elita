@@ -202,6 +202,13 @@ class ApplicationDataService(GenericChildDataService):
     def GetApplications(self):
         return [k for k in self.root['app'].keys() if k[0] != '_']
 
+    def GetApplication(self, app_name):
+        docs = [d for d in self.db['application'].find({'app_name': app_name})]
+        assert len(docs) > 0
+        if len(docs) > 1:
+            elita.util.debugLog(self, "GetApplication: WARNING: more than one application named {}".format(app_name))
+        return {k: docs[0][k] for k in docs[0] if k[0] != '_'}
+
     def NewApplication(self, app_name):
         id = self.db['applications'].insert({'_class': "Application", "app_name": app_name})
         self.parent.refresh_root()
@@ -213,6 +220,9 @@ class ApplicationDataService(GenericChildDataService):
             "gitdeploys": {"_doc": self.parent.NewContainer("GitDeployContainer", "gitdeploys", app_name),},
             "deployments": {"_doc": self.parent.NewContainer("DeploymentContainer", "deployments", app_name)}
         }
+
+    def ChangeApplication(self, app_name, data):
+        self.parent.ModifyObject("applications", app_name, data, name_key="app_name")
 
     def DeleteApplication(self, app_name):
         self.parent.DeleteObject(self.root['app'], app_name, 'applications')
@@ -674,9 +684,16 @@ class DataService:
     def ModifyObject(self, collection_name, name, modify_keys, name_key="name"):
         '''Replace only the keys in modify_keys in the referenced document'''
         docs = [d for d in self.db[collection_name].find({name_key: name})]
+        assert len(docs) > 0
         if len(docs) > 1:
-            elita.util.debugLog(self, )
-
+            elita.util.debugLog(self, "ModifyObject: found multiple docs in collection: {}; name: {}"
+                                .format(collection_name, name))
+            for d in docs[1:]:
+                self.db[collection_name].remove({'_id': d['_id']})
+        doc = docs[0]
+        for k in modify_keys:
+            doc[k] = modify_keys[k]
+        self.db[collection_name].save(doc)
 
     def UpdateObject(self, name, doc, collection_name, class_name):
         self.UpdateGenericObject(name, doc, collection_name, class_name, {"name": name})
