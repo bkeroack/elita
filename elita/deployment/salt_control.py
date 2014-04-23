@@ -1,5 +1,6 @@
 import salt.client
 import salt.config
+from salt.exceptions import SaltClientError
 import lockfile
 import os
 import os.path
@@ -141,7 +142,10 @@ class SaltController:
         self.pillar_roots = None
         self.sls_dir = None
 
-        self.load_salt_info()
+        try:
+            self.load_salt_info()
+        except SaltClientError:
+            elita.util.debugLog(self, "WARNING: SaltClientError")
 
     def salt_command(self, target, cmd, arg, opts=None, timeout=120):
         return self.salt_client.cmd(target, cmd, arg, kwarg=opts, timeout=timeout, expr_form='list')

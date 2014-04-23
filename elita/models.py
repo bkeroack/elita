@@ -10,8 +10,6 @@ import pprint
 import datetime
 import pytz
 
-from salt.exceptions import SaltClientError
-
 import elita
 from elita.crypto import keypair
 from elita.deployment import deploy, salt_control
@@ -661,13 +659,10 @@ class DataService:
         #passed in if this is part of an async job
         self.job_id = job_id
         #super ugly below - only exists for plugin access
-        try:
+        if job_id is not None:
             self.salt_controller = salt_control.SaltController(self.settings)
-        except SaltClientError:
-            util.debugLog(self, "SaltClientExeption detected")
-
-        self.remote_controller = salt_control.RemoteCommands(self.salt_controller)
-        self.deploy_controller = deploy.DeployController(self, self.remote_controller)
+            self.remote_controller = salt_control.RemoteCommands(self.salt_controller)
+            self.deploy_controller = deploy.DeployController(self, self.remote_controller)
 
     def refresh_root(self):
         # when running long async actions the root tree passed to constructor may be stale by the time we try to update
@@ -675,6 +670,13 @@ class DataService:
         req = Request()
         req.db = self.db
         self.root = elita.RootService(req)
+
+    def ModifyObject(self, collection_name, name, modify_keys, name_key="name"):
+        '''Replace only the keys in modify_keys in the referenced document'''
+        docs = [d for d in self.db[collection_name].find({name_key: name})]
+        if len(docs) > 1:
+            elita.util.debugLog(self, )
+
 
     def UpdateObject(self, name, doc, collection_name, class_name):
         self.UpdateGenericObject(name, doc, collection_name, class_name, {"name": name})
