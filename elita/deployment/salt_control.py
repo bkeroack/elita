@@ -169,10 +169,10 @@ class SaltController:
         self.sls_dir = "{}/{}".format(self.file_roots['base'][0], self.settings['elita.salt.slsdir'])
         if not os.path.isdir(self.sls_dir):
             os.mkdir(self.sls_dir)
-        self.include_daft_top()
+        self.include_elita_top()
 
-    def include_daft_top(self):
-        elita.util.debugLog(self, "include_daft_top")
+    def include_elita_top(self):
+        elita.util.debugLog(self, "include_elita_top")
         top_sls = "{}/top.sls".format(self.file_roots['base'][0])
         if not os.path.isfile(top_sls):
             elita.util.debugLog(self, "WARNING: default salt top.sls not found! (check base file roots setting)")
@@ -184,23 +184,23 @@ class SaltController:
             top_content = yaml.load(f, Loader=Loader)
         write = False
         if top_content is None:
-            elita.util.debugLog(self, "include_daft_top: empty file")
+            elita.util.debugLog(self, "include_elita_top: empty file")
             top_content = dict()
             write = True
         if 'include' not in top_content:
-            elita.util.debugLog(self, "include_daft_top: include not in top")
+            elita.util.debugLog(self, "include_elita_top: include not in top")
             top_content['include'] = dict()
             write = True
         if not isinstance(top_content['include'], list):
-            elita.util.debugLog(self, "include_daft_top: creating include list")
+            elita.util.debugLog(self, "include_elita_top: creating include list")
             top_content['include'] = list()
             write = True
         if 'elita' not in top_content['include']:
-            elita.util.debugLog(self, "include_daft_top: adding elita to include")
+            elita.util.debugLog(self, "include_elita_top: adding elita to include")
             top_content['include'].append('elita')
             write = True
         if write:
-            elita.util.debugLog(self, "include_daft_top: writing new top.sls")
+            elita.util.debugLog(self, "include_elita_top: writing new top.sls")
             with open(top_sls, 'w') as f:
                 f.write(yaml.safe_dump(top_content, default_flow_style=False))
         lock.release()
@@ -216,8 +216,8 @@ class SaltController:
             os.mkdir(appdir)
         return "{}/{}.sls".format(appdir, name)
 
-    def get_daft_top_filename(self):
-        return "{}/{}".format(self.file_roots['base'][0], self.settings['elita.salt.dafttop'])
+    def get_elita_top_filename(self):
+        return "{}/{}".format(self.file_roots['base'][0], self.settings['elita.salt.elitatop'])
 
     def get_gitdeploy_entry_name(self, app, gd_name):
         return "{}.{}.{}".format(self.settings['elita.salt.slsdir'], app, gd_name)
@@ -228,14 +228,14 @@ class SaltController:
         with open(new_file, 'w') as f:
             f.write(yaml.dump(content, Dumper=Dumper))
 
-    def add_gitdeploy_servers_to_daft_top(self, server_list, app, gd_name):
-        elita.util.debugLog(self, "add_server_to_daft_top: server_list: {}".format(server_list))
-        fname = self.get_daft_top_filename()
+    def add_gitdeploy_servers_to_elita_top(self, server_list, app, gd_name):
+        elita.util.debugLog(self, "add_server_to_elita_top: server_list: {}".format(server_list))
+        fname = self.get_elita_top_filename()
         if not os.path.isfile(fname):
             with open(fname, 'w') as f:
                 f.write("\n")  # create if doesn't exist
         gdentry = self.get_gitdeploy_entry_name(app, gd_name)
-        elita.util.debugLog(self, "add_server_to_daft_top: acquiring lock on {}".format(fname))
+        elita.util.debugLog(self, "add_server_to_elita_top: acquiring lock on {}".format(fname))
         lock = lockfile.FileLock(fname)
         lock.acquire(timeout=60)
         with open(fname, 'r') as f:
@@ -251,35 +251,35 @@ class SaltController:
             gdset.add(gdentry)
             dt_content['base'][s] = list(gdset)
         with open(fname, 'w') as f:
-            elita.util.debugLog(self, "add_server_to_daft_top: writing file")
+            elita.util.debugLog(self, "add_server_to_elita_top: writing file")
             f.write(yaml.safe_dump(dt_content, default_flow_style=False))
         lock.release()
         return "success"
 
-    def rm_gitdeploy_servers_from_daft_top(self, server_list, app, gd_name):
-        elita.util.debugLog(self, "rm_server_from_daft_top: server_list: {}".format(server_list))
-        daft_top = self.get_daft_top_filename()
-        assert os.path.isfile(daft_top)
-        elita.util.debugLog(self, "rm_server_from_daft_top: acquiring lock on {}".format(daft_top))
-        lock = lockfile.FileLock(daft_top)
+    def rm_gitdeploy_servers_from_elita_top(self, server_list, app, gd_name):
+        elita.util.debugLog(self, "rm_server_from_elita_top: server_list: {}".format(server_list))
+        elita_top = self.get_elita_top_filename()
+        assert os.path.isfile(elita_top)
+        elita.util.debugLog(self, "rm_server_from_elita_top: acquiring lock on {}".format(elita_top))
+        lock = lockfile.FileLock(elita_top)
         lock.acquire(timeout=60)
-        with open(daft_top, 'r') as f:
+        with open(elita_top, 'r') as f:
             dt_content = yaml.load(f, Loader=Loader)
         assert dt_content
         assert 'base' in dt_content
         for s in server_list:
             if s in dt_content['base']:
                 if "elita.{}.{}".format(app, gd_name) in dt_content['base'][s]:
-                    elita.util.debugLog(self, "rm_server_from_daft_top: deleting gitdeploy {} from server {} in elita top".
+                    elita.util.debugLog(self, "rm_server_from_elita_top: deleting gitdeploy {} from server {} in elita top".
                                   format(gd_name, s))
                     del dt_content['base'][s]
                 else:
-                    elita.util.debugLog(self, "rm_server_from_daft_top: WARNING: gitdeploy {} not found in elita top".
+                    elita.util.debugLog(self, "rm_server_from_elita_top: WARNING: gitdeploy {} not found in elita top".
                                   format(gd_name))
             else:
-                elita.util.debugLog(self, "rm_server_from_daft_top: WARNING: server {} not found in elita top".format(s))
-        with open(daft_top, 'w') as f:
-            elita.util.debugLog(self, "rm_server_from_daft_top: writing file")
+                elita.util.debugLog(self, "rm_server_from_elita_top: WARNING: server {} not found in elita top".format(s))
+        with open(elita_top, 'w') as f:
+            elita.util.debugLog(self, "rm_server_from_elita_top: writing file")
             f.write(yaml.safe_dump(dt_content, default_flow_style=False))
         lock.release()
         return "success"

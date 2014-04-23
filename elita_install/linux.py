@@ -107,6 +107,15 @@ def do_step(msg, func, params=[]):
     func(*params)
     puts(colored.green("DONE"))
 
+def add_salt_client_acl():
+    #find salt config
+    #if exists, load it
+    #deserialize the yaml
+    #add/modify client_acl
+    #serialize
+    #save
+    puts(colored.red("STUB"))
+
 def InstallUbuntu():
 
     puts("OS Flavor: Ubuntu")
@@ -139,6 +148,8 @@ def InstallUbuntu():
     do_step("Making init.d script executable", chmod_ax_initd)
 
     do_step("Creating salt base dirs if necessary", create_salt_dirs)
+
+    do_step("Adding elita to salt client_acl", add_salt_client_acl)
 
     do_step("Setting up example nginx config", setup_nginx)
 

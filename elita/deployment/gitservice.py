@@ -310,7 +310,7 @@ class GitDeployManager:
         self.sc.new_gitdeploy_yaml(self.gitdeploy)
 
     def add_to_top(self, server_list):
-        return self.sc.add_gitdeploy_servers_to_daft_top(server_list, self.gitdeploy['application'],
+        return self.sc.add_gitdeploy_servers_to_elita_top(server_list, self.gitdeploy['application'],
                                                          self.gitdeploy['name'])
     def rm_sls(self):
         self.sc.rm_gitdeploy_yaml(self.gitdeploy)
