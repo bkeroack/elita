@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+          "DTD/xhtml1-strict.dtd">
+<html>
+  <head>
+    <title>elita.auth.UserPermissions : API documentation</title>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+    <link href="apidocs.css" type="text/css" rel="stylesheet" />
+    
+    
+  </head>
+  <body>
+    <h1 class="class">e.a.UserPermissions : class documentation</h1>
+    <p>
+      <span id="part">Part of <a href="elita.html">elita</a>.<a href="elita.auth.html">auth</a></span>
+      
+      <a href="classIndex.html#elita.auth.UserPermissions">View In Hierarchy</a>
+    </p>
+    <div>
+      
+    </div>
+    <div class="docstring">
+      <div class="undocumented">No class docstring</div>
+    </div>
+
+    
+    <div id="splitTables">
+      <table class="children sortable" id="id11">
+  
+  
+  <tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.auth.UserPermissions.html#__init__">__init__</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.auth.UserPermissions.html#validate_token">validate_token</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.auth.UserPermissions.html#get_allowed_apps">get_allowed_apps</a></td>
+    <td><span>Returns list of tuples: (appname, permissions ('read;write'))</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.auth.UserPermissions.html#get_allowed_actions">get_allowed_actions</a></td>
+    <td><span>Returns list of tuples: (appname, actionname). If present, 'execute' 
+permission is implicit</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.auth.UserPermissions.html#get_allowed_servers">get_allowed_servers</a></td>
+    <td><span>Returns list</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.auth.UserPermissions.html#get_action_permissions">get_action_permissions</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.auth.UserPermissions.html#get_app_permissions">get_app_permissions</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.auth.UserPermissions.html#validate_pw">validate_pw</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr>
+</table>
+      
+    </div>
+    
+    
+
+    <div class="function">
+  <a name="elita.auth.UserPermissions.__init__">
+    
+  </a>
+  <a name="__init__">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    __init__(self, usersvc, token, datasvc=None):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.auth.UserPermissions.validate_token">
+    
+  </a>
+  <a name="validate_token">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    validate_token(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.auth.UserPermissions.get_allowed_apps">
+    
+  </a>
+  <a name="get_allowed_apps">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    get_allowed_apps(self, username):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Returns list of tuples: (appname, permissions ('read;write'))</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.auth.UserPermissions.get_allowed_actions">
+    
+  </a>
+  <a name="get_allowed_actions">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    get_allowed_actions(self, username):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Returns list of tuples: (appname, actionname). If present, 'execute' 
+permission is implicit</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.auth.UserPermissions.get_allowed_servers">
+    
+  </a>
+  <a name="get_allowed_servers">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    get_allowed_servers(self, username):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Returns list</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.auth.UserPermissions.get_action_permissions">
+    
+  </a>
+  <a name="get_action_permissions">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    get_action_permissions(self, app, action):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.auth.UserPermissions.get_app_permissions">
+    
+  </a>
+  <a name="get_app_permissions">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    get_app_permissions(self, app):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.auth.UserPermissions.validate_pw">
+    
+  </a>
+  <a name="validate_pw">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    validate_pw(self, username, password):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div>
+    <address>
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-04-22 12:17:03.
+    </address>
+  </body>
+</html>
