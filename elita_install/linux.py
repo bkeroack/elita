@@ -65,6 +65,19 @@ def create_user_and_group():
     except:
         puts(colored.red("Error creating user/group elita!"))
 
+def setup_nginx():
+    nginx_path = '/etc/nginx/sites-available'
+    elita_nginx_location = os.path.join(nginx_path, 'elita')
+    puts('\n')
+    if os.path.isdir(nginx_path):
+        nginx_conf_location = os.path.join(get_root_dir(), "util", "nginx.conf")
+        cp_file_checkperms(nginx_conf_location, elita_nginx_location)
+        puts('Example nginx configuration copied to: {}'.format(elita_nginx_location))
+        puts('To use, add a symlink in /etc/nginx/sites-enabled then restart nginx')
+        puts('Elita will be listening on port 2719 via SSL')
+    else:
+        puts(colored.yellow('nginx not found. Install nginx and re-run'))
+
 def do_step(msg, func, params=[]):
     puts(msg + " ... ", newline=False)
     func(*params)
@@ -98,6 +111,8 @@ def InstallUbuntu():
     do_step("Copying init.d script", cp_file_checkperms, [initd_location, ELITA_INITD])
 
     do_step("Making init.d script executable", chmod_ax_initd)
+
+    do_step("Setting up example nginx config", setup_nginx)
 
     puts("Starting service...")
 
