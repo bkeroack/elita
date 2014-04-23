@@ -10,6 +10,7 @@ Prerequisites
 * SWIG (for crypto-related dependencies)
 * Python, OpenSSL headers
 * git
+* nginx (for external access)
 
 
 Ubuntu
@@ -18,7 +19,7 @@ Ubuntu
 Installing the prerequistes on an Ubuntu system::
 
     # apt-get update
-    # apt-get install mongodb rabbitmq-server python-pip python-dev libssl-dev swig git
+    # apt-get install mongodb rabbitmq-server python-pip python-dev libssl-dev swig git nginx
 
 
 Installation (Linux/POSIX)

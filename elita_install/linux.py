@@ -8,7 +8,7 @@ import stat
 import sh
 from sh import useradd, chown
 import logging
-from clint.textui import puts, colored
+from clint.textui import puts, colored, indent
 
 
 ELITA_HOME = "/var/run/elita"
@@ -69,14 +69,18 @@ def setup_nginx():
     nginx_path = '/etc/nginx/sites-available'
     elita_nginx_location = os.path.join(nginx_path, 'elita')
     puts('\n')
-    if os.path.isdir(nginx_path):
-        nginx_conf_location = os.path.join(get_root_dir(), "util", "nginx.conf")
-        cp_file_checkperms(nginx_conf_location, elita_nginx_location)
-        puts('Example nginx configuration copied to: {}'.format(elita_nginx_location))
-        puts('To use, add a symlink in /etc/nginx/sites-enabled then restart nginx')
-        puts('Elita will be listening on port 2719 via SSL')
-    else:
-        puts(colored.yellow('nginx not found. Install nginx and re-run'))
+    with indent(4):
+        if os.path.isdir(nginx_path):
+            nginx_conf_location = os.path.join(get_root_dir(), "util", "nginx.conf")
+            cp_file_checkperms(nginx_conf_location, elita_nginx_location)
+            if not os.path.isdir('/etc/nginx/ssl'):
+                mk_dir('/etc/nginx/ssl')
+            puts(colored.magenta('Example nginx configuration copied to: {}'.format(elita_nginx_location)))
+            puts(colored.magenta('To use, add a symlink in /etc/nginx/sites-enabled, add your SSL cert and key to /etc/nginx/ssl and then restart nginx'))
+            puts(colored.magenta('Elita will be listening on port 2719 via SSL'))
+        else:
+            puts(colored.yellow('nginx not found. Install nginx and re-run'))
+
 
 def do_step(msg, func, params=[]):
     puts(msg + " ... ", newline=False)
