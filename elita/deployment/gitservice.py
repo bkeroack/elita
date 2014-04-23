@@ -128,13 +128,15 @@ class GitRepoService:
         #copy keypair to user ssh dir
         #add alias in ~/.ssh/config
         home_dir = os.path.expanduser('~elita')
-        priv_key_name = "{}/.ssh/{}-{}".format(home_dir, application, name)
+        home_sshdir = "{}/.ssh".format(home_dir)
+        if not os.path.isdir(home_sshdir):
+            os.mkdir(home_sshdir)
+        priv_key_name = "{}/{}-{}".format(home_sshdir, application, name)
         pub_key_name = "{}.pub".format(priv_key_name)
 
         elita.util.debugLog(self, "key_setup: home_dir: {}".format(home_dir))
         elita.util.debugLog(self, "key_setup: priv_key_name: {}".format(priv_key_name))
         elita.util.debugLog(self, "key_setup: pub_key_name: {}".format(pub_key_name))
-
 
         elita.util.debugLog(self, "key_setup: writing keypairs")
         with open(pub_key_name, 'w') as f:
@@ -147,7 +149,7 @@ class GitRepoService:
         os.chmod(priv_key_name, stat.S_IWUSR | stat.S_IRUSR)
 
         elita.util.debugLog(self, "key_setup: adding alias to ssh config")
-        ssh_config = "{}/.ssh/config".format(home_dir)
+        ssh_config = "{}/config".format(home_sshdir)
         alias_name = "{}-{}".format(application, name)
         lock = lockfile.FileLock(ssh_config)
         lock.acquire(timeout=60)
