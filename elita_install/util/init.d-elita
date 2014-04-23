@@ -43,6 +43,7 @@ PSERVE_OPTIONS="--daemon --pid-file=${HOME_DIR}/pyramid.pid --log-file=${SYNC_LO
 case "$1" in
   start)
     cd "${HOME_DIR}"
+    export HOME=$(eval echo ~elita)
     log_begin_msg "Starting Elita Celery workers..."
     start-stop-daemon --start --quiet --oknodo --exec "$CELERY" -- $CELERY_OPTIONS
     log_end_msg $?

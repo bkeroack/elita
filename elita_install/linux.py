@@ -16,6 +16,9 @@ ELITA_LOG_DIR = "/var/log/elita"
 ELITA_ETC = "/etc/elita"
 ELITA_INITD = "/etc/init.d/elita"
 ELITA_DEFAULTS = "/etc/default/elita"
+ELITA_DATADIR = "/var/lib/elita"
+ELITA_GITDEPLOY = "{}/gitdeploy".format(ELITA_DATADIR)
+ELITA_BUILDS = "{}/builds".format(ELITA_DATADIR)
 
 LOGROTATE_DIR = "/etc/logrotate.d"
 
@@ -87,14 +90,17 @@ def setup_nginx():
         puts('\n')
 
 def create_salt_dirs():
-    if not os.path.isdir("/srv"):
-        mk_dir('/srv')
-    if not os.path.isdir("/srv/salt"):
-        mk_dir('/srv/salt')
-    if not os.path.isdir("/srv/pillar"):
-        mk_dir('/srv/pillar')
+    mk_dir('/srv')
+    mk_dir('/srv/salt')
+    mk_dir('/srv/pillar')
     chown("elita:elita", "/srv/pillar", R=True)
     chown("elita:elita", "/srv/salt", R=True)
+
+def create_data_dirs():
+    mk_dir(ELITA_DATADIR)
+    mk_dir(ELITA_GITDEPLOY)
+    mk_dir(ELITA_BUILDS)
+    chown("elita:elita", ELITA_DATADIR, R=True)
 
 def do_step(msg, func, params=[]):
     puts(msg + " ... ", newline=False)
@@ -110,6 +116,8 @@ def InstallUbuntu():
     do_step("Creating log directory: {}".format(ELITA_LOG_DIR), mk_dir, [ELITA_LOG_DIR])
 
     do_step("Setting ownership on log directory", chown_dir, [ELITA_LOG_DIR])
+
+    do_step("Creating data directories", create_data_dirs)
 
     do_step("Copying logrotate script", cp_logrotate)
 
