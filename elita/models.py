@@ -494,7 +494,7 @@ class GitDataService(GenericChildDataService):
         doc = self.db['gitrepos'].find_one({'name': name, 'application': app})
         return {k: doc[k] for k in doc if k[0] != '_'}
 
-    def NewGitRepo(self, app, name, keypair, gitprovider, existing=False):
+    def NewGitRepo(self, app, name, keypair, gitprovider, uri=None, existing=False):
         gp_doc = self.db['gitproviders'].find_one({'name': gitprovider})
         if gp_doc is None:
             return {'NewGitRepo': "gitprovider '{}' is unknown".format(gitprovider)}
@@ -505,7 +505,8 @@ class GitDataService(GenericChildDataService):
             'name': name,
             'application': app,
             'keypair': bson.DBRef("keypairs", kp_doc['_id']),
-            'gitprovider': bson.DBRef("gitproviders", gp_doc['_id'])
+            'gitprovider': bson.DBRef("gitproviders", gp_doc['_id']),
+            'uri': uri
         })
         gro = self.db['gitrepos'].find_and_modify(query={
             'name': gr_obj.name,
@@ -515,7 +516,8 @@ class GitDataService(GenericChildDataService):
             'name': gr_obj.name,
             'application': gr_obj.application,
             'keypair': gr_obj.keypair,
-            'gitprovider': gr_obj.gitprovider
+            'gitprovider': gr_obj.gitprovider,
+            'uri': gr_obj.uri
         }, upsert=True, new=True)
         gr_id = gro['_id']
         self.parent.refresh_root()
@@ -616,6 +618,8 @@ class KeyDataService(GenericChildDataService):
                 err = "Invalid private key"
             if exc_type == elita_exceptions.InvalidPublicKey:
                 err = "Invalid public key"
+            if exc_type == elita_exceptions.InvalidKeyPairType:
+                err = "Invalid key type"
             else:
                 err = "unknown key error"
             return {

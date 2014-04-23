@@ -255,7 +255,7 @@ class ApplicationView(GenericView):
     def GET(self):
         return {"application": self.context.app_name,
                 "created": self.get_created_datetime_text(),
-                "child_resources": self.datasvc.GetAppKeys(self.context.app_name)}
+                self.context.app_name: self.datasvc.GetAppKeys(self.context.app_name)}
 
     def PATCH(self):
         pass
@@ -713,28 +713,32 @@ class GitRepoContainerView(GenericView):
         gitprovider = self.req.params['gitprovider']
         keypair = self.req.params['keypair']
         name = self.req.params['name']
-        ret = self.datasvc.gitsvc.NewGitRepo(self.context.parent, name, keypair, gitprovider)
+
+        if not existing:
+            uri = None
+            kp = self.datasvc.keysvc.GetKeyPair(keypair)
+            gp_doc = self.datasvc.gitsvc.GetGitProvider(gitprovider)
+            logger.debug("GitRepoContainerView: gp_doc: {}".format(gp_doc))
+            repo_callable = elita.deployment.gitservice.create_repo_callable_from_type(gp_doc['type'])
+            if not repo_callable:
+                return self.Error(400, "gitprovider type not supported ({})".format(gp_doc['type']))
+            msg = self.run_async("create_repository", repo_callable, {'gitprovider': gp_doc, 'name': name,
+                                                                      'application': self.context.parent,
+                                                                      'keypair': kp})
+        else:
+            if 'uri' not in self.req.params:
+                return self.MISSING_PARAMETER('uri')
+            uri = self.req.params['uri']
+            msg = {
+                'task': 'none'
+            }
+        ret = self.datasvc.gitsvc.NewGitRepo(self.context.parent, name, keypair, gitprovider, uri=uri)
         if ret['NewGitRepo'] != 'ok':
             return self.Error(500, ret)
-        else:
-            if not existing:
-                kp = self.datasvc.keysvc.GetKeyPair(keypair)
-                gp_doc = self.datasvc.gitsvc.GetGitProvider(gitprovider)
-                logger.debug("GitRepoContainerView: gp_doc: {}".format(gp_doc))
-                repo_callable = elita.deployment.gitservice.create_repo_callable_from_type(gp_doc['type'])
-                if not repo_callable:
-                    return self.Error(400, "gitprovider type not supported ({})".format(gp_doc['type']))
-                msg = self.run_async("create_repository", repo_callable, {'gitprovider': gp_doc, 'name': name,
-                                                                          'application': self.context.parent,
-                                                                          'keypair': kp})
-            else:
-                msg = {
-                    'task': 'none'
-                }
-            return self.status_ok({
-                'new_gitrepo': ret,
-                'message': msg
-            })
+        return self.status_ok({
+            'new_gitrepo': ret,
+            'message': msg
+        })
 
     def POST(self):
         return self.PUT()
