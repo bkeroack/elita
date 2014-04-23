@@ -127,7 +127,7 @@ class GitRepoService:
     def key_setup(self, name, application, keypair):
         #copy keypair to user ssh dir
         #add alias in ~/.ssh/config
-        home_dir = os.path.expanduser('~')
+        home_dir = os.path.expanduser('~elita')
         priv_key_name = "{}/.ssh/{}-{}".format(home_dir, application, name)
         pub_key_name = "{}.pub".format(priv_key_name)
 

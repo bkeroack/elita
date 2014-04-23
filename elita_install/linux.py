@@ -6,7 +6,7 @@ import os.path
 import sys
 import stat
 import sh
-from sh import useradd, chown
+from sh import useradd, chown, chmod
 import logging
 from clint.textui import puts, colored, indent
 
@@ -86,6 +86,15 @@ def setup_nginx():
             puts(colored.yellow('nginx not found. Install nginx and re-run'))
         puts('\n')
 
+def create_salt_dirs():
+    if not os.path.isdir("/srv"):
+        mk_dir('/srv')
+    if not os.path.isdir("/srv/salt"):
+        mk_dir('/srv/salt')
+    if not os.path.isdir("/srv/pillar"):
+        mk_dir('/srv/pillar')
+    chown("elita:elita", "/srv/pillar", R=True)
+    chown("elita:elita", "/srv/salt", R=True)
 
 def do_step(msg, func, params=[]):
     puts(msg + " ... ", newline=False)
@@ -120,6 +129,8 @@ def InstallUbuntu():
     do_step("Copying init.d script", cp_file_checkperms, [initd_location, ELITA_INITD])
 
     do_step("Making init.d script executable", chmod_ax_initd)
+
+    do_step("Creating salt base dirs if necessary", create_salt_dirs)
 
     do_step("Setting up example nginx config", setup_nginx)
 
