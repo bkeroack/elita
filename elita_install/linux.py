@@ -76,10 +76,15 @@ def setup_nginx():
             if not os.path.isdir('/etc/nginx/ssl'):
                 mk_dir('/etc/nginx/ssl')
             puts(colored.magenta('Example nginx configuration copied to: {}'.format(elita_nginx_location)))
-            puts(colored.magenta('To use, add a symlink in /etc/nginx/sites-enabled, add your SSL cert and key to /etc/nginx/ssl and then restart nginx'))
-            puts(colored.magenta('Elita will be listening on port 2719 via SSL'))
+            puts(colored.magenta('To use:'))
+            with indent(2, quote=colored.magenta('* ')):
+                puts(colored.magenta('Add a symlink in /etc/nginx/sites-enabled'))
+                puts(colored.magenta('Put your SSL certificate and key in /etc/nginx/ssl'))
+                puts(colored.magenta('Restart nginx'))
+            puts(colored.magenta('Elita will then be listening on port 2719 via SSL'))
         else:
             puts(colored.yellow('nginx not found. Install nginx and re-run'))
+        puts('\n')
 
 
 def do_step(msg, func, params=[]):
@@ -122,6 +127,8 @@ def InstallUbuntu():
 
     init_d = sh.Command(ELITA_INITD)
     init_d("start")
+
+    puts(colored.yellow('Elita started and listening on http://localhost:2718/'))
 
     puts(colored.green("Done!"))
 
