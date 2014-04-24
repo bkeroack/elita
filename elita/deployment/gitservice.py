@@ -224,7 +224,7 @@ class GitRepoService:
                 elita.util.debugLog(self, "setup_gitdeploy_dir: cloning repo")
                 res = git.clone(alias_uri, gitrepo_name)
                 elita.util.debugLog(self, "setup_gitdeploy_dir: res: {}".format(res))
-                self.git_user_config(parent_path)
+                self.git_user_config(path)
         else:
             elita.util.debugLog(self, "setup_gitdeploy_dir: local dir exists! not creating")
 
