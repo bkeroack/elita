@@ -259,7 +259,7 @@ class JobDataService(GenericChildDataService):
         assert self.parent.job_id
         self.db['job_data'].insert({
             'job_id': self.parent.job_id,
-            'data': data
+            'data': elita.util.change_dict_keys(data, '.', '_') if isinstance(data, dict) else data
         })
 
     def GetJobs(self, active):
