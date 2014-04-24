@@ -268,7 +268,7 @@ class GitDeployManager:
         self.rc = salt_control.RemoteCommands(self.sc)
 
         if not os.path.isdir(self.get_path()):
-            gitrepo = gitdeploy['gitrepo']
+            gitrepo = gitdeploy['location']['gitrepo']
             setup_local_gitrepo_dir(datasvc, gitrepo)
 
     def initialize(self, server_list):
