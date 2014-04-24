@@ -139,7 +139,7 @@ class GitRepoService:
 
     def get_alias_uri(self, alias, original_uri):
         orig_domain = 'bitbucket.org' if self.gp_type == 'bitbucket' else 'github.com'
-        return original_uri.replace('git@{}'.format(orig_domain), alias)
+        return original_uri.replace(orig_domain, alias)
 
     def key_setup(self, gitdeploy_name, application, keypair):
         #copy keypair to user ssh dir
