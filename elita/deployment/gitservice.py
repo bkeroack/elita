@@ -37,7 +37,7 @@ def create_bitbucket_repo(datasvc, gitprovider, name, application, keypair):
         alias = bbsvc.key_setup(name, application, keypair)
         alias_uri = uri.replace("bitbucket.org", alias)
         elita.util.debugLog(create_bitbucket_repo, "alias uri: {}".format(alias_uri))
-        bbsvc.setup_gitdeploy_dir(name, application, alias_uri, force=True)
+        bbsvc.setup_gitdeploy_dir(name, application, alias_uri, empty=True)
         datasvc.gitsvc.UpdateGitRepo(application, name, {'uri': uri})
     else:
         elita.util.debugLog(create_bitbucket_repo, "ERROR: uri for gitrepo not found!")
@@ -118,7 +118,7 @@ def setup_local_gitrepo_dir(datasvc, gitrepo):
     elita.util.debugLog(setup_local_gitrepo_dir, "setting up gitrepo: {}".format(gitrepo['name']))
     repo_service = BitBucketRepoService if gitrepo['gitprovider']['type'] == 'bitbucket' else GitHubRepoService
     rs = repo_service(gitrepo['gitprovider'], datasvc.settings)
-    rs.setup_gitdeploy_dir(gitrepo['name'], gitrepo['application'], gitrepo['uri'], force=False)
+    rs.setup_gitdeploy_dir(gitrepo['name'], gitrepo['application'], gitrepo['uri'], empty=False)
 
 class GitRepoService:
     def __init__(self, gitprovider, settings):
@@ -169,40 +169,44 @@ class GitRepoService:
         lock.release()
         return alias_name
 
-    def setup_gitdeploy_dir(self, name, application, uri, force=False):
+    def setup_gitdeploy_dir(self, name, application, uri, empty=False):
         '''create master gitdeploy directory and initialize with git'''
         elita.util.debugLog(self, "setup_gitdeploy_dir: name: {}; app: {}; uri: {}".format(name, application, uri))
         root = self.settings['elita.gitdeploy.dir']
         if not os.path.isdir(root):
             os.mkdir(root)
-        path = "{}/{}".format(root, application)
-        if not os.path.isdir(path):
-            os.mkdir(path)
-        path += "/{}".format(name)
-        if os.path.isdir(path) and force:
+        parent_path = os.path.join(root, application)
+        path = os.path.join(parent_path, name)
+        if os.path.isdir(path) and empty:
             shutil.rmtree(path)
         if not os.path.isdir(path):
             os.mkdir(path)
-            git = sh.git.bake(_cwd=path)
-            res = git.init()
-            elita.util.debugLog(self, "setup_gitdeploy_dir: git init: {}".format(res))
-            res = git.remote.add.origin("ssh://{}".format(uri))
-            elita.util.debugLog(self, "setup_gitdeploy_dir: git remote add origin: {}".format(res))
-            elita.util.debugLog(self, "setup_gitdeploy_dir: creating initial repo with dummy file")
-            touch = sh.touch.bake(_cwd=path)
-            touch(".empty")
-            res = git.add('-A')
-            elita.util.debugLog(self, "setup_gitdeploy_dir: git add: {}".format(res))
-            res = git.config("user.email", "elita@locahost")
-            elita.util.debugLog(self, "setup_gitdeploy_dir: git config user.email: {}".format(res))
-            res = git.config("user.name", "elita")
-            elita.util.debugLog(self, "setup_gitdeploy_dir: git config user.name: {}".format(res))
-            res = git.config("--global", "push.default", "simple")
-            elita.util.debugLog(self, "setup_gitdeploy_dir: git config --global push.default simple: {}".format(res))
-            res = git.commit(m="initial state")
-            elita.util.debugLog(self, "setup_gitdeploy_dir: git commit: {}".format(res))
-            res = git.push("--set-upstream", "origin", "master")
-            elita.util.debugLog(self, "setup_gitdeploy_dir: git push: {}".format(res))
+            if empty:
+                git = sh.git.bake(_cwd=path)
+                res = git.init()
+                elita.util.debugLog(self, "setup_gitdeploy_dir: git init: {}".format(res))
+                res = git.remote.add.origin("ssh://{}".format(uri))
+                elita.util.debugLog(self, "setup_gitdeploy_dir: git remote add origin: {}".format(res))
+                elita.util.debugLog(self, "setup_gitdeploy_dir: creating initial repo with dummy file")
+                touch = sh.touch.bake(_cwd=path)
+                touch(".empty")
+                res = git.add('-A')
+                elita.util.debugLog(self, "setup_gitdeploy_dir: git add: {}".format(res))
+                res = git.config("user.email", "elita@locahost")
+                elita.util.debugLog(self, "setup_gitdeploy_dir: git config user.email: {}".format(res))
+                res = git.config("user.name", "elita")
+                elita.util.debugLog(self, "setup_gitdeploy_dir: git config user.name: {}".format(res))
+                res = git.config("--global", "push.default", "simple")
+                elita.util.debugLog(self, "setup_gitdeploy_dir: git config --global push.default simple: {}".format(res))
+                res = git.commit(m="initial state")
+                elita.util.debugLog(self, "setup_gitdeploy_dir: git commit: {}".format(res))
+                res = git.push("--set-upstream", "origin", "master")
+                elita.util.debugLog(self, "setup_gitdeploy_dir: git push: {}".format(res))
+            else:
+                git = sh.git.bake(_cwd=parent_path)
+                elita.util.debugLog(self, "setup_gitdeploy_dir: cloning repo")
+                res = git.clone(uri, name)
+                elita.util.debugLog(self, "setup_gitdeploy_dir: res: {}".format(res))
         else:
             elita.util.debugLog(self, "setup_gitdeploy_dir: local dir exists! not creating")
 
