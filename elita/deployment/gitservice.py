@@ -8,6 +8,7 @@ import sh
 import lockfile
 import git
 import copy
+import socket
 
 import elita.util
 import salt_control
@@ -178,6 +179,16 @@ class GitRepoService:
         lock.release()
         return alias_name
 
+    def git_user_config(self, cwd):
+        git = sh.git.bake(_cwd=cwd)
+        hostname = socket.getfqdn()
+        res = git.config("user.email", "elita@{}".format(hostname))
+        elita.util.debugLog(self, "setup_gitdeploy_dir: git config user.email: {}".format(res))
+        res = git.config("user.name", "elita")
+        elita.util.debugLog(self, "setup_gitdeploy_dir: git config user.name: {}".format(res))
+        res = git.config("--global", "push.default", "simple")
+        elita.util.debugLog(self, "setup_gitdeploy_dir: git config --global push.default simple: {}".format(res))
+
     def setup_gitdeploy_dir(self, gitrepo_name, application, uri, empty=False):
         '''create master gitdeploy directory and initialize with git'''
         elita.util.debugLog(self, "setup_gitdeploy_dir: name: {}; app: {}; uri: {}".format(gitrepo_name, application, uri))
@@ -203,12 +214,7 @@ class GitRepoService:
                 touch(".empty")
                 res = git.add('-A')
                 elita.util.debugLog(self, "setup_gitdeploy_dir: git add: {}".format(res))
-                res = git.config("user.email", "elita@locahost")
-                elita.util.debugLog(self, "setup_gitdeploy_dir: git config user.email: {}".format(res))
-                res = git.config("user.name", "elita")
-                elita.util.debugLog(self, "setup_gitdeploy_dir: git config user.name: {}".format(res))
-                res = git.config("--global", "push.default", "simple")
-                elita.util.debugLog(self, "setup_gitdeploy_dir: git config --global push.default simple: {}".format(res))
+                self.git_user_config(path)
                 res = git.commit(m="initial state")
                 elita.util.debugLog(self, "setup_gitdeploy_dir: git commit: {}".format(res))
                 res = git.push("--set-upstream", "origin", "master")
@@ -218,6 +224,7 @@ class GitRepoService:
                 elita.util.debugLog(self, "setup_gitdeploy_dir: cloning repo")
                 res = git.clone(alias_uri, gitrepo_name)
                 elita.util.debugLog(self, "setup_gitdeploy_dir: res: {}".format(res))
+                self.git_user_config(parent_path)
         else:
             elita.util.debugLog(self, "setup_gitdeploy_dir: local dir exists! not creating")
 
