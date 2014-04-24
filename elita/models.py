@@ -570,7 +570,7 @@ class DeploymentDataService(GenericChildDataService):
             'name': dpo.name,
             'application': dpo.application,
             'build_name': dpo.build_name,
-            'deployment': dpo.deploy,
+            'deployment': dpo.deployment,
             'status': dpo.status,
             'job_id': dpo.job_id
         })
