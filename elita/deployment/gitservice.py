@@ -222,7 +222,7 @@ class GitRepoService:
             else:
                 git = sh.git.bake(_cwd=parent_path)
                 elita.util.debugLog(self, "setup_gitdeploy_dir: cloning repo")
-                res = git.clone(alias_uri, gitrepo_name)
+                res = git.clone("ssh://{}".format(alias_uri), gitrepo_name)
                 elita.util.debugLog(self, "setup_gitdeploy_dir: res: {}".format(res))
                 self.git_user_config(path)
         else:

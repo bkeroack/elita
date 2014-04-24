@@ -1104,6 +1104,7 @@ class DataValidator:
         self.check_deployments()
         self.check_servers()
         self.check_gitdeploys()
+        self.check_gitrepos()
         self.SaveRoot()
 
     def SaveRoot(self):
@@ -1425,6 +1426,21 @@ class DataValidator:
         for dl in dlist:
             self.db['gitdeploys'].remove({'_id': dl})
 
+    def check_gitrepos(self):
+        fixlist = list()
+        for d in self.db['gitrepos'].find():
+            if 'uri' in d:
+                if ':' in d['uri']:
+                    util.debugLog(self, "WARNING: found gitrepo URI with ':'; replacing with '/' ({})".format(d['name']))
+                    d['uri'] = d['uri'].replace(':', '/')
+                    fixlist.append(d)
+                else:
+                    util.debugLog(self, "WARNING: found gitrepo without URI ({}); adding empty field".format(d['name']))
+                    d['uri'] = ""
+                    fixlist.append(d)
+        for d in fixlist:
+            self.db['gitrepos'].save(d)
+            
     def check_toplevel(self):
         top_levels = {
             'app': {
