@@ -511,9 +511,19 @@ class DeploymentContainerView(GenericView):
                 return self.Error(400, "servers glob pattern doesn't match anything: {}".format(body['servers']))
         else:
             servers = body['servers']
+        if isinstance(body['gitdeploys'], str):
+            gitdeploys = fnmatch.filter(self.datasvc.gitsvc.GetGitDeploys(app), body['gitdeploys'])
+            if len(gitdeploys) == 0:
+                return self.Error(400, "gitdeploys glob pattern doesn't match anything: {}".format(body['gitdeploys']))
+        else:
+            gitdeploys = set(body['gitdeploys'])
+            existing_gds = set(self.datasvc.gitsvc.GetGitDeploys(app))
+            if not gitdeploys.issubset(existing_gds):
+                diff = gitdeploys - existing_gds
+                return self.Error(400, "unknown gitdeploys: {}".format(diff))
         #verify that all servers have the requested gitdeploys initialized on them
         uninit_gd = dict()
-        for gd in body['gitdeploys']:
+        for gd in gitdeploys:
             gddoc = self.datasvc.gitsvc.GetGitDeploy(app, gd)
             init_servers = set(tuple(gddoc['servers']))
             req_servers = set(tuple(servers))
@@ -527,7 +537,7 @@ class DeploymentContainerView(GenericView):
             'application': app,
             'build_name': build_name,
             'servers': servers,
-            'gitdeploys': body['gitdeploys'],
+            'gitdeploys': gitdeploys,
             'deployment': d_id
         })
         self.datasvc.deploysvc.UpdateDeployment(app, d_id, {'status': 'running', 'job_id': msg['job_id']})
