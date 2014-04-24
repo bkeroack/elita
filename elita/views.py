@@ -746,10 +746,7 @@ class GitRepoContainerView(GenericView):
             ret = self.datasvc.gitsvc.NewGitRepo(self.context.parent, name, keypair, gitprovider, uri=uri)
             if ret['NewGitRepo'] != 'ok':
                 return self.Error(500, ret)
-            gitrepo = self.datasvc.gitsvc.GetGitRepo(self.context.parent, name)
-            msg = self.run_async("setup_local_gitdeploy", elita.deployment.gitservice.setup_local_gitrepo_dir, {
-                'gitrepo': gitrepo
-            })
+            msg = "done"
         return self.status_ok({
             'new_gitrepo': ret,
             'message': msg

@@ -67,6 +67,7 @@ def delete_github_repo(datasvc, gitprovider, name):
 def create_gitdeploy(datasvc, gitdeploy):
     gdm = GitDeployManager(gitdeploy, datasvc)
     gdm.add_sls()
+    setup_local_gitrepo_dir(datasvc, gitdeploy)
     return "done"
 
 def remove_gitdeploy(datasvc, gitdeploy):
@@ -114,13 +115,14 @@ def remove_and_deinitialize_gitdeploy(datasvc, gitdeploy):
         'remove': res2
     }
 
-def setup_local_gitrepo_dir(datasvc, gitrepo):
+def setup_local_gitrepo_dir(datasvc, gitdeploy):
+    gitrepo = gitdeploy['gitrepo']
     elita.util.debugLog(setup_local_gitrepo_dir, "setting up gitrepo: {}".format(gitrepo['name']))
     repo_service = BitBucketRepoService if gitrepo['gitprovider']['type'] == 'bitbucket' else GitHubRepoService
     rs = repo_service(gitrepo['gitprovider'], datasvc.settings)
-    rs.setup_gitdeploy_dir(gitrepo['name'], gitrepo['application'], gitrepo['uri'], empty=False)
     kp = datasvc.keysvc.GetKeyPair(gitrepo['keypair'])
-    rs.key_setup(gitrepo['name'], gitrepo['application'], kp)
+    rs.key_setup(gitdeploy['name'], gitdeploy['application'], kp)
+    rs.setup_gitdeploy_dir(gitdeploy['name'], gitdeploy['application'], gitrepo['uri'], empty=False)
 
 class GitRepoService:
     def __init__(self, gitprovider, settings):
@@ -132,14 +134,21 @@ class GitRepoService:
     def create_repo(self, name):
         elita.util.debugLog(self, "create_repo not implemented")
 
-    def key_setup(self, name, application, keypair):
+    def get_alias(self, gd_name, app):
+        return "{}-{}".format(app, gd_name)
+
+    def get_alias_uri(self, alias, original_uri):
+        orig_domain = 'bitbucket.org' if self.gp_type == 'bitbucket' else 'github.com'
+        return original_uri.replace('git@{}'.format(orig_domain), alias)
+
+    def key_setup(self, gitdeploy_name, application, keypair):
         #copy keypair to user ssh dir
         #add alias in ~/.ssh/config
         home_dir = os.path.expanduser('~elita')
         home_sshdir = "{}/.ssh".format(home_dir)
         if not os.path.isdir(home_sshdir):
             os.mkdir(home_sshdir)
-        priv_key_name = "{}/{}-{}".format(home_sshdir, application, name)
+        priv_key_name = "{}/{}-{}".format(home_sshdir, application, gitdeploy_name)
         pub_key_name = "{}.pub".format(priv_key_name)
 
         elita.util.debugLog(self, "key_setup: home_dir: {}".format(home_dir))
@@ -158,7 +167,7 @@ class GitRepoService:
 
         elita.util.debugLog(self, "key_setup: adding alias to ssh config")
         ssh_config = "{}/config".format(home_sshdir)
-        alias_name = "{}-{}".format(application, name)
+        alias_name = self.get_alias(gitdeploy_name, application)
         lock = lockfile.FileLock(ssh_config)
         lock.acquire(timeout=60)
         with open(ssh_config, 'a') as f:
@@ -179,6 +188,8 @@ class GitRepoService:
             os.mkdir(root)
         parent_path = os.path.join(root, application)
         path = os.path.join(parent_path, name)
+        alias = self.get_alias(name, application)
+        alias_uri = self.get_alias_uri(alias , uri)
         if os.path.isdir(path) and empty:
             shutil.rmtree(path)
         if not os.path.isdir(path):
@@ -187,7 +198,7 @@ class GitRepoService:
                 git = sh.git.bake(_cwd=path)
                 res = git.init()
                 elita.util.debugLog(self, "setup_gitdeploy_dir: git init: {}".format(res))
-                res = git.remote.add.origin("ssh://{}".format(uri))
+                res = git.remote.add.origin("ssh://{}".format(alias_uri))
                 elita.util.debugLog(self, "setup_gitdeploy_dir: git remote add origin: {}".format(res))
                 elita.util.debugLog(self, "setup_gitdeploy_dir: creating initial repo with dummy file")
                 touch = sh.touch.bake(_cwd=path)
@@ -207,7 +218,7 @@ class GitRepoService:
             else:
                 git = sh.git.bake(_cwd=parent_path)
                 elita.util.debugLog(self, "setup_gitdeploy_dir: cloning repo")
-                res = git.clone(uri, name)
+                res = git.clone(alias_uri, name)
                 elita.util.debugLog(self, "setup_gitdeploy_dir: res: {}".format(res))
         else:
             elita.util.debugLog(self, "setup_gitdeploy_dir: local dir exists! not creating")
