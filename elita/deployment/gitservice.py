@@ -120,7 +120,7 @@ def setup_local_gitrepo_dir(datasvc, gitdeploy):
     elita.util.debugLog(setup_local_gitrepo_dir, "setting up gitrepo: {}".format(gitrepo['name']))
     repo_service = BitBucketRepoService if gitrepo['gitprovider']['type'] == 'bitbucket' else GitHubRepoService
     rs = repo_service(gitrepo['gitprovider'], datasvc.settings)
-    kp = datasvc.keysvc.GetKeyPair(gitrepo['keypair'])
+    kp = gitrepo['keypair']
     rs.key_setup(gitdeploy['name'], gitdeploy['application'], kp)
     rs.setup_gitdeploy_dir(gitdeploy['name'], gitdeploy['application'], gitrepo['uri'], empty=False)
 
