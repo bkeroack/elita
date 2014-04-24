@@ -119,6 +119,8 @@ def setup_local_gitrepo_dir(datasvc, gitrepo):
     repo_service = BitBucketRepoService if gitrepo['gitprovider']['type'] == 'bitbucket' else GitHubRepoService
     rs = repo_service(gitrepo['gitprovider'], datasvc.settings)
     rs.setup_gitdeploy_dir(gitrepo['name'], gitrepo['application'], gitrepo['uri'], empty=False)
+    kp = datasvc.keysvc.GetKeyPair(gitrepo['keypair'])
+    rs.key_setup(gitrepo['name'], gitrepo['application'], kp)
 
 class GitRepoService:
     def __init__(self, gitprovider, settings):
