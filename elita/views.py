@@ -520,7 +520,7 @@ class DeploymentContainerView(GenericView):
             existing_gds = set(self.datasvc.gitsvc.GetGitDeploys(app))
             if not gitdeploys.issubset(existing_gds):
                 diff = gitdeploys - existing_gds
-                return self.Error(400, "unknown gitdeploys: {}".format(diff))
+                return self.Error(400, "unknown gitdeploys: {}".format(list(diff)))
             gitdeploys = list(gitdeploys)
         #verify that all servers have the requested gitdeploys initialized on them
         uninit_gd = dict()
