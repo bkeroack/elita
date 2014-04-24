@@ -736,16 +736,20 @@ class GitRepoContainerView(GenericView):
             msg = self.run_async("create_repository", repo_callable, {'gitprovider': gp_doc, 'name': name,
                                                                       'application': self.context.parent,
                                                                       'keypair': kp})
+            ret = self.datasvc.gitsvc.NewGitRepo(self.context.parent, name, keypair, gitprovider, uri=uri)
+            if ret['NewGitRepo'] != 'ok':
+                return self.Error(500, {"error_NewGitRepo": ret, "message": msg})
         else:
             if 'uri' not in self.req.params:
                 return self.MISSING_PARAMETER('uri')
             uri = self.req.params['uri']
-            msg = {
-                'task': 'none'
-            }
-        ret = self.datasvc.gitsvc.NewGitRepo(self.context.parent, name, keypair, gitprovider, uri=uri)
-        if ret['NewGitRepo'] != 'ok':
-            return self.Error(500, ret)
+            ret = self.datasvc.gitsvc.NewGitRepo(self.context.parent, name, keypair, gitprovider, uri=uri)
+            if ret['NewGitRepo'] != 'ok':
+                return self.Error(500, ret)
+            gitrepo = self.datasvc.gitsvc.GetGitRepo(self.context.parent, name)
+            msg = self.run_async("setup_local_gitdeploy", elita.deployment.gitservice.setup_local_gitrepo_dir, {
+                'gitrepo': gitrepo
+            })
         return self.status_ok({
             'new_gitrepo': ret,
             'message': msg
