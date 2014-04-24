@@ -116,7 +116,7 @@ def remove_and_deinitialize_gitdeploy(datasvc, gitdeploy):
     }
 
 def setup_local_gitrepo_dir(datasvc, gitdeploy):
-    gitrepo = gitdeploy['gitrepo']
+    gitrepo = gitdeploy['location']['gitrepo']
     elita.util.debugLog(setup_local_gitrepo_dir, "setting up gitrepo: {}".format(gitrepo['name']))
     repo_service = BitBucketRepoService if gitrepo['gitprovider']['type'] == 'bitbucket' else GitHubRepoService
     rs = repo_service(gitrepo['gitprovider'], datasvc.settings)
