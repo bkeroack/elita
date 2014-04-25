@@ -448,7 +448,7 @@ class GitDeployManager:
         orig_files = copy.deepcopy(files)
         elita.util.change_dict_keys(files, '.', '_')
         return {
-            "files": files,
+            "files": elita.util.change_dict_keys(files, '.', '_') if isinstance(files, dict) else files,
             "commit_diff_hook": self.run_commit_diffhook(orig_files)
         }
 

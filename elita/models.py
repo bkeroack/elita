@@ -259,7 +259,7 @@ class JobDataService(GenericChildDataService):
         assert self.parent.job_id
         self.db['job_data'].insert({
             'job_id': self.parent.job_id,
-            'data': elita.util.change_dict_keys(data, '.', '_') if isinstance(data, dict) else data
+            'data': data
         })
 
     def GetJobs(self, active):
@@ -1440,7 +1440,7 @@ class DataValidator:
                     fixlist.append(d)
         for d in fixlist:
             self.db['gitrepos'].save(d)
-            
+
     def check_toplevel(self):
         top_levels = {
             'app': {
