@@ -293,6 +293,19 @@ class GitDeployManager:
             gitrepo = gitdeploy['location']['gitrepo']
             setup_local_gitrepo_dir(datasvc, gitrepo)
 
+        #if there's no uri for associated gitrepo, try to fetch it
+        if len(gitdeploy['location']['gitrepo']['uri']) == 0:
+            elita.util.debugLog(self, "WARNING: found gitrepo with empty URI; fixing")
+            repo_service = BitBucketRepoService if \
+                gitdeploy['location']['gitrepo']['gitprovider']['type'] == "bitbucket" else GitHubRepoService
+            rs = repo_service(gitdeploy['location']['gitrepo']['gitprovider'], self.settings)
+            uri = rs.get_ssh_uri(gitdeploy['location']['gitrepo']['name'])
+            assert uri is not None
+            #need to get the original doc because of the dereferences
+            git_repo = datasvc.gitsvc.GetGitRepo(gitdeploy['application'], gitdeploy['gitrepo']['name'])
+            git_repo['uri'] = uri
+            datasvc.gitsvc.UpdateGitRepo(gitdeploy['application'], git_repo['name'], git_repo)
+
     def initialize(self, server_list):
         return {
             'prehook': self.run_init_prehook(server_list),

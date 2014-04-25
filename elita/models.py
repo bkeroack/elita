@@ -527,14 +527,6 @@ class GitDataService(GenericChildDataService):
         return {'NewGitRepo': 'ok'}
 
     def UpdateGitRepo(self, app, name, doc):
-        if 'keypair' in doc:
-            kpd = self.db['keypairs'].find_one({'name': doc['keypair']})
-            assert kpd
-            doc['keypair'] = bson.DBRef('keypairs', kpd['_id'])
-        if 'keypair' in doc:
-            kpd = self.db['keypairs'].find_one({'name': doc['keypair']})
-            assert kpd
-            doc['keypair'] = bson.DBRef('keypairs', kpd['_id'])
         gro = GitRepo(self.GetGitRepo(app, name))
         gro.update_values(doc)
         grd = gro.get_doc()
@@ -1434,10 +1426,10 @@ class DataValidator:
                     util.debugLog(self, "WARNING: found gitrepo URI with ':'; replacing with '/' ({})".format(d['name']))
                     d['uri'] = d['uri'].replace(':', '/')
                     fixlist.append(d)
-                else:
-                    util.debugLog(self, "WARNING: found gitrepo without URI ({}); adding empty field".format(d['name']))
-                    d['uri'] = ""
-                    fixlist.append(d)
+            else:
+                util.debugLog(self, "WARNING: found gitrepo without URI ({}); adding empty field".format(d['name']))
+                d['uri'] = ""
+                fixlist.append(d)
         for d in fixlist:
             self.db['gitrepos'].save(d)
 
