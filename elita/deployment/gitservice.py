@@ -302,9 +302,10 @@ class GitDeployManager:
             uri = rs.get_ssh_uri(gitdeploy['location']['gitrepo']['name'])
             assert uri is not None
             #need to get the original doc because of the dereferences
-            git_repo = datasvc.gitsvc.GetGitRepo(gitdeploy['application'], gitdeploy['gitrepo']['name'])
+            git_repo = datasvc.gitsvc.GetGitRepo(gitdeploy['application'], gitdeploy['location']['gitrepo']['name'])
             git_repo['uri'] = uri
             datasvc.gitsvc.UpdateGitRepo(gitdeploy['application'], git_repo['name'], git_repo)
+            self.gitdeploy = datasvc.gitsvc.GetGitDeploy(gitdeploy['application'], gitdeploy['name'])
 
     def initialize(self, server_list):
         return {
