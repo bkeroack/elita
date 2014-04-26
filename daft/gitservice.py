@@ -411,7 +411,7 @@ class GitDeployManager:
         orig_files = copy.deepcopy(files)
         util.change_dict_keys(files, '.', '_')
         return {
-            "files": files,
+            "files": util.change_dict_keys(files, '.', '_'),
             "commit_diff_hook": self.run_commit_diffhook(orig_files)
         }
 
