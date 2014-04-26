@@ -48,8 +48,8 @@ class GenericView:
     def get_created_datetime_text(self):
         return self.context.created_datetime.isoformat(' ') if hasattr(self.context, 'created_datetime') else None
 
-    def run_async(self, name, callable, args):
-        jid = action.run_async(self.datasvc, name, callable, args)
+    def run_async(self, name, job_type, data, callable, args):
+        jid = action.run_async(self.datasvc, name, job_type, data, callable, args)
         return {
             'task': name,
             'job_id': jid,
@@ -357,7 +357,7 @@ class BuildView(GenericView):
             'file_type': self.file_type
         }
         args = dict(base_args.items() + arg.items())
-        msg = self.run_async('store_build', func, args)
+        msg = self.run_async('store_build', 'async', args, func, args)
         return self.return_action_status({
             "build_stored": {
                 "application": self.app_name,
@@ -534,13 +534,15 @@ class DeploymentContainerView(GenericView):
             return self.Error(400, {"message": "gitdeploy not initialized on servers", "servers": uninit_gd})
         dpo = self.datasvc.deploysvc.NewDeployment(app, build_name, body)
         d_id = dpo['NewDeployment']['id']
-        msg = self.run_async('deploy_{}_{}'.format(app,  build_name), elita.deployment.deploy.run_deploy, {
+        args = {
             'application': app,
             'build_name': build_name,
             'servers': servers,
             'gitdeploys': gitdeploys,
             'deployment': d_id
-        })
+        }
+        msg = self.run_async('deploy_{}_{}'.format(app,  build_name), "deployment", args,
+                             elita.deployment.deploy.run_deploy, args)
         self.datasvc.deploysvc.UpdateDeployment(app, d_id, {'status': 'running', 'job_id': msg['job_id']})
         return self.status_ok({
             'deployment': {
@@ -733,9 +735,13 @@ class GitRepoContainerView(GenericView):
             repo_callable = elita.deployment.gitservice.create_repo_callable_from_type(gp_doc['type'])
             if not repo_callable:
                 return self.Error(400, "gitprovider type not supported ({})".format(gp_doc['type']))
-            msg = self.run_async("create_repository", repo_callable, {'gitprovider': gp_doc, 'name': name,
-                                                                      'application': self.context.parent,
-                                                                      'keypair': kp})
+            args = {
+                'gitprovider': gp_doc,
+                'name': name,
+                'application': self.context.parent,
+                'keypair': kp
+            }
+            msg = self.run_async("create_repository", "async", args, repo_callable, args)
             ret = self.datasvc.gitsvc.NewGitRepo(self.context.parent, name, keypair, gitprovider, uri=uri)
             if ret['NewGitRepo'] != 'ok':
                 return self.Error(500, {"error_NewGitRepo": ret, "message": msg})
@@ -747,9 +753,11 @@ class GitRepoContainerView(GenericView):
             if ret['NewGitRepo'] != 'ok':
                 return self.Error(500, ret)
             gitrepo = self.datasvc.gitsvc.GetGitRepo(self.context.parent, name)
-            msg = self.run_async("create_extant_gitrepo", elita.deployment.gitservice.setup_local_gitrepo_dir, {
+            args = {
                 'gitrepo': gitrepo
-            })
+            }
+            msg = self.run_async("create_extant_gitrepo", "async", args,
+                                 elita.deployment.gitservice.setup_local_gitrepo_dir, args)
         return self.status_ok({
             'new_gitrepo': ret,
             'message': msg
@@ -795,7 +803,11 @@ class GitRepoView(GenericView):
             del_callable = elita.deployment.gitservice.delete_repo_callable_from_type(gp_doc['type'])
             if not del_callable:
                 return self.Error(400, "git provider type not supported ({})".format(gp_doc['type']))
-            msg = self.run_async("delete_repository", del_callable, {'gitprovider': gp_doc, 'name': self.context.name})
+            args = {
+                'gitprovider': gp_doc,
+                'name': self.context.name
+            }
+            msg = self.run_async("delete_repository", "async", args, del_callable, args)
             resp['message'] = { 'delete_repository': msg}
         return self.status_ok(resp)
 
@@ -836,7 +848,8 @@ class GitDeployContainerView(GenericView):
         if 'error' in res:
             return self.Error(500, {"NewGitDeploy": res})
         gd = self.datasvc.gitsvc.GetGitDeploy(app, name)
-        msg = self.run_async("create_gitdeploy", elita.deployment.gitservice.create_gitdeploy, {'gitdeploy': gd})
+        args = {'gitdeploy': gd}
+        msg = self.run_async("create_gitdeploy", "async", args, elita.deployment.gitservice.create_gitdeploy, args)
         return self.status_ok({'create_gitdeploy': {'name': name, 'message': msg}})
 
 
@@ -903,7 +916,8 @@ class GitDeployView(GenericView):
             return self.Error(400, "invalid {}: {}".format(word, diff))
         self.datasvc.gitsvc.UpdateGitDeploy(self.context.application, self.context.name, body)
         gd = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
-        msg = self.run_async("create_gitdeploy", elita.deployment.gitservice.create_gitdeploy, {'gitdeploy': gd})
+        args = {'gitdeploy': gd}
+        msg = self.run_async("create_gitdeploy", "async", args, elita.deployment.gitservice.create_gitdeploy, args)
         return self.status_ok({'update_gitdeploy': {'name': self.context.name, 'object': body, 'message': msg}})
 
     def initialize(self, body):
@@ -912,8 +926,12 @@ class GitDeployView(GenericView):
             return err
         #we need to get the fully dereferenced doc
         gddoc = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
-        msg = self.run_async('initialize_gitdeploy_servers', elita.deployment.gitservice.initialize_gitdeploy, {'gitdeploy': gddoc,
-                                                                                               'server_list': self.servers})
+        args = {
+            'gitdeploy': gddoc,
+            'server_list': self.servers
+        }
+        msg = self.run_async('initialize_gitdeploy_servers', "async", args,
+                             elita.deployment.gitservice.initialize_gitdeploy, args)
         return self.status_ok({
             'initialize_gitdeploy': {
                 'application': self.context.application,
@@ -928,9 +946,11 @@ class GitDeployView(GenericView):
         if not ok:
             return err
         gddoc = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
-        msg = self.run_async('deinitialize_gitdeploy_servers', elita.deployment.gitservice.deinitialize_gitdeploy, {
+        args = {
             'gitdeploy': gddoc, 'server_list': self.servers
-        })
+        }
+        msg = self.run_async('deinitialize_gitdeploy_servers', "async", args,
+                             elita.deployment.gitservice.deinitialize_gitdeploy, args)
         return self.status_ok({
             'deinitialize_gitdeploy': {
                 'application': self.context.application,
@@ -954,8 +974,9 @@ class GitDeployView(GenericView):
 
     def DELETE(self):
         gddoc = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
-        msg = self.run_async('remove_deinitialize_gitdeploy', elita.deployment.gitservice.remove_and_deinitialize_gitdeploy,
-                             {'gitdeploy': gddoc})
+        args = {'gitdeploy': gddoc}
+        msg = self.run_async('remove_deinitialize_gitdeploy', "async", args,
+                             elita.deployment.gitservice.remove_and_deinitialize_gitdeploy, args)
         return self.status_ok({
             'delete_deinitialize_gitdeploy': {
                 'application': gddoc['application'],
@@ -1024,6 +1045,9 @@ class JobView(GenericView):
     def GET(self):
         ret = {
             'job_id': str(self.context.job_id),
+            'name': self.context.name,
+            'job_type': self.context.job_type,
+            'data': self.context.data,
             'created_datetime': self.get_created_datetime_text(),
             'status': self.context.status,
         }

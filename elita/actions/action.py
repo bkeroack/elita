@@ -5,9 +5,6 @@ import traceback
 import elita.util
 import elita.models
 import elita.celeryinit
-#from elita import util
-#from elita import models
-#from elita import celeryinit
 
 __author__ = 'bkeroack'
 
@@ -19,7 +16,7 @@ def regen_datasvc(settings, job_id):
     root = elita.models.RootTree(db, updater, tree, None)
     return client, elita.models.DataService(settings, db, root, job_id=job_id)
 
-@elita.celeryinit.celery.task(bind=True, name="daft_task_run_job")
+@elita.celeryinit.celery.task(bind=True, name="elita_task_run_job")
 def run_job(self, settings, callable, args):
     ''' Generate new dataservice, run callable, store results
     '''
@@ -39,9 +36,9 @@ def run_job(self, settings, callable, args):
     client.close()
 
 #generic interface to run code async (not explicit named actions/hooks)
-def run_async(datasvc, name, callable, args):
+def run_async(datasvc, name, job_type, data, callable, args):
     elita.util.debugLog("run_async", "create new async task: {}; args: {}".format(callable, args))
-    job = datasvc.jobsvc.NewJob("run_async: {}".format(name))
+    job = datasvc.jobsvc.NewJob(name, job_type, data)
     job_id = str(job.job_id)
     run_job.apply_async((datasvc.settings, callable, args), task_id=job_id)
     return job_id
@@ -61,7 +58,10 @@ class ActionService:
     def async(self, app, action_name, params):
         action = self.actions.actionmap[app][action_name]['callable']
         elita.util.debugLog(self, "action: {}, params: {}".format(action, params))
-        job = self.datasvc.jobsvc.NewJob(action_name)
+        job = self.datasvc.jobsvc.NewJob("{}.{}".format(app, action_name), "Action", {
+            "application": app,
+            "params": params
+        })
         job_id = str(job.job_id)
         run_job.apply_async((self.datasvc.settings, action, {'params': params}), task_id=job_id)
         return {"action": action_name, "job_id": job_id, "status": "async/running"}
@@ -98,6 +98,7 @@ class RegisterHooks:
             elita.util.debugLog(self, "HookMap: {}".format(self.hookmap))
 
     def run_hook(self, app, name, args):
+        # Hooks are always triggered in an async context, so there's no need to spawn another celery task
         hook = self.hookmap[app][name]
         if hook is None:
             return "none"

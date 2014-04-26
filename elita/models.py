@@ -236,16 +236,22 @@ class JobDataService(GenericChildDataService):
         actions = self.parent.actionsvc.get_action_details(app_name, action_name)
         return {k: actions[k] for k in actions if k is not "callable"}
 
-    def NewJob(self, name):
+    def NewJob(self, name, job_type, data):
         job = Job({
             'status': "running",
+            'name': name,
+            'job_type': job_type,
+            'data': data,
             'attributes': {
                 'name': name
             }
         })
         jid = self.db['jobs'].insert({
             '_class': 'Job',
+            'name': job.name,
             'job_id': str(job.job_id),
+            'job_type': job.job_type,
+            'data': job.data,
             'status': job.status,
             'attributes': job.attributes
         })
@@ -879,17 +885,17 @@ class Build(GenericDataModel):
 
 
 class Action:
-    def __init__(self, app_name, action_name, params, datasvc):
+    def __init__(self, app_name, action_name, params, job_datasvc):
         self.app_name = app_name
         self.action_name = action_name
         self.params = params
-        self.datasvc = datasvc
+        self.job_datasvc = job_datasvc
 
     def execute(self, params):
-        return self.datasvc.ExecuteAction(self.app_name, self.action_name, params)
+        return self.job_datasvc.ExecuteAction(self.app_name, self.action_name, params)
 
     def details(self):
-        return self.datasvc.GetAction(self.app_name, self.action_name)
+        return self.job_datasvc.GetAction(self.app_name, self.action_name)
 
 class Application(GenericDataModel):
     default_values = {
@@ -943,6 +949,9 @@ class Token(GenericDataModel):
 class Job(GenericDataModel):
     default_values = {
         'status': 'running',
+        'name': None,
+        'job_type': None,
+        'data': None,
         'completed_datetime': None,
         'duration_in_seconds': None,
         'attributes': None,
@@ -1271,11 +1280,19 @@ class DataValidator:
                     djs.append(j)
         for j in djs:
             del self.root['job'][j]
+        job_fixlist = list()
         for doc in self.db['jobs'].find():
             if doc['job_id'] not in self.root['job']:
                 job_id = doc['job_id']
                 util.debugLog(self, "WARNING: found orphan job: {}; adding to root tree".format(doc['job_id']))
                 self.root['job'][job_id] = {'_doc': bson.DBRef('jobs', doc['_id'])}
+            for k in ('job_type', 'data', 'name'):
+                if k not in doc:
+                    util.debugLog(self, "WARNING: found job without {}: {}; adding blank".format(k, doc['job_id']))
+                    doc[k] = ""
+                    job_fixlist.append(doc)
+        for d in job_fixlist:
+            self.db['jobs'].save(d)
 
     def check_apps(self):
         app_sublevels = {
