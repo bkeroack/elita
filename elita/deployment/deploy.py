@@ -90,37 +90,42 @@ class DeployController:
             "output": str(gdm.checkout_default_branch())
         })
         self.current_step += 1
-        self.add_msg(desc="Decompressing package to master gitdeploy repo", data={})
-        gdm.decompress_to_repo(package_doc)
-        self.current_step += 1
-        self.add_msg(desc="Checking for changes", data={})
-        res = gdm.check_repo_status()
-        self.add_msg(desc="git status results", data={
-            "output": str(res)
-        })
-        if "nothing to commit" in res:
-            self.current_step += 4
-            self.add_msg(desc="No changes to commit/push", data={})
+        if gdm.last_build == self.build_name:
+            self.add_msg(desc="Build already committed to local gitrepo; skipping package decompression", data={})
+            self.current_step += 5
         else:
+            self.add_msg(desc="Decompressing package to master gitdeploy repo", data={})
+            gdm.decompress_to_repo(package_doc)
             self.current_step += 1
-            self.add_msg(desc="Adding changed files to commit", data={})
-            self.add_msg(desc="git add result", data={
-                "output": str(gdm.add_files_to_repo())
+            self.add_msg(desc="Checking for changes", data={})
+            res = gdm.check_repo_status()
+            self.add_msg(desc="git status results", data={
+                "output": str(res)
             })
-            self.current_step += 1
-            self.add_msg(desc="Committing changes", data={})
-            self.add_msg(desc="git commit result", data={
-                "output": str(gdm.commit_to_repo(self.build_name))
-            })
-            self.current_step += 1
-            self.add_msg(desc="Inspect latest diff results", data={
-                "output": gdm.inspect_latest_diff()
-            })
-            self.current_step += 1
-            self.add_msg(desc="Pushing changes to git provider", data={})
-            self.add_msg(desc="git push result", data={
-                "output": str(gdm.push_repo())
-            })
+            if "nothing to commit" in res:
+                self.current_step += 4
+                self.add_msg(desc="No changes to commit/push", data={})
+            else:
+                self.current_step += 1
+                self.add_msg(desc="Adding changed files to commit", data={})
+                self.add_msg(desc="git add result", data={
+                    "output": str(gdm.add_files_to_repo())
+                })
+                self.current_step += 1
+                self.add_msg(desc="Committing changes", data={})
+                self.add_msg(desc="git commit result", data={
+                    "output": str(gdm.commit_to_repo(self.build_name))
+                })
+                self.current_step += 1
+                self.add_msg(desc="Inspect latest diff results", data={
+                    "output": gdm.inspect_latest_diff()
+                })
+                self.current_step += 1
+                self.add_msg(desc="Pushing changes to git provider", data={})
+                self.add_msg(desc="git push result", data={
+                    "output": str(gdm.push_repo())
+                })
+            gdm.update_repo_last_build(self.build_name)
         self.add_msg(desc="Finished gitdeploy push", data={})
 
     def salt_checkout_branch(self, gddoc):

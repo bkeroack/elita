@@ -307,6 +307,12 @@ class GitDeployManager:
             datasvc.gitsvc.UpdateGitRepo(gitdeploy['application'], git_repo['name'], git_repo)
             self.gitdeploy = datasvc.gitsvc.GetGitDeploy(gitdeploy['application'], gitdeploy['name'])
 
+        if "last_build" in gitdeploy['location']['gitrepo']:
+            self.last_build = gitdeploy['location']['gitrepo']['last_build']
+        else:
+            elita.util.debugLog(self, "WARNING: found gitrepo without last_build")
+            self.last_build = None
+
     def initialize(self, server_list):
         return {
             'prehook': self.run_init_prehook(server_list),
@@ -504,6 +510,11 @@ class GitDeployManager:
         git = self.git_obj()
         return git.push()
 
-
+    def update_repo_last_build(self, build_name):
+        gitrepo_name = self.gitdeploy['location']['gitrepo']['name']
+        elita.util.debugLog(self, "update_repo_last_build: updating last_build on {} to {}".format(gitrepo_name, build_name))
+        gitrepo = self.datasvc.gitsvc.GetGitRepo(self.gitdeploy['application'], gitrepo_name)
+        gitrepo['last_build'] = build_name
+        self.datasvc.gitsvc.UpdateGitRepo(self.gitdeploy['application'], gitrepo_name, gitrepo)
 
 

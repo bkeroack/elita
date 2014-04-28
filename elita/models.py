@@ -833,6 +833,7 @@ class GitRepo(GenericDataModel):
     default_values = {
         'name': None,
         'application': None,
+        'last_build': None,
         'uri': None,
         'keypair': bson.DBRef("", None),
         'gitprovider': bson.DBRef("", None)
@@ -1451,6 +1452,10 @@ class DataValidator:
             else:
                 util.debugLog(self, "WARNING: found gitrepo without URI ({}); adding empty field".format(d['name']))
                 d['uri'] = ""
+                fixlist.append(d)
+            if 'last_build' not in d:
+                util.debugLog(self, "WARNING: found gitrepo without last_build: {}; adding empty field".format(d['name']))
+                d['last_build'] = None
                 fixlist.append(d)
         for d in fixlist:
             self.db['gitrepos'].save(d)
