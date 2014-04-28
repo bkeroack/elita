@@ -975,19 +975,32 @@ class GitDeployView(GenericView):
     def DELETE(self):
         gddoc = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
         args = {'gitdeploy': gddoc}
+        groups_deleted = False
+        delete_groups = list()
+        if "delete_groups" in self.req.params and self.req.params['delete_groups'] in AFFIRMATIVE_SYNONYMS:
+            groups = self.datasvc.appsvc.GetGroups(self.context.application)
+            for g in groups:
+                group = self.datasvc.appsvc.GetGroup(self.context.application, g)
+                if self.context.name in group['gitdeploys']:
+                    delete_groups.append(g)
+            for g in delete_groups:
+                logger.debug("deleting group: {} (application: {})".format(g, self.context.application))
+                self.datasvc.appsvc.DeleteGroup(self.context.application, g)
+            groups_deleted = True
+
         msg = self.run_async('remove_deinitialize_gitdeploy', "async", args,
                              elita.deployment.gitservice.remove_and_deinitialize_gitdeploy, args)
-        return self.status_ok({
+        status_msg = {
             'delete_deinitialize_gitdeploy': {
                 'application': gddoc['application'],
                 'name': gddoc['name'],
                 'servers': gddoc['servers'] if 'servers' in gddoc else list(),
                 'msg': msg
             }
-        })
-
-
-
+        }
+        if groups_deleted:
+            status_msg['delete_deinitialize_gitdeploy']['groups_deleted'] = delete_groups
+        return self.status_ok(status_msg)
 
 
 class GlobalContainerView(GenericView):
@@ -997,6 +1010,87 @@ class GlobalContainerView(GenericView):
     def GET(self):
         return {"global": self.datasvc.GetGlobalKeys()}
 
+
+class GroupContainerView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request, app_name=context.parent)
+        self.set_params({"GET": [], "PUT": ["name"], "POST": [], "DELETE": ["name"]})
+
+    def GET(self):
+        return {
+            'application': self.context.parent,
+            'groups': self.datasvc.appsvc.GetGroups(self.context.parent)
+        }
+
+    def PUT(self):
+        name = self.req.params['name']
+        try:
+            server_gitdeploys = self.req.json_body
+        except:
+            return self.Error(400, "invalid server/gitdeploys object (problem deserializing, bad JSON?)")
+        submitted_keys = set(server_gitdeploys.keys())
+        required_keys = {"servers", "gitdeploys"}
+        if not submitted_keys.issuperset(required_keys):
+            return self.Error(400, "missing server/gitdeploy keys: {}".format(list(required_keys - submitted_keys)))
+        servers = server_gitdeploys['servers']
+        gitdeploys = server_gitdeploys['gitdeploys']
+        attributes = server_gitdeploys['attributes'] if 'attributes' in server_gitdeploys else dict()
+
+        existing_gitdeploys = set(self.datasvc.gitsvc.GetGitDeploys(self.context.parent))
+        submitted_gitdeploys = set(gitdeploys)
+        if not existing_gitdeploys.issuperset(submitted_gitdeploys):
+            return self.Error(400, "unknown gitdeploys: {}".format(list(submitted_gitdeploys - existing_gitdeploys)))
+
+        existing_servers = set(self.datasvc.serversvc.GetServers())
+        submitted_servers = set(servers)
+        if not existing_servers.issuperset(submitted_servers):
+            return self.Error(400, "unknown servers: {}".format(list(submitted_servers - existing_servers)))
+
+        self.datasvc.appsvc.NewGroup(self.context.parent, name, servers, gitdeploys, attributes=attributes)
+        return self.status_ok({
+            "New_Group": {
+                "name": name,
+                "application": self.context.parent,
+                "attributes": attributes,
+                "servers": servers,
+                "gitdeploys": gitdeploys
+            }
+        })
+
+    def DELETE(self):
+        name = self.req.params['name']
+        if name not in self.datasvc.appsvc.GetGroups(self.context.parent):
+            return self.Error(400, "unknown group: {}".format(name))
+        self.datasvc.appsvc.DeleteGroup(self.context.parent, name)
+        return self.status_ok({
+            "Delete_Group": {
+                "name": name,
+                "application": self.context.parent
+            }
+        })
+
+class GroupView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request, app_name=context.application)
+
+    def GET(self):
+        return {
+            'created': self.get_created_datetime_text(),
+            'application': self.context.application,
+            'name': self.context.name,
+            'attributes': self.context.attributes,
+            'servers': self.context.servers,
+            'gitdeploys': self.context.gitdeploys
+        }
+
+    def DELETE(self):
+        self.datasvc.appsvc.DeleteGroup(self.context.application, self.context.name)
+        return self.status_ok({
+            "Delete_Group": {
+                "name": self.context.name,
+                "application": self.context.application
+            }
+        })
 
 class UserContainerView(GenericView):
     def __init__(self, context, request):

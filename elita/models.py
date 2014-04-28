@@ -218,7 +218,8 @@ class ApplicationDataService(GenericChildDataService):
             "actions": {"_doc": self.parent.NewContainer("ActionContainer", "action", app_name)},
             "gitrepos": {"_doc": self.parent.NewContainer("GitRepoContainer", "gitrepos", app_name)},
             "gitdeploys": {"_doc": self.parent.NewContainer("GitDeployContainer", "gitdeploys", app_name),},
-            "deployments": {"_doc": self.parent.NewContainer("DeploymentContainer", "deployments", app_name)}
+            "deployments": {"_doc": self.parent.NewContainer("DeploymentContainer", "deployments", app_name)},
+            "groups": {"_doc": self.parent.NewContainer("GroupContainer", "groups", app_name)}
         }
 
     def ChangeApplication(self, app_name, data):
@@ -226,6 +227,43 @@ class ApplicationDataService(GenericChildDataService):
 
     def DeleteApplication(self, app_name):
         self.parent.DeleteObject(self.root['app'], app_name, 'applications')
+
+    def GetGroups(self, app):
+        return [k for k in self.root['app'][app]['groups'] if k[0] != '_']
+
+    def GetGroup(self, app, name):
+        docs = [d for d in self.db['groups'].find({'application': app, 'name': name})]
+        assert len(docs) > 0
+        if len(docs) > 1:
+            elita.util.debugLog(self, "GetGroup: WARNING: more than one group {} in application {}".format(name, app))
+        doc = docs[0]
+        return {k: doc[k] for k in doc if k[0] != '_'}
+
+    def NewGroup(self, app, name, servers, gitdeploys, attributes={}):
+        gp = Group({
+            "application": app,
+            "name": name,
+            "servers": servers,
+            "gitdeploys": gitdeploys,
+            "attributes": attributes
+        })
+
+        gid = self.db['groups'].insert({
+            '_class': 'Group',
+            'application': gp.application,
+            'name': gp.name,
+            'attributes': gp.attributes,
+            'servers': gp.servers,
+            'gitdeploys': gp.gitdeploys
+        })
+
+        self.parent.refresh_root()
+        self.root['app'][app]['groups'][gp.name] = {
+            '_doc': bson.DBRef("groups", gid)
+        }
+
+    def DeleteGroup(self, app, name):
+        self.parent.DeleteObject(self.root['app'][app]['groups'], name, 'groups')
 
 class JobDataService(GenericChildDataService):
     def GetAllActions(self, app_name):
@@ -517,7 +555,8 @@ class GitDataService(GenericChildDataService):
             'application': app,
             'keypair': bson.DBRef("keypairs", kp_doc['_id']),
             'gitprovider': bson.DBRef("gitproviders", gp_doc['_id']),
-            'uri': uri
+            'uri': uri,
+            'last_build': None
         })
         gro = self.db['gitrepos'].find_and_modify(query={
             'name': gr_obj.name,
@@ -528,7 +567,8 @@ class GitDataService(GenericChildDataService):
             'application': gr_obj.application,
             'keypair': gr_obj.keypair,
             'gitprovider': gr_obj.gitprovider,
-            'uri': gr_obj.uri
+            'uri': gr_obj.uri,
+            'last_build': gr_obj.last_build
         }, upsert=True, new=True)
         gr_id = gro['_id']
         self.parent.refresh_root()
@@ -967,6 +1007,15 @@ class Job(GenericDataModel):
     def init_hook(self):
         self.job_id = uuid.uuid4() if self.job_id is None else self.job_id
 
+class Group(GenericDataModel):
+    default_values = {
+        'application': None,
+        'name': None,
+        'servers': list(),
+        'gitdeploys': list(),
+        'attributes': dict()
+    }
+
 class GenericContainer:
     def __init__(self, doc):
         self.name = doc['name']
@@ -1011,6 +1060,9 @@ class DeploymentContainer(GenericContainer):
     pass
 
 class KeyPairContainer(GenericContainer):
+    pass
+
+class GroupContainer(GenericContainer):
     pass
 
 class Root(GenericContainer):
@@ -1316,6 +1368,9 @@ class DataValidator:
             },
             'deployments': {
                 'class': "DeploymentContainer"
+            },
+            'groups': {
+                'class': "GroupContainer"
             }
         }
         for a in self.root['app']:
@@ -1445,7 +1500,7 @@ class DataValidator:
         fixlist = list()
         for d in self.db['gitrepos'].find():
             if 'uri' in d:
-                if ':' in d['uri']:
+                if d['uri'] is not None and ':' in d['uri']:
                     util.debugLog(self, "WARNING: found gitrepo URI with ':'; replacing with '/' ({})".format(d['name']))
                     d['uri'] = d['uri'].replace(':', '/')
                     fixlist.append(d)

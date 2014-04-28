@@ -27,7 +27,7 @@ requires = [
     ]
 
 setup(name='elita',
-      version="0.79",
+      version="0.39",
       description='Continuous deployment (continuous delivery) and infrastructure management REST framework',
       long_description=README + '\n\n' + CHANGES,
       license='Apache',
