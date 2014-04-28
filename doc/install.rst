@@ -5,6 +5,7 @@ Installation
 Prerequisites
 -------------
 
+* Python 2.7+ (not tested on 3.x)
 * MongoDB
 * RabbitMQ (for Celery)
 * SWIG (for crypto-related dependencies)
@@ -21,6 +22,18 @@ Installing the prerequistes on an Ubuntu system::
     # apt-get update
     # apt-get install mongodb rabbitmq-server python-pip python-dev libssl-dev swig git nginx
 
+
+CentOS
+------
+
+In general installing on CentOS will be somewhat painful compared to Ubuntu, since very few of the dependencies
+are available in the standard yum repositories. You'll need to install them each individually.
+
+First, CentOS 6.x ships with Python 2.6 by default, so you have to `compile and install Python 2.7.x
+<http://toomuchdata.com/2014/02/16/how-to-install-python-on-centos/>`_ first.
+
+After that's complete, install the dependencies listed above, probably by installing RPMs manually or compiling from scratch.
+Once that's finished you should be able to install via the instructions below.
 
 Installation (Linux/POSIX)
 --------------------------
@@ -64,6 +77,7 @@ verifying your installation before exposing it to the public internet.
           },
           "servers": [ "*" ]
        }
+
    Just be sure that if you change the permissions on 'admin' (or delete it) that you have a different user with full
    permissions, otherwise you could be locked out of your installation.
 

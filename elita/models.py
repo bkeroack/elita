@@ -14,7 +14,7 @@ import elita
 from elita.crypto import keypair
 from elita.deployment import deploy, salt_control
 import util
-from deployment.gitservice import EMBEDDED_YAML_DOT_REPLACEMENT
+from deployment.gitservice import EMBEDDED_YAML_DOT_REPLACEMENT, GitDeployManager
 import elita_exceptions
 from elita.actions.action import ActionService
 
@@ -444,6 +444,11 @@ class GitDataService(GenericChildDataService):
         doc['location']['gitrepo']['gitprovider'] = self.db.dereference(doc['location']['gitrepo']['gitprovider'])
         assert doc['location']['gitrepo']['gitprovider'] is not None
         return {k: doc[k] for k in doc if k[0] != '_'}
+
+    def GetGitDeployLocalPath(self, app, name):
+        gd_doc = self.GetGitDeploy(app, name)
+        gdm = GitDeployManager(gd_doc, self.parent)
+        return gdm.get_path()
 
     def UpdateGitDeploy(self, app, name, doc):
         if 'location' in doc:
