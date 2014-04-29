@@ -30,18 +30,6 @@ def run_deploy(datasvc, application, build_name, servers, gitdeploys, deployment
     datasvc.deploysvc.UpdateDeployment(application, deployment, {"status": "complete"})
     return {"deploy_status": "complete"}
 
-def validate_server_specs(deploy_obj):
-    if not isinstance(deploy_obj, dict):
-        return False, "must be dict"
-    for k in ('servers', 'gitdeploys'):
-        if k not in deploy_obj:
-            return False, "deployment dict must have '{}' key".format(k)
-    if not (isinstance(deploy_obj['servers'], list) or isinstance(deploy_obj['servers'], str)):
-        return False, "servers must be a list or string"
-    if not isinstance(deploy_obj['gitdeploys'], list):
-        return False, "invalid gitdeploys [need list]"
-    return True, None
-
 class DeployController:
     def __init__(self, datasvc, remote_controller):
         self.datasvc = datasvc

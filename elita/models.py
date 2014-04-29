@@ -610,12 +610,15 @@ class GitDataService(GenericChildDataService):
         self.parent.DeleteObject(self.root['app'][app]['gitrepos'], name, 'gitrepos')
 
 class DeploymentDataService(GenericChildDataService):
-    def NewDeployment(self, app, build_name, deploy):
+    def NewDeployment(self, app, build_name, environments, groups, servers, gitdeploys):
         dpo = Deployment({
             'name': "",
             'application': app,
             'build_name': build_name,
-            'deployment': deploy,
+            'environments': environments,
+            'groups': groups,
+            'servers': servers,
+            'gitdeploys': gitdeploys,
             'status': 'created',
             'job_id': ''
         })
@@ -624,7 +627,10 @@ class DeploymentDataService(GenericChildDataService):
             'name': dpo.name,
             'application': dpo.application,
             'build_name': dpo.build_name,
-            'deployment': dpo.deployment,
+            'environments': dpo.environments,
+            'groups': dpo.groups,
+            'servers': dpo.servers,
+            'gitdeploys': dpo.gitdeploys,
             'status': dpo.status,
             'job_id': dpo.job_id
         })
@@ -922,10 +928,10 @@ class Deployment(GenericDataModel):
         'name': None,  # "name" for consistency w/ other models, even though it's really id
         'application': None,
         'build_name': None,
-        'deployment': {
-            'servers': None,
-            'gitdeploys': []
-        },
+        'environments': None,
+        'groups': None,
+        'servers': None,
+        'gitdeploys': None,
         'status': None,
         'job_id': None
     }

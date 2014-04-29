@@ -9,6 +9,7 @@ import fnmatch
 import tempfile
 import json
 import socket
+import itertools
 
 from elita.actions import action
 import models
@@ -493,6 +494,12 @@ class DeploymentContainerView(GenericView):
             'deployments': self.datasvc.deploysvc.GetDeployments(self.context.parent)
         }
 
+    def check_against_existing(self, existing, submitted):
+        return set(submitted).issubset(set(existing))
+
+    def get_unknown(self, existing, submitted):
+        return list(set(submitted) - set(existing))
+
     def POST(self):
         app = self.context.parent
         build_name = self.req.params['build_name']
@@ -501,44 +508,71 @@ class DeploymentContainerView(GenericView):
         try:
             body = self.req.json_body
         except:
-            return self.Error(400, "invalid deployment object (problem deserializing, bad JSON?)")
-        ok, msg = elita.deployment.deploy.validate_server_specs(body)
-        if not ok:
-            return self.Error(400, "invalid deployment object ({})".format(msg))
-        if isinstance(body['servers'], str):
-            servers = fnmatch.filter(self.datasvc.serversvc.GetServers(), body['servers'])
-            if len(servers) == 0:
-                return self.Error(400, "servers glob pattern doesn't match anything: {}".format(body['servers']))
-        else:
-            servers = body['servers']
-        if isinstance(body['gitdeploys'], str):
-            gitdeploys = fnmatch.filter(self.datasvc.gitsvc.GetGitDeploys(app), body['gitdeploys'])
-            if len(gitdeploys) == 0:
-                return self.Error(400, "gitdeploys glob pattern doesn't match anything: {}".format(body['gitdeploys']))
-        else:
-            gitdeploys = set(body['gitdeploys'])
-            existing_gds = set(self.datasvc.gitsvc.GetGitDeploys(app))
-            if not gitdeploys.issubset(existing_gds):
-                diff = gitdeploys - existing_gds
-                return self.Error(400, "unknown gitdeploys: {}".format(list(diff)))
-            gitdeploys = list(gitdeploys)
+            return self.Error(400, "invalid target object (problem deserializing, bad JSON?)")
+
+        target = {
+            "servers": list(),
+            "gitdeploys": list()
+        }
+
+        if "environments" in body and "groups" in body:
+            envs = self.datasvc.serversvc.GetEnvironments()
+            if not self.check_against_existing(envs.keys(), body['environments']):
+                return self.Error(400, "unknown environments: {}".format(self.get_unknown(envs.keys(), body['environments'])))
+
+            existing_groups = self.datasvc.groupsvc.GetGroups(app)
+            if not self.check_against_existing(existing_groups, body['groups']):
+                return self.Error(400, "unknown groups: {}".format(self.get_unknown(existing_groups, body['groups'])))
+
+            #flat list of all servers in environments
+            servers_in_environments = set([s for s in [envs[e] for e in envs] for s in s])
+            servers_in_groups = set([s for s in [self.datasvc.groupsvc.GetGroupServers(app, g) for g in body['groups']]
+                                 for s in s])
+            target['servers'] = list(servers_in_environments.intersection(servers_in_groups))
+            target['gitdeploys'] = list(itertools.chain(*[g['gitdeploys'] for g in [self.datasvc.groupsvc.GetGroup(app, g)
+                                                                               for g in body['groups']]]))
+
+            logging.debug("DeploymentContainerView: calculated target: {}".format(target))
+
+            for k in target:
+                if target[k] < 1:
+                    return self.Error(400, "no matching {} for environments ({}) and groups ({})"
+                                      .format(k, body['environments'], body['groups']))
+
+        if "servers" in body and "gitdeploys" in body:
+
+            existing_servers = self.datasvc.serversvc.GetServers()
+            if not self.check_against_existing(existing_servers, body['servers']):
+                return self.Error(400, "unknown servers: {}".format(self.get_unknown(existing_servers, body['servers'])))
+
+            existing_gitdeploys = self.datasvc.gitsvc.GetGitDeploys(app)
+            if not self.check_against_existing(existing_gitdeploys, body['gitdeploys']):
+                return self.Error(400, "unkown gitdeploys: {}".format(self.get_unknown(existing_gitdeploys,
+                                                                                   body['gitdeploys'])))
+            for s in body['servers']:
+                target['servers'].append(s)
+            for gd in body['gitdeploys']:
+                target['gitdeploys'].append(s)
+
         #verify that all servers have the requested gitdeploys initialized on them
         uninit_gd = dict()
-        for gd in gitdeploys:
+        for gd in target['gitdeploys']:
             gddoc = self.datasvc.gitsvc.GetGitDeploy(app, gd)
             init_servers = set(tuple(gddoc['servers']))
-            req_servers = set(tuple(servers))
+            req_servers = set(tuple(target['servers']))
             if not init_servers.issuperset(req_servers):
                 uninit_gd[gd] = list(req_servers - init_servers)
         if len(uninit_gd) > 0:
             return self.Error(400, {"message": "gitdeploy not initialized on servers", "servers": uninit_gd})
-        dpo = self.datasvc.deploysvc.NewDeployment(app, build_name, body)
+        environments = body['environments'] if 'environments' in body else "(not specified)"
+        groups = body['groups'] if 'groups' in body else "(not specified)"
+        dpo = self.datasvc.deploysvc.NewDeployment(app, build_name, environments, groups, target['servers'], target['gitdeploys'])
         d_id = dpo['NewDeployment']['id']
         args = {
             'application': app,
             'build_name': build_name,
-            'servers': servers,
-            'gitdeploys': gitdeploys,
+            'servers': target['servers'],
+            'gitdeploys': target['gitdeploys'],
             'deployment': d_id
         }
         msg = self.run_async('deploy_{}_{}'.format(app,  build_name), "deployment", args,
@@ -549,7 +583,10 @@ class DeploymentContainerView(GenericView):
                 'deployment_id': dpo['NewDeployment']['id'],
                 'application': app,
                 'build': build_name,
-                'deployment': body,
+                'environments': environments,
+                'groups': groups,
+                'servers': target['servers'],
+                'gitdeploys': target['gitdeploys'],
                 'message': msg
             }
         })
@@ -569,6 +606,8 @@ class DeploymentView(GenericView):
                 'application': self.context.application,
                 'deployment': self.context.deploy,
                 'build': self.context.build_name,
+                'servers': self.context.servers,
+                'gitdeploys': self.context.gitdeploys,
                 'status': self.context.status
             }
         }
