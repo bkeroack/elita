@@ -451,7 +451,9 @@ View Keypairs
 Create Keypair
 ^^^^^^^^^^^^^^
 
-.. http:put::   /global/keypairs/(string:keypair)
+Keypairs can be uploaded either as JSON-encoded strings (PUT request) or as files (POST request).
+
+.. http:put::   /global/keypairs
 
    :param name: keypair name (URL-encoded)
    :param type: keypair type ("git" or "salt")
@@ -459,7 +461,7 @@ Create Keypair
    :type name: string
    :type type: string
 
-   Create new keypair.
+   Create new keypair by providing JSON.
 
    **Example JSON body**
 
@@ -481,6 +483,24 @@ Create Keypair
           "private_key": "-----BEGIN RSA PRIVATE KEY-----\\n...\\n-----END RSA PRIVATE KEY-----\\n",
           "public_key": "ssh-rsa ... foo@bar.com\\n"
       }'
+
+.. http:post::   /global/keypairs
+
+   :param name: keypair name (URL-encoded)
+   :param type: keypair type ("git" or "salt")
+   :formparameter private_key: private key file (ASCII)
+   :formparameter public_key: public key file (ASCII
+   :type name: string
+   :type type: string
+
+   Create new keypair by uploading key files.
+
+   **Example request**
+
+   .. sourcecode:: http
+
+      $ curl -XPOST '/global/keypairs?type=git&name=mykeypair' -F "private_key=@/home/user/keys/mykey"
+      -F "public_key=@/home/user/keys/mykey.pub"
 
 
 Modify Keypair
