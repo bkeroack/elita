@@ -808,6 +808,7 @@ class GitRepoView(GenericView):
                 'created_datetime': self.get_created_datetime_text(),
                 'name': self.context.name,
                 'application': self.context.application,
+                'last_build': self.context.last_build,
                 'uri': self.context.uri if hasattr(self.context, 'uri') else None,
                 'gitprovider': gp_doc
             }
@@ -894,6 +895,7 @@ class GitDeployView(GenericView):
                     'path': gddoc['location']['path'],
                     'gitrepo': {
                         'name': gddoc['location']['gitrepo']['name'],
+                        'last_build': gddoc['location']['gitrepo']['last_build'],
                         'gitprovider': {
                             'name': gddoc['location']['gitrepo']['gitprovider']['name'],
                             'type': gddoc['location']['gitrepo']['gitprovider']['type']
