@@ -584,9 +584,18 @@ class KeyPairContainerView(GenericView):
             'keypairs': self.datasvc.keysvc.GetKeyPairs()
         }
 
+    def new_keypair(self, name, private_key, public_key, attributes, key_type):
+        ret = self.datasvc.keysvc.NewKeyPair(name, attributes, key_type, private_key, public_key)
+        if ret['NewKeyPair']['status'] == 'ok':
+            return self.status_ok({'new_keypair': {'name': name, 'key_type': key_type}})
+        else:
+            return self.Error(500, ret)
+
     def PUT(self):
         name = self.req.params['name']
         key_type = self.req.params['key_type']
+        if self.req.params['from'] not in ('json', 'files'):
+            return self.Error(400, "invalid 'from' type: {}; must be 'json' or 'files'".format(self.req.params['from']))
         try:
             info = self.req.json_body
         except:
@@ -600,14 +609,25 @@ class KeyPairContainerView(GenericView):
             return self.Error(400, "public_key missing")
         else:
             public_key = info['public_key']
-        ret = self.datasvc.keysvc.NewKeyPair(name, attributes, key_type, private_key, public_key)
-        if ret['NewKeyPair']['status'] == 'ok':
-            return self.status_ok({'new_keypair': {'name': name, 'key_type': key_type}})
-        else:
-            return self.Error(500, ret)
+        return self.new_keypair(name, private_key, public_key, attributes, key_type)
 
     def POST(self):
-        return self.PUT()
+        name = self.req.params['name']
+        key_type = self.req.params['key_type']
+        attributes = dict()
+        logger.debug("POST keys: {}".format(self.req.POST.keys()))
+        for kt in ("private_key", "public_key"):
+            if kt not in self.req.POST:
+                return self.Error(400, "{} not found in POST data".format(kt))
+            pr_file = self.req.POST['private_key'].file
+            pr_file.seek(0)
+            pk_file = self.req.POST['public_key'].file
+            pk_file.seek(0)
+            private_key = pr_file.read(-1)
+            public_key = pk_file.read(-1)
+
+        return self.new_keypair(name, private_key, public_key, attributes, key_type)
+
 
     def DELETE(self):
         name = self.req.params['name']
