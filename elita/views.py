@@ -1041,49 +1041,44 @@ class GroupContainerView(GenericView):
     def GET(self):
         return {
             'application': self.context.parent,
-            'groups': self.datasvc.appsvc.GetGroups(self.context.parent)
+            'groups': self.datasvc.groupsvc.GetGroups(self.context.parent)
         }
 
     def PUT(self):
         name = self.req.params['name']
         try:
-            server_gitdeploys = self.req.json_body
+            gitdeploys = self.req.json_body
         except:
-            return self.Error(400, "invalid server/gitdeploys object (problem deserializing, bad JSON?)")
-        submitted_keys = set(server_gitdeploys.keys())
-        required_keys = {"servers", "gitdeploys"}
-        if not submitted_keys.issuperset(required_keys):
-            return self.Error(400, "missing server/gitdeploy keys: {}".format(list(required_keys - submitted_keys)))
-        servers = server_gitdeploys['servers']
-        gitdeploys = server_gitdeploys['gitdeploys']
-        attributes = server_gitdeploys['attributes'] if 'attributes' in server_gitdeploys else dict()
+            return self.Error(400, "invalid gitdeploys object (problem deserializing, bad JSON?)")
+        if "gitdeploys" not in gitdeploys.keys():
+            return self.Error(400, "JSON missing key 'gitdeploys'")
+        if not isinstance(gitdeploys['gitdeploys'], list):
+            return self.Error(400, "gitdeploys must be list")
+        description = gitdeploys['description'] if 'description' in gitdeploys else ""
+        attributes = gitdeploys['attributes'] if 'attributes' in gitdeploys else dict()
 
         existing_gitdeploys = set(self.datasvc.gitsvc.GetGitDeploys(self.context.parent))
-        submitted_gitdeploys = set(gitdeploys)
+        submitted_gitdeploys = set(gitdeploys['gitdeploys'])
         if not existing_gitdeploys.issuperset(submitted_gitdeploys):
             return self.Error(400, "unknown gitdeploys: {}".format(list(submitted_gitdeploys - existing_gitdeploys)))
 
-        existing_servers = set(self.datasvc.serversvc.GetServers())
-        submitted_servers = set(servers)
-        if not existing_servers.issuperset(submitted_servers):
-            return self.Error(400, "unknown servers: {}".format(list(submitted_servers - existing_servers)))
-
-        self.datasvc.appsvc.NewGroup(self.context.parent, name, servers, gitdeploys, attributes=attributes)
+        self.datasvc.groupsvc.NewGroup(self.context.parent, name, gitdeploys['gitdeploys'], description=description,
+                                       attributes=attributes)
         return self.status_ok({
             "New_Group": {
                 "name": name,
+                "description": description,
                 "application": self.context.parent,
                 "attributes": attributes,
-                "servers": servers,
-                "gitdeploys": gitdeploys
+                "gitdeploys": gitdeploys['gitdeploys']
             }
         })
 
     def DELETE(self):
         name = self.req.params['name']
-        if name not in self.datasvc.appsvc.GetGroups(self.context.parent):
+        if name not in self.datasvc.groupsvc.GetGroups(self.context.parent):
             return self.Error(400, "unknown group: {}".format(name))
-        self.datasvc.appsvc.DeleteGroup(self.context.parent, name)
+        self.datasvc.groupsvc.DeleteGroup(self.context.parent, name)
         return self.status_ok({
             "Delete_Group": {
                 "name": name,
@@ -1101,12 +1096,12 @@ class GroupView(GenericView):
             'application': self.context.application,
             'name': self.context.name,
             'attributes': self.context.attributes,
-            'servers': self.context.servers,
-            'gitdeploys': self.context.gitdeploys
+            'gitdeploys': self.context.gitdeploys,
+            'servers': self.datasvc.groupsvc.GetGroupServers(self.context.application, self.context.name)
         }
 
     def DELETE(self):
-        self.datasvc.appsvc.DeleteGroup(self.context.application, self.context.name)
+        self.datasvc.groupsvc.DeleteGroup(self.context.application, self.context.name)
         return self.status_ok({
             "Delete_Group": {
                 "name": self.context.name,

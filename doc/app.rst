@@ -168,3 +168,8 @@ Gitrepos
 Gitdeploys
 ----------
 
+Groups
+------
+
+Application groups are groups of gitdeploys which constitute a logical unit. You might call this unit a "subapplication"
+or "subservice".

@@ -228,6 +228,8 @@ class ApplicationDataService(GenericChildDataService):
     def DeleteApplication(self, app_name):
         self.parent.DeleteObject(self.root['app'], app_name, 'applications')
 
+
+class GroupDataService(GenericChildDataService):
     def GetGroups(self, app):
         return [k for k in self.root['app'][app]['groups'] if k[0] != '_']
 
@@ -239,11 +241,11 @@ class ApplicationDataService(GenericChildDataService):
         doc = docs[0]
         return {k: doc[k] for k in doc if k[0] != '_'}
 
-    def NewGroup(self, app, name, servers, gitdeploys, attributes={}):
+    def NewGroup(self, app, name, gitdeploys, description="", attributes={}):
         gp = Group({
             "application": app,
             "name": name,
-            "servers": servers,
+            "description": description,
             "gitdeploys": gitdeploys,
             "attributes": attributes
         })
@@ -252,8 +254,8 @@ class ApplicationDataService(GenericChildDataService):
             '_class': 'Group',
             'application': gp.application,
             'name': gp.name,
+            'description': gp.description,
             'attributes': gp.attributes,
-            'servers': gp.servers,
             'gitdeploys': gp.gitdeploys
         })
 
@@ -264,6 +266,15 @@ class ApplicationDataService(GenericChildDataService):
 
     def DeleteGroup(self, app, name):
         self.parent.DeleteObject(self.root['app'][app]['groups'], name, 'groups')
+
+    def GetGroupServers(self, app, name):
+        # build sets from initialized servers in each gitdeploy in the group
+        # then take intersection of all the sets
+        group = self.GetGroup(app, name)
+        assert group is not None
+        server_sets = [set(self.parent.gitsvc.GetGitDeploy(app, gd)['servers']) for gd in group['gitdeploys']]
+        return list(set.intersection(*server_sets))
+
 
 class JobDataService(GenericChildDataService):
     def GetAllActions(self, app_name):
@@ -713,6 +724,7 @@ class DataService:
         self.keysvc = KeyDataService(self)
         self.deploysvc = DeploymentDataService(self)
         self.actionsvc = ActionService(self)
+        self.groupsvc = GroupDataService(self)
         #passed in if this is part of an async job
         self.job_id = job_id
         #super ugly below - only exists for plugin access
@@ -1011,7 +1023,7 @@ class Group(GenericDataModel):
     default_values = {
         'application': None,
         'name': None,
-        'servers': list(),
+        'description': None,
         'gitdeploys': list(),
         'attributes': dict()
     }
@@ -1164,6 +1176,7 @@ class DataValidator:
         self.check_servers()
         self.check_gitdeploys()
         self.check_gitrepos()
+        self.check_groups()
         self.SaveRoot()
 
     def SaveRoot(self):
@@ -1514,6 +1527,20 @@ class DataValidator:
                 fixlist.append(d)
         for d in fixlist:
             self.db['gitrepos'].save(d)
+
+    def check_groups(self):
+        fixlist = list()
+        for d in self.db['groups'].find():
+            if 'description' not in d:
+                util.debugLog(self, "WARNING: found group without description: {}; fixing".format(d['name']))
+                d['description'] = None
+                fixlist.append(d)
+            if 'servers' in d:
+                util.debugLog(self, "WARNING: found group with explicit server list: {}; removing".format(d['name']))
+                del d['servers']
+                fixlist.append(d)
+        for d in fixlist:
+            self.db['groups'].save(d)
 
     def check_toplevel(self):
         top_levels = {
