@@ -604,10 +604,12 @@ class DeploymentView(GenericView):
                 'job_id': self.context.job_id,
                 'created_datetime': self.get_created_datetime_text(),
                 'application': self.context.application,
-                'deployment': self.context.deploy,
+                'deployment': self.context.deploy if hasattr(self.context, 'deploy') else None,
+                'environments': self.context.environments if hasattr(self.context, 'environments') else None,
+                'groups': self.context.groups if hasattr(self.context, 'groups') else None,
                 'build': self.context.build_name,
-                'servers': self.context.servers,
-                'gitdeploys': self.context.gitdeploys,
+                'servers': self.context.servers if hasattr(self.context, 'servers') else None,
+                'gitdeploys': self.context.gitdeploys if hasattr(self.context, 'gitdeploys') else None,
                 'status': self.context.status
             }
         }
@@ -1133,6 +1135,7 @@ class GroupView(GenericView):
         return {
             'created': self.get_created_datetime_text(),
             'application': self.context.application,
+            'description': self.context.description,
             'name': self.context.name,
             'attributes': self.context.attributes,
             'gitdeploys': self.context.gitdeploys,

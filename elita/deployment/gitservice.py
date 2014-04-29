@@ -371,7 +371,7 @@ class GitDeployManager:
         self.sc.rm_gitdeploy_yaml(self.gitdeploy)
 
     def remove_from_top(self, server_list):
-        return self.sc.rm_gitdeploy_servers_from_daft_top(server_list, self.gitdeploy['application'],
+        return self.sc.rm_gitdeploy_servers_from_elita_top(server_list, self.gitdeploy['application'],
                                                           self.gitdeploy['name'])
 
     def delete_remote_dir(self, server_list):
