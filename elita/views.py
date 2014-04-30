@@ -85,6 +85,13 @@ class GenericView:
             }
         })
 
+    #for verifying user-supplied parameters
+    def check_against_existing(self, existing, submitted):
+        return set(submitted).issubset(set(existing))
+
+    def get_unknown(self, existing, submitted):
+        return list(set(submitted) - set(existing))
+
     def call_action(self):
         g, p = self.check_params()
         if not g:
@@ -493,12 +500,6 @@ class DeploymentContainerView(GenericView):
             'application': self.context.parent,
             'deployments': self.datasvc.deploysvc.GetDeployments(self.context.parent)
         }
-
-    def check_against_existing(self, existing, submitted):
-        return set(submitted).issubset(set(existing))
-
-    def get_unknown(self, existing, submitted):
-        return list(set(submitted) - set(existing))
 
     def POST(self):
         app = self.context.parent
@@ -1132,6 +1133,13 @@ class GroupView(GenericView):
         GenericView.__init__(self, context, request, app_name=context.application)
 
     def GET(self):
+        environments = self.req.params['environments'].split(' ') \
+            if ('environments' in self.req.params and len(self.req.params['environments']) > 0) else None
+        if environments:
+            existing_groups = self.datasvc.serversvc.GetEnvironments()
+            print(existing_groups)
+            if not self.check_against_existing(existing_groups, environments):
+                return self.Error(400, "unknown environments: {}".format(self.get_unknown(existing_groups, environments)))
         return {
             'created': self.get_created_datetime_text(),
             'application': self.context.application,
@@ -1139,7 +1147,9 @@ class GroupView(GenericView):
             'name': self.context.name,
             'attributes': self.context.attributes,
             'gitdeploys': self.context.gitdeploys,
-            'servers': self.datasvc.groupsvc.GetGroupServers(self.context.application, self.context.name)
+            'servers': self.datasvc.groupsvc.GetGroupServers(self.context.application, self.context.name,
+                                                             environments=environments),
+            'environments': environments if environments else "(any)"
         }
 
     def DELETE(self):

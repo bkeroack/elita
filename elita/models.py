@@ -267,14 +267,19 @@ class GroupDataService(GenericChildDataService):
     def DeleteGroup(self, app, name):
         self.parent.DeleteObject(self.root['app'][app]['groups'], name, 'groups')
 
-    def GetGroupServers(self, app, name):
+    def GetGroupServers(self, app, name, environments=None):
         # build sets from initialized servers in each gitdeploy in the group
         # then take intersection of all the sets
+        # if environments specified, take intersection with that set as well
         group = self.GetGroup(app, name)
         assert group is not None
         server_sets = [set(self.parent.gitsvc.GetGitDeploy(app, gd)['servers']) for gd in group['gitdeploys']]
+        if environments:
+            envs = self.parent.serversvc.GetEnvironments()
+            for e in environments:
+                assert e in envs
+                server_sets.append(set(envs[e]))
         return list(set.intersection(*server_sets))
-
 
 class JobDataService(GenericChildDataService):
     def GetAllActions(self, app_name):
