@@ -552,7 +552,7 @@ class DeploymentContainerView(GenericView):
             for s in body['servers']:
                 target['servers'].append(s)
             for gd in body['gitdeploys']:
-                target['gitdeploys'].append(s)
+                target['gitdeploys'].append(gd)
 
         #verify that all servers have the requested gitdeploys initialized on them
         uninit_gd = dict()
