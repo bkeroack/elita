@@ -516,6 +516,10 @@ class DeploymentContainerView(GenericView):
             "gitdeploys": list()
         }
 
+        rolling_divisor = int(self.req.params['rolling_divisor']) if 'rolling_divisor' in self.req.params else 2
+        if rolling_divisor < 1:
+            return self.Error(400, "invalid rolling_divisor: {}".format(rolling_divisor))
+
         if "environments" in body and "groups" in body:
             envs = self.datasvc.serversvc.GetEnvironments()
             if not self.check_against_existing(envs.keys(), body['environments']):
@@ -569,11 +573,13 @@ class DeploymentContainerView(GenericView):
         groups = body['groups'] if 'groups' in body else "(not specified)"
         dpo = self.datasvc.deploysvc.NewDeployment(app, build_name, environments, groups, target['servers'], target['gitdeploys'])
         d_id = dpo['NewDeployment']['id']
+        target['environments'] = environments if isinstance(environments, list) else None
+        target['groups'] = groups if isinstance(groups, list) else None
         args = {
             'application': app,
             'build_name': build_name,
-            'servers': target['servers'],
-            'gitdeploys': target['gitdeploys'],
+            'target': target,
+            'rolling_divisor': rolling_divisor,
             'deployment': d_id
         }
         msg = self.run_async('deploy_{}_{}'.format(app,  build_name), "deployment", args,
@@ -586,6 +592,7 @@ class DeploymentContainerView(GenericView):
                 'build': build_name,
                 'environments': environments,
                 'groups': groups,
+                'rolling_divisor': rolling_divisor,
                 'servers': target['servers'],
                 'gitdeploys': target['gitdeploys'],
                 'message': msg
@@ -619,7 +626,7 @@ class DeploymentView(GenericView):
 class KeyPairContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, app_name='_global')
-        self.set_params({"GET": [], "PUT": ['name', 'key_type'], "POST": ['name', 'key_type'], "DELETE": ['name']})
+        self.set_params({"GET": [], "PUT": ['name', 'key_type', 'from'], "POST": ['name', 'key_type', 'from'], "DELETE": ['name']})
 
     def GET(self):
         return {
@@ -1078,7 +1085,7 @@ class GlobalContainerView(GenericView):
 class GroupContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, app_name=context.parent)
-        self.set_params({"GET": [], "PUT": ["name"], "POST": [], "DELETE": ["name"]})
+        self.set_params({"GET": [], "PUT": ["name", "rolling_deploy"], "POST": [], "DELETE": ["name"]})
 
     def GET(self):
         return {
@@ -1088,6 +1095,7 @@ class GroupContainerView(GenericView):
 
     def PUT(self):
         name = self.req.params['name']
+        rolling_deploy = self.req.params['rolling_deploy'] in AFFIRMATIVE_SYNONYMS
         try:
             gitdeploys = self.req.json_body
         except:
@@ -1105,13 +1113,14 @@ class GroupContainerView(GenericView):
             return self.Error(400, "unknown gitdeploys: {}".format(list(submitted_gitdeploys - existing_gitdeploys)))
 
         self.datasvc.groupsvc.NewGroup(self.context.parent, name, gitdeploys['gitdeploys'], description=description,
-                                       attributes=attributes)
+                                       attributes=attributes, rolling_deploy=rolling_deploy)
         return self.status_ok({
             "New_Group": {
                 "name": name,
                 "description": description,
                 "application": self.context.parent,
                 "attributes": attributes,
+                "rolling_deploy": rolling_deploy,
                 "gitdeploys": gitdeploys['gitdeploys']
             }
         })
@@ -1146,6 +1155,7 @@ class GroupView(GenericView):
             'description': self.context.description,
             'name': self.context.name,
             'attributes': self.context.attributes,
+            'rolling_deploy': self.context.rolling_deploy,
             'gitdeploys': self.context.gitdeploys,
             'servers': self.datasvc.groupsvc.GetGroupServers(self.context.application, self.context.name,
                                                              environments=environments),

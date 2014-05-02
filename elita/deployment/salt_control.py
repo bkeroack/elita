@@ -108,6 +108,10 @@ class RemoteCommands:
         return self.sc.salt_command(server_list, 'cmd.run', ['git checkout {}'.format(branch_name)],
                                     opts={'cwd': location})
 
+    def discard_git_changes(self, server_list, location):
+        return self.sc.salt_command(server_list, 'cmd.run', ['git checkout -f'],
+                                    opts={'cwd': location})
+
     def add_all_files_git(self, server_list, location):
         return self.sc.salt_command(server_list, 'cmd.run', ['git add -A'], opts={'cwd': location}, timeout=120)
 

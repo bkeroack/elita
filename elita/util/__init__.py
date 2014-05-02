@@ -47,3 +47,13 @@ class IndentedTextParser:
                         indentation_level += 1
             else:
                 pass
+
+def split_seq(seq, n):
+    '''split iterable into n number of equal-length (approx) chunks'''
+    newseq = []
+    splitsize = 1.0/n*len(seq)
+    for i in range(n):
+        ns = seq[int(round(i*splitsize)):int(round((i+1)*splitsize))]
+        if len(ns) > 0:
+            newseq.append(ns)
+    return newseq

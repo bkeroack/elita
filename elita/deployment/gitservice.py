@@ -196,6 +196,8 @@ class GitRepoService:
         if not os.path.isdir(root):
             os.mkdir(root)
         parent_path = os.path.join(root, application)
+        if not os.path.isdir(parent_path):
+            os.mkdir(parent_path)
         path = os.path.join(parent_path, gitrepo_name)
         alias = self.get_alias(gitrepo_name, application)
         alias_uri = self.get_alias_uri(alias , uri)

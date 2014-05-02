@@ -241,13 +241,14 @@ class GroupDataService(GenericChildDataService):
         doc = docs[0]
         return {k: doc[k] for k in doc if k[0] != '_'}
 
-    def NewGroup(self, app, name, gitdeploys, description="", attributes={}):
+    def NewGroup(self, app, name, gitdeploys, rolling_deploy=False, description="", attributes={}):
         gp = Group({
             "application": app,
             "name": name,
             "description": description,
             "gitdeploys": gitdeploys,
-            "attributes": attributes
+            "attributes": attributes,
+            "rolling_deploy": rolling_deploy
         })
 
         gid = self.db['groups'].insert({
@@ -256,7 +257,8 @@ class GroupDataService(GenericChildDataService):
             'name': gp.name,
             'description': gp.description,
             'attributes': gp.attributes,
-            'gitdeploys': gp.gitdeploys
+            'gitdeploys': gp.gitdeploys,
+            'rolling_deploy': gp.rolling_deploy
         })
 
         self.parent.refresh_root()
@@ -1036,7 +1038,8 @@ class Group(GenericDataModel):
         'name': None,
         'description': None,
         'gitdeploys': list(),
-        'attributes': dict()
+        'attributes': dict(),
+        'rolling_deploy': False
     }
 
 class GenericContainer:
@@ -1542,13 +1545,20 @@ class DataValidator:
     def check_groups(self):
         fixlist = list()
         for d in self.db['groups'].find():
+            fix = False
             if 'description' not in d:
                 util.debugLog(self, "WARNING: found group without description: {}; fixing".format(d['name']))
                 d['description'] = None
-                fixlist.append(d)
+                fix = True
             if 'servers' in d:
                 util.debugLog(self, "WARNING: found group with explicit server list: {}; removing".format(d['name']))
                 del d['servers']
+                fix = True
+            if 'rolling_deploy' not in d:
+                util.debugLog(self, "WARNING: found group without rolling_deploy flag: {}; fixing".format(d['name']))
+                d['rolling_deploy'] = False
+                fix = True
+            if fix:
                 fixlist.append(d)
         for d in fixlist:
             self.db['groups'].save(d)
