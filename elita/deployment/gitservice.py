@@ -321,7 +321,6 @@ class GitDeployManager:
             'delete_remote_dir': self.delete_remote_dir(server_list),
             'create_remote_dir': self.create_remote_dir(server_list),
             'push_keys': self.push_keypair(server_list),
-            'add_to_top': self.add_to_top(server_list),
             'clone_repo': self.clone_repo(server_list),
             'create_gitignore': self.create_ignore(server_list),
             'posthook': self.run_init_posthook(server_list)
@@ -332,7 +331,6 @@ class GitDeployManager:
             'prehook': self.run_deinit_prehook(server_list),
             'delete_remote_dir': self.delete_remote_dir(server_list),
             'delete_remote_keys': self.delete_remote_keypair(server_list),
-            'remove_from_top': self.remove_from_top(server_list),
             'posthook': self.run_deinit_posthook(server_list)
         }
 
@@ -366,15 +364,16 @@ class GitDeployManager:
     def add_sls(self):
         self.sc.new_gitdeploy_yaml(self.gitdeploy)
 
-    def add_to_top(self, server_list):
-        return self.sc.add_gitdeploy_servers_to_elita_top(server_list, self.gitdeploy['application'],
-                                                         self.gitdeploy['name'])
+    #def add_to_top(self, server_list):
+    #    return self.sc.add_gitdeploy_servers_to_elita_top(server_list, self.gitdeploy['application'],
+    #                                                     self.gitdeploy['name'])
+
     def rm_sls(self):
         self.sc.rm_gitdeploy_yaml(self.gitdeploy)
 
-    def remove_from_top(self, server_list):
-        return self.sc.rm_gitdeploy_servers_from_elita_top(server_list, self.gitdeploy['application'],
-                                                          self.gitdeploy['name'])
+    #def remove_from_top(self, server_list):
+    #    return self.sc.rm_gitdeploy_servers_from_elita_top(server_list, self.gitdeploy['application'],
+    #                                                      self.gitdeploy['name'])
 
     def delete_remote_dir(self, server_list):
         elita.util.debugLog(self, "delete_remote_dir")

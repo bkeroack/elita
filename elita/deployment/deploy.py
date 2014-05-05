@@ -180,14 +180,13 @@ class RollingDeployController(GenericDeployController):
 
 class DeployController(GenericDeployController):
 
-    def push_to_gitdeploy(self, gddoc):
+    def push_to_gitdeploy(self, gdm, gddoc):
         self.add_msg(desc="Starting push to gitdeploy", data={
             "gitdeploy": gddoc['name'],
             "application": self.application
         })
         package = gddoc['package']
         package_doc = self.build_doc['packages'][package]
-        gdm = gitservice.GitDeployManager(gddoc, self.datasvc)
         self.current_step += 1
         self.add_msg(desc="Checking out default git branch", data={})
         self.add_msg(desc="git checkout complete", data={
@@ -254,12 +253,14 @@ class DeployController(GenericDeployController):
             "output": self.rc.checkout_branch(self.servers, path, branch)
         })
 
-    def salt_highstate_server(self):
+    def git_pull_gitdeploy(self, gddoc, servers):
+        #until salt Helium is released, we can only execute an SLS *file* as opposed to a single module call
+        sls_name = self.sc.get_gitdeploy_entry_name(self.application, gddoc['name'])
         self.current_step += 1
-        self.add_msg(desc="Starting highstate deployment", data={
-            "servers": self.servers
+        self.add_msg(desc="Executing states and git pull", data={
+            "servers": servers
         })
-        res = self.rc.highstate(self.servers)
+        res = self.rc.run_sls(servers, sls_name)
         errors = dict()
         successes = dict()
         for host in res:
@@ -280,21 +281,65 @@ class DeployController(GenericDeployController):
                                 "retcode": res[host][cmd]["changes"]["retcode"],
                             }
         if len(errors) > 0:
-            self.error_msg(desc="Errors detected in highstate call", data={
+            self.error_msg(desc="Errors detected in sls execution", data={
                 "success_servers": successes.keys(),
                 "error_servers": errors.keys(),
                 "error_responses": errors
             })
         if len(successes) > 0:
-            self.add_msg(desc="Successfull highstate calls detected", data={
+            self.add_msg(desc="Successfull sls executions", data={
                 "success_servers": successes.keys(),
                 "success_responses": successes
             })
         self.current_step += 1
-        self.add_msg(desc="Finished highstate call", data={
+        self.add_msg(desc="Finished executing states and git pull", data={
             "servers": self.servers
         })
         return len(errors) == 0
+
+
+
+    # def salt_highstate_server(self):
+    #     self.current_step += 1
+    #     self.add_msg(desc="Starting highstate deployment", data={
+    #         "servers": self.servers
+    #     })
+    #     res = self.rc.highstate(self.servers)
+    #     errors = dict()
+    #     successes = dict()
+    #     for host in res:
+    #         for cmd in res[host]:
+    #             if "gitdeploy" in cmd:
+    #                 if "result" in res[host][cmd]:
+    #                     if not res[host][cmd]["result"]:
+    #                         errors[host] = res[host][cmd]["changes"] if "changes" in res[host][cmd] else res[host][cmd]
+    #                     else:
+    #                         if host not in successes:
+    #                             successes[host] = dict()
+    #                         module, state, command, subcommand = str(cmd).split('|')
+    #                         if state not in successes[host]:
+    #                             successes[host][state] = dict()
+    #                         successes[host][state][command] = {
+    #                             "stdout": res[host][cmd]["changes"]["stdout"],
+    #                             "stderr": res[host][cmd]["changes"]["stderr"],
+    #                             "retcode": res[host][cmd]["changes"]["retcode"],
+    #                         }
+    #     if len(errors) > 0:
+    #         self.error_msg(desc="Errors detected in highstate call", data={
+    #             "success_servers": successes.keys(),
+    #             "error_servers": errors.keys(),
+    #             "error_responses": errors
+    #         })
+    #     if len(successes) > 0:
+    #         self.add_msg(desc="Successfull highstate calls detected", data={
+    #             "success_servers": successes.keys(),
+    #             "success_responses": successes
+    #         })
+    #     self.current_step += 1
+    #     self.add_msg(desc="Finished highstate call", data={
+    #         "servers": self.servers
+    #     })
+    #     return len(errors) == 0
 
     def run(self, app_name, build_name, servers, gitdeploys, batch_number):
         '''
@@ -310,7 +355,7 @@ class DeployController(GenericDeployController):
         self.servers = servers
         self.gitdeploys = gitdeploys
         self.batch_number = batch_number
-        self.total_steps = (len(self.gitdeploys)*8)+3
+        self.total_steps = len(self.gitdeploys) * 11
 
         self.current_step += 1
         self.add_msg(desc="Deployment batch", data={
@@ -323,11 +368,10 @@ class DeployController(GenericDeployController):
         for gd in self.gitdeploys:
             self.add_msg(desc="Processing gitdeploy", data={"name": gd})
             gddoc = self.datasvc.gitsvc.GetGitDeploy(self.application, gd)
-            self.push_to_gitdeploy(gddoc)
+            gdm = gitservice.GitDeployManager(gddoc, self.datasvc)
+            self.push_to_gitdeploy(gdm, gddoc)
             self.salt_checkout_branch(gddoc)
-
-        if not self.salt_highstate_server():
-            return False
+            self.git_pull_gitdeploy(gddoc, self.servers)
 
         self.current_step = self.total_steps
         self.add_msg(desc="Finished deployment batch", data={
