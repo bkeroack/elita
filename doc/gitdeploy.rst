@@ -1,4 +1,4 @@
-.. _gitdeploy-explanation:
+
 
 ==========
 Gitdeploys
@@ -78,6 +78,8 @@ only on one server in a farm), this can be done by editing the file and then com
 These changes will then persist with future deployments, as new code will be automatically merged into the existing
 repository without overwriting local changes.
 
+Any *uncommitted* changes will be lost with the next deployment to prevent pull failure.
+
 .. CAUTION::
    Any time you modify a gitdeploy locally it creates a chance that future deployments could result in a merge error
    and failed deployment. Elita uses git options to minimize the changes of merge errors by default,
@@ -93,6 +95,21 @@ API Objects
 -----------
 
 Follow is a list of the associated API objects (endpoints):
+
+**server**
+
+    A machine to which you want to deploy builds or apply actions. It is assumed that the server is addressable by
+    name via salt--for a server named 'server01' you should be able to do ``salt 'server01' test.ping`` prior to creating
+    the server object in Elita.
+
+    Gitdeploys are initialized on servers, which pushes the appropriate SSH keys and clones the gitrepo at the
+    configured path.
+
+    Each server is associated with exactly one environment, which is a logical grouping of servers. A dynamically
+    calculated environment roster can be obtained via GET on the /server/environments endpoint.
+
+    .. NOTE::
+       Elita environments are completely independent of salt environments.
 
 
 **gitprovider**
@@ -148,5 +165,21 @@ Follow is a list of the associated API objects (endpoints):
                 }
             }
        }
+
+**group**
+
+    A group (or application group) is a logical group of gitdeploys which make up a subapplication. For example a web
+    application might have frontend web servers and backend workers, each requiring deployments of a different set of
+    gitdeploys.
+
+    Gitdeploys may overlap between groups. For example, given three gitdeploys (gitdeployA, gitdeployB, gitdeployC) the
+    following groups could be constructed (not an exhaustive list, just an example):
+
+    *   Group1:  gitdeployA, gitdeployB
+    *   Group2:  gitdeployA, gitdeployC
+
+    Any servers with the matching set of gitdeploys initialized on them are considered part of the group. Server group
+    membership is dynamically calculated. You don't 'add' a server to a group, you create the group and any servers with
+    the relevant gitdeploys automatically are considered members.
 
 

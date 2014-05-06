@@ -54,7 +54,16 @@ Common Parameters
 
 The following parameters are available on all endpoints for all verbs:
 
-* ``auth_token``:  Authorization token (required for all resources that don't accept a password URL parameter)
+* ``auth_token``:  (URL parameter) Authorization token (required for all resources that don't accept a password URL parameter)
+
+  -OR-
+
+* ``Auth-Token``: (Header) Authorization token.
+
+.. NOTE::
+   Exactly one of auth_token or Auth-Token must be provided for every resource that requires authorization. Multiple auth_token
+   parameters/headers are considered errors and will result in authentication failure.
+
 * ``pretty``: Pretty-print JSON response? ("true", "false", "yes", "no")
 
 .. ATTENTION::

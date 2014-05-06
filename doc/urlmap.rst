@@ -20,6 +20,9 @@ app/
                 gitdeploys/
                         - webapp
 
+                groups/
+                        - group1
+
                 actions/
                         - CustomScriptedAction
 
