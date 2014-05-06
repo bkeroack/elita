@@ -149,7 +149,7 @@ class GenericView:
                 token = ''
             else:
                 submitted_tokens = self.req.params.getall('auth_token') if 'auth_token' in self.req.params else \
-                    list(self.req.headers['Auth-Token'])
+                    [self.req.headers['Auth-Token']]
                 if len(submitted_tokens) != 1:  # multiple auth tokens are an error condition
                     token = ''
                 else:
