@@ -559,23 +559,24 @@ class DeploymentContainerView(GenericView):
 
             existing_gitdeploys = self.datasvc.gitsvc.GetGitDeploys(app)
             if not self.check_against_existing(existing_gitdeploys, body['gitdeploys']):
-                return self.Error(400, "unkown gitdeploys: {}".format(self.get_unknown(existing_gitdeploys,
+                return self.Error(400, "unknown gitdeploys: {}".format(self.get_unknown(existing_gitdeploys,
                                                                                    body['gitdeploys'])))
             for s in body['servers']:
                 target['servers'].append(s)
             for gd in body['gitdeploys']:
                 target['gitdeploys'].append(gd)
 
-        #verify that all servers have the requested gitdeploys initialized on them
-        uninit_gd = dict()
-        for gd in target['gitdeploys']:
-            gddoc = self.datasvc.gitsvc.GetGitDeploy(app, gd)
-            init_servers = set(tuple(gddoc['servers']))
-            req_servers = set(tuple(target['servers']))
-            if not init_servers.issuperset(req_servers):
-                uninit_gd[gd] = list(req_servers - init_servers)
-        if len(uninit_gd) > 0:
-            return self.Error(400, {"message": "gitdeploy not initialized on servers", "servers": uninit_gd})
+            #verify that all servers have the requested gitdeploys initialized on them
+            uninit_gd = dict()
+            for gd in target['gitdeploys']:
+                gddoc = self.datasvc.gitsvc.GetGitDeploy(app, gd)
+                init_servers = set(tuple(gddoc['servers']))
+                req_servers = set(tuple(target['servers']))
+                if not init_servers.issuperset(req_servers):
+                    uninit_gd[gd] = list(req_servers - init_servers)
+            if len(uninit_gd) > 0:
+                return self.Error(400, {"message": "gitdeploy not initialized on servers", "servers": uninit_gd})
+
         environments = body['environments'] if 'environments' in body else "(not specified)"
         groups = body['groups'] if 'groups' in body else "(not specified)"
         dpo = self.datasvc.deploysvc.NewDeployment(app, build_name, environments, groups, target['servers'], target['gitdeploys'])
