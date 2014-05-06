@@ -128,9 +128,6 @@ class GenericView:
         return self.UNAUTHORIZED()
 
     def check_params(self):
-        if not self.permissionless and not self.allow_pw_auth:
-            for p in self.required_params:
-                self.required_params[p].append("auth_token")
         try:
             for p in self.required_params[self.req.method]:
                 if p not in self.req.params:
@@ -146,15 +143,20 @@ class GenericView:
         if self.allow_pw_auth and 'auth_token' not in self.req.params:  # view sub-class responsible for verifying pw
             self.permissions = "read;write"
             return
-        if 'auth_token' in self.req.params:
-            token = self.req.params['auth_token']
+        if 'auth_token' in self.req.params or 'Auth-Token' in self.req.headers:
+            if 'auth_token' in self.req.params and 'Auth-Token' in self.req.headers:
+                #if both are specified on one request it's an error condition
+                token = ''
+            else:
+                token = self.req.params['auth_token'] if 'auth_token' in self.req.params else \
+                    self.req.headers['Auth-Token']
             if self.is_action and self.req.method == 'POST':
                 self.permissions = auth.UserPermissions(self.datasvc.usersvc, token).get_action_permissions(app_name,
                                                                                       self.context.action_name)
             else:
                 self.permissions = auth.UserPermissions(self.datasvc.usersvc, token).get_app_permissions(app_name)
         else:
-            self.permissions = None
+            self.permissions = ""
 
     def set_params(self, params):
         for t in params:
