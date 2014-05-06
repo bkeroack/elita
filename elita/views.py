@@ -148,8 +148,12 @@ class GenericView:
                 #if both are specified on one request it's an error condition
                 token = ''
             else:
-                token = self.req.params['auth_token'] if 'auth_token' in self.req.params else \
-                    self.req.headers['Auth-Token']
+                submitted_tokens = self.req.params.getall('auth_token') if 'auth_token' in self.req.params else \
+                    list(self.req.headers['Auth-Token'])
+                if len(submitted_tokens) != 1:  # multiple auth tokens are an error condition
+                    token = ''
+                else:
+                    token = submitted_tokens[0]
             if self.is_action and self.req.method == 'POST':
                 self.permissions = auth.UserPermissions(self.datasvc.usersvc, token).get_action_permissions(app_name,
                                                                                       self.context.action_name)
