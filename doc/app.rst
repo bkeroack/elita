@@ -120,6 +120,7 @@ Upload Build
 
    :param file_type: file type (either "zip", "tar.gz" or "tar.bz2")
    :param indirect_url: URL-encoded location to download the build from (optional, only for indirect uploads)
+   :param verify: (optional) If doing indirect upload, verify SSL certificate on indirect_url if present (defaults to True)
    :formparameter build: File data (optional, only if indirect_url isn't specified)
 
    Upload a build. This can be done either directly by including file data in a form post,

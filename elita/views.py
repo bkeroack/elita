@@ -383,8 +383,8 @@ class BuildView(GenericView):
     def run_build_storage_direct(self, tempfile):
         return self.run_build_storage(builds.store_uploaded_build, {'temp_file': tempfile})
 
-    def run_build_storage_indirect(self, uri):
-        return self.run_build_storage(builds.store_indirect_build, {'uri': uri})
+    def run_build_storage_indirect(self, uri, verify):
+        return self.run_build_storage(builds.store_indirect_build, {'uri': uri, 'verify': verify})
 
     def direct_upload(self):
         logger.debug("BuildView: direct_upload")
@@ -399,7 +399,8 @@ class BuildView(GenericView):
             return self.Error(400, "build data not found in POST body")
 
     def indirect_upload(self):
-        return self.run_build_storage_indirect(self.req.params['indirect_url'])
+        verify = self.req.params.getone('verify') in AFFIRMATIVE_SYNONYMS if 'verify' in self.req.params else False
+        return self.run_build_storage_indirect(self.req.params['indirect_url'], verify)
 
     def POST(self):
         self.build_name = self.context.build_name

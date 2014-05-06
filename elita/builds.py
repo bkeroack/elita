@@ -16,10 +16,10 @@ class SupportedFileType:
     types = [TarBz2, TarGz, Zip]
 
 #async callables
-def store_indirect_build(datasvc, app, build, file_type, uri):
+def store_indirect_build(datasvc, app, build, file_type, uri, verify):
     util.debugLog(store_indirect_build, "indirect_upload: downloading from {}".format(uri))
     datasvc.jobsvc.NewJobData({'status': 'Downloading build file from {}'.format(uri)})
-    r = requests.get(uri)
+    r = requests.get(uri, verify=verify)
     fd, temp_file = tempfile.mkstemp()
     with open(temp_file, 'wb') as f:
         f.write(r.content)
