@@ -103,8 +103,6 @@ class RollingDeployController(GenericDeployController):
             b['servers'] = list(set(b['servers']))
             b['gitdeploys'] = list(set(b['gitdeploys']))
 
-        print(batches)
-
         return batches
 
     def run(self, application, build_name, target, rolling_divisor):
@@ -200,7 +198,7 @@ class DeployController(GenericDeployController):
         self.current_step += 1
         self.add_msg("Executing states and git pull: {}".format(self.servers))
         res = self.rc.run_sls_async(self.servers, sls_list)
-        print(res)
+        elita.util.debugLog(self, "git_pull_gitdeploys: results: {}".format(res))
         errors = dict()
         successes = dict()
         for r in res:
