@@ -13,7 +13,6 @@ def run_deploy(datasvc, application, build_name, target, rolling_divisor, deploy
     sc = salt_control.SaltController(datasvc.settings)
     rc = salt_control.RemoteCommands(sc)
 
-
     # normally there's a higher level try/except block for all async actions
     # we want to make sure the error is saved in the deployment object as well, not just the job
     # so we duplicate the functionality here
@@ -49,34 +48,14 @@ class GenericDeployController:
         self.batch_number = 0
 
 
-    def _push_msg(self, status, msg):
+    def add_msg(self, msg):
         elita.util.debugLog(self, msg)
-        self.datasvc.jobsvc.NewJobData({
-            "DeployController": {
-                "status": status,
-                "batch": self.batch_number,
-                "current_step": self.current_step,
-                "total_steps": self.total_steps,
-                "message": msg,
-                "servers": self.servers,
-                "gitdeploys": self.gitdeploys
-            }
-        })
+        self.datasvc.jobsvc.NewJobData({"DeployController": msg})
 
-    def add_msg(self, desc, data):
-        self._push_msg("ok", {
-            "description": desc,
-            "data": data
-        })
 
-    def error_msg(self, desc, data):
-        self._push_msg("error", {
-            "description": desc,
-            "data": data
-        })
-
-    def done_msg(self, msg):
-        self._push_msg("complete", msg)
+    def error_msg(self, msg):
+        elita.util.debugLog(self, msg)
+        self.datasvc.jobsvc.NewJobData({"error": msg})
 
 
 class RollingDeployController(GenericDeployController):
@@ -100,6 +79,7 @@ class RollingDeployController(GenericDeployController):
                 "gitdeploys": list()
             })
 
+        #we assume a single rolling_divisor for all rolling groups
         for g in rolling_groups:
             group_servers = self.datasvc.groupsvc.GetGroupServers(application, g)
             group_steps = elita.util.split_seq(group_servers, rolling_divisor)
@@ -116,12 +96,14 @@ class RollingDeployController(GenericDeployController):
             non_rolling_group_servers = {g: self.datasvc.groupsvc.GetGroupServers(application, g) for g in non_rolling_groups}
             for nrg in non_rolling_group_servers:
                 batches[0]['servers'] += non_rolling_group_servers[nrg]
-                batches[0]['gitdeploys'] += non_rolling_group_docs[nrg]
+                batches[0]['gitdeploys'] += non_rolling_group_docs[nrg]['gitdeploys']
 
         #dedupe
         for b in batches:
             b['servers'] = list(set(b['servers']))
             b['gitdeploys'] = list(set(b['gitdeploys']))
+
+        print(batches)
 
         return batches
 
@@ -130,50 +112,30 @@ class RollingDeployController(GenericDeployController):
         rolling_groups = [g for g in groups if self.datasvc.groupsvc.GetGroup(application, g)['rolling_deploy']]
         if len(rolling_groups) > 0:
             batches = self.compute_batches(application, target, rolling_groups, rolling_divisor)
-            self.add_msg("RollingDeployment", {
-                "state": "begin",
-                "batch_count": len(batches),
-                "rolling_groups": rolling_groups,
-                "nonrolling_groups": self.get_nonrolling_groups(rolling_groups, target['groups']),
-                "divisor": rolling_divisor
+            self.add_msg({
+                "RollingDeployment": {
+                    "batch_count": len(batches),
+                    "rolling_groups": rolling_groups,
+                    "nonrolling_groups": self.get_nonrolling_groups(rolling_groups, target['groups']),
+                    "divisor": rolling_divisor
+                }
             })
+
             for i, b in enumerate(batches):
-                self.add_msg("RollingDeployment", {
-                    "state": "start_batch",
-                    "batch_number": i,
-                    "batch_target": b
-                })
+                self.add_msg("Starting batch {}".format(i))
+                self.add_msg({"batch_target": b})
 
                 if not self.dc.run(application, build_name, b['servers'], b['gitdeploys'], i):
-                    self.error_msg("error executing batch", {
-                        "batch_number": i,
-                        "batch_target": b
-                    })
+                    self.error_msg("error executing batch {}".format(i))
                     return False
-                self.add_msg("RollingDeployment", {
-                    "state": "end_batch",
-                    "batch_number": i,
-                    "batch_target": b
-                })
-            batches = self.compute_batches(application, target, rolling_groups, rolling_divisor)
-            self.add_msg("RollingDeployment", {
-                "state": "end",
-                "batch_count": len(batches)
-            })
+                self.add_msg("Done with batch {}".format(i))
+            self.add_msg("Deployment finished")
         else:
-            self.add_msg("Deployment", {
-                "state": "beginning",
-                "target": target
-            })
+            self.add_msg({"ManualDeployment": target})
             if not self.dc.run(application, build_name, target['servers'], target['gitdeploys'], 0):
-                self.error_msg("error executing deployment", {
-                    "target": target
-                })
+                self.error_msg("error executing deployment")
                 return False
-            self.add_msg("Deployment", {
-                "state": "done",
-                "target": target
-            })
+            self.add_msg("Deployment finished")
         return True
 
 
@@ -181,165 +143,92 @@ class RollingDeployController(GenericDeployController):
 class DeployController(GenericDeployController):
 
     def push_to_gitdeploy(self, gdm, gddoc):
-        self.add_msg(desc="Starting push to gitdeploy", data={
-            "gitdeploy": gddoc['name'],
-            "application": self.application
-        })
+        self.add_msg("Starting push to gitdeploy: {}".format(gddoc['name']))
         package = gddoc['package']
         package_doc = self.build_doc['packages'][package]
         self.current_step += 1
-        self.add_msg(desc="Checking out default git branch", data={})
-        self.add_msg(desc="git checkout complete", data={
-            "output": str(gdm.checkout_default_branch())
-        })
+        #self.add_msg("Checking out default git branch")
+        res = gdm.checkout_default_branch()
+        elita.util.debugLog(self, "git checkout output: {}".format(str(res)))
         self.current_step += 1
         if gdm.last_build == self.build_name:
-            self.add_msg(desc="Build already committed to local gitrepo; skipping package decompression", data={})
+            self.add_msg("Build already committed to local gitrepo; skipping package decompression")
             self.current_step += 5
         else:
-            self.add_msg(desc="Decompressing package to master gitdeploy repo", data={})
+            self.add_msg("Decompressing package to master gitdeploy repo")
             gdm.decompress_to_repo(package_doc)
             self.current_step += 1
-            self.add_msg(desc="Checking for changes", data={})
+            elita.util.debugLog(self, "Checking for changes")
             res = gdm.check_repo_status()
-            self.add_msg(desc="git status results", data={
-                "output": str(res)
-            })
+            elita.util.debugLog(self, "git status results: {}".format(str(res)))
+
             if "nothing to commit" in res:
                 self.current_step += 4
-                self.add_msg(desc="No changes to commit/push", data={})
+                self.add_msg("No changes to commit/push")
             else:
                 self.current_step += 1
-                self.add_msg(desc="Adding changed files to commit", data={})
-                self.add_msg(desc="git add result", data={
-                    "output": str(gdm.add_files_to_repo())
-                })
+                self.add_msg("Adding changed files to commit")
+                res = gdm.add_files_to_repo()
+                elita.util.debugLog(self, "git add result: {}".format(str(res)))
                 self.current_step += 1
-                self.add_msg(desc="Committing changes", data={})
-                self.add_msg(desc="git commit result", data={
-                    "output": str(gdm.commit_to_repo(self.build_name))
-                })
+                self.add_msg("Committing changes")
+                res = gdm.commit_to_repo(self.build_name)
+                elita.util.debugLog(self, "git commit result: {}".format(str(res)))
                 self.current_step += 1
-                self.add_msg(desc="Inspect latest diff results", data={
-                    "output": gdm.inspect_latest_diff()
-                })
+                res = gdm.inspect_latest_diff()
+                elita.util.debugLog(self, "inspect diff result: {}".format(str(res)))
                 self.current_step += 1
-                self.add_msg(desc="Pushing changes to git provider", data={})
-                self.add_msg(desc="git push result", data={
-                    "output": str(gdm.push_repo())
-                })
+                self.add_msg("Pushing changes to git provider")
+                res = gdm.push_repo()
+                elita.util.debugLog(self, "git push result: {}".format(str(res)))
             gdm.update_repo_last_build(self.build_name)
-        self.add_msg(desc="Finished gitdeploy push", data={})
+        self.add_msg("Finished gitdeploy push")
 
     def salt_checkout_branch(self, gddoc):
         branch = gddoc['location']['default_branch']
         path = gddoc['location']['path']
         self.current_step += 1
+        self.add_msg("Discarding uncommitted changes and checking out gitdeploy branch")
+        res = self.rc.discard_git_changes(self.servers, path)
+        elita.util.debugLog(self, "discard git changes result: {}".format(str(res)))
+        res = self.rc.checkout_branch(self.servers, path, branch)
+        elita.util.debugLog(self, "git checkout result: {}".format(str(res)))
 
-        self.add_msg(desc="Discarding uncommitted changes", data={
-            "branch": branch,
-            "path": path
-        })
-        self.add_msg(desc="git result", data={
-            "branch": branch,
-            "output": self.rc.discard_git_changes(self.servers, path)
-        })
-        self.add_msg(desc="Checking out gitdeploy branch", data={
-            "branch": branch,
-            "path": path
-        })
-        self.add_msg(desc="git checkout result", data={
-            "branch": branch,
-            "output": self.rc.checkout_branch(self.servers, path, branch)
-        })
-
-    def git_pull_gitdeploy(self, gddoc, servers):
+    def git_pull_gitdeploys(self):
         #until salt Helium is released, we can only execute an SLS *file* as opposed to a single module call
-        sls_name = self.sc.get_gitdeploy_entry_name(self.application, gddoc['name'])
+        sls_list = [self.sc.get_gitdeploy_entry_name(self.application, gd) for gd in self.gitdeploys]
         self.current_step += 1
-        self.add_msg(desc="Executing states and git pull", data={
-            "servers": servers
-        })
-        res = self.rc.run_sls(servers, sls_name)
+        self.add_msg("Executing states and git pull: {}".format(self.servers))
+        res = self.rc.run_sls_async(self.servers, sls_list)
+        print(res)
         errors = dict()
         successes = dict()
-        for host in res:
-            for cmd in res[host]:
-                if "gitdeploy" in cmd:
-                    if "result" in res[host][cmd]:
-                        if not res[host][cmd]["result"]:
-                            errors[host] = res[host][cmd]["changes"] if "changes" in res[host][cmd] else res[host][cmd]
-                        else:
-                            if host not in successes:
-                                successes[host] = dict()
-                            module, state, command, subcommand = str(cmd).split('|')
-                            if state not in successes[host]:
-                                successes[host][state] = dict()
-                            successes[host][state][command] = {
-                                "stdout": res[host][cmd]["changes"]["stdout"],
-                                "stderr": res[host][cmd]["changes"]["stderr"],
-                                "retcode": res[host][cmd]["changes"]["retcode"],
-                            }
+        for r in res:
+            for host in r:
+                for cmd in r[host]:
+                    if "gitdeploy" in cmd:
+                        if "result" in r[host][cmd]:
+                            if not r[host][cmd]["result"]:
+                                errors[host] = r[host][cmd]["changes"] if "changes" in r[host][cmd] else r[host][cmd]
+                            else:
+                                if host not in successes:
+                                    successes[host] = dict()
+                                module, state, command, subcommand = str(cmd).split('|')
+                                if state not in successes[host]:
+                                    successes[host][state] = dict()
+                                successes[host][state][command] = {
+                                    "stdout": r[host][cmd]["changes"]["stdout"],
+                                    "stderr": r[host][cmd]["changes"]["stderr"],
+                                    "retcode": r[host][cmd]["changes"]["retcode"],
+                                }
         if len(errors) > 0:
-            self.error_msg(desc="Errors detected in sls execution", data={
-                "success_servers": successes.keys(),
-                "error_servers": errors.keys(),
-                "error_responses": errors
-            })
-        if len(successes) > 0:
-            self.add_msg(desc="Successfull sls executions", data={
-                "success_servers": successes.keys(),
-                "success_responses": successes
-            })
+            elita.util.debugLog(self, "SLS error servers: {}".format(errors.keys()))
+            elita.util.debugLog(self, "SLS error responses: {}".format(errors))
+            self.error_msg("Errors detected in sls execution on servers: {}".format(errors.keys()))
+        elif len(successes) > 0:
+            self.add_msg("Successful git pull and state executeion")
         self.current_step += 1
-        self.add_msg(desc="Finished executing states and git pull", data={
-            "servers": self.servers
-        })
         return len(errors) == 0
-
-
-
-    # def salt_highstate_server(self):
-    #     self.current_step += 1
-    #     self.add_msg(desc="Starting highstate deployment", data={
-    #         "servers": self.servers
-    #     })
-    #     res = self.rc.highstate(self.servers)
-    #     errors = dict()
-    #     successes = dict()
-    #     for host in res:
-    #         for cmd in res[host]:
-    #             if "gitdeploy" in cmd:
-    #                 if "result" in res[host][cmd]:
-    #                     if not res[host][cmd]["result"]:
-    #                         errors[host] = res[host][cmd]["changes"] if "changes" in res[host][cmd] else res[host][cmd]
-    #                     else:
-    #                         if host not in successes:
-    #                             successes[host] = dict()
-    #                         module, state, command, subcommand = str(cmd).split('|')
-    #                         if state not in successes[host]:
-    #                             successes[host][state] = dict()
-    #                         successes[host][state][command] = {
-    #                             "stdout": res[host][cmd]["changes"]["stdout"],
-    #                             "stderr": res[host][cmd]["changes"]["stderr"],
-    #                             "retcode": res[host][cmd]["changes"]["retcode"],
-    #                         }
-    #     if len(errors) > 0:
-    #         self.error_msg(desc="Errors detected in highstate call", data={
-    #             "success_servers": successes.keys(),
-    #             "error_servers": errors.keys(),
-    #             "error_responses": errors
-    #         })
-    #     if len(successes) > 0:
-    #         self.add_msg(desc="Successfull highstate calls detected", data={
-    #             "success_servers": successes.keys(),
-    #             "success_responses": successes
-    #         })
-    #     self.current_step += 1
-    #     self.add_msg(desc="Finished highstate call", data={
-    #         "servers": self.servers
-    #     })
-    #     return len(errors) == 0
 
     def run(self, app_name, build_name, servers, gitdeploys, batch_number):
         '''
@@ -358,28 +247,17 @@ class DeployController(GenericDeployController):
         self.total_steps = len(self.gitdeploys) * 11
 
         self.current_step += 1
-        self.add_msg(desc="Deployment batch", data={
-            "application": self.application,
-            "build": self.build_name,
-            "servers": self.servers,
-            "gitdeploys": self.gitdeploys
-        })
 
         for gd in self.gitdeploys:
-            self.add_msg(desc="Processing gitdeploy", data={"name": gd})
+            self.add_msg("Processing gitdeploy: {}".format(gd))
             gddoc = self.datasvc.gitsvc.GetGitDeploy(self.application, gd)
             gdm = gitservice.GitDeployManager(gddoc, self.datasvc)
             self.push_to_gitdeploy(gdm, gddoc)
             self.salt_checkout_branch(gddoc)
-            self.git_pull_gitdeploy(gddoc, self.servers)
+
+        self.git_pull_gitdeploys()
 
         self.current_step = self.total_steps
-        self.add_msg(desc="Finished deployment batch", data={
-            "application": self.application,
-            "build": self.build_name,
-            "servers": self.servers,
-            "gitdeploys": self.gitdeploys
-        })
 
         return True
 

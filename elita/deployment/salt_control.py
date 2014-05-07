@@ -7,8 +7,8 @@ import os.path
 import random
 import shutil
 import string
-import simplejson as json
 import yaml
+import time
 import elita.deployment.gitservice
 
 try:
@@ -141,6 +141,10 @@ class RemoteCommands:
     def run_sls(self, server_list, sls_name):
         return self.sc.salt_command(server_list, 'state.sls', [sls_name], timeout=300)
 
+    def run_sls_async(self, server_list, sls_name_list):
+        cmd_group = [{'command': 'state.sls', 'arguments': [s]} for s in sls_name_list]
+        return self.sc.salt_command_async(server_list, cmd_group, timeout=30)
+
 class SaltController:
     def __init__(self, settings):
         self.settings = settings
@@ -153,6 +157,18 @@ class SaltController:
             self.load_salt_info()
         except SaltClientError:
             elita.util.debugLog(self, "WARNING: SaltClientError")
+
+    def salt_command_async(self, target, cmd_group, opts=None, timeout=120):
+        rets = list()
+        for c in cmd_group:
+            rets.append(self.salt_client.cmd_iter_no_block(target, c['command'], c['arguments'], kwarg=opts,
+                                      timeout=timeout, expr_form='list'))
+        for ret in rets:
+            while None in ret:
+                print("salt_command_async: waiting for returns: {}".format(str(ret)))
+                time.sleep(0.25)
+
+        return rets
 
     def salt_command(self, target, cmd, arg, opts=None, timeout=120):
         return self.salt_client.cmd(target, cmd, arg, kwarg=opts, timeout=timeout, expr_form='list')
