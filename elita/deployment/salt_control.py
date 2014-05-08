@@ -162,15 +162,12 @@ class SaltController:
     def salt_command_async(self, target, cmd_group, opts=None, timeout=120):
         rets = list()
         for c in cmd_group:
-            rets.append(self.salt_client.cmd_iter_no_block(target, c['command'], c['arguments'], kwarg=opts,
+            rets.append(self.salt_client.cmd_iter(target, c['command'], c['arguments'], kwarg=opts,
                                       timeout=timeout, expr_form='list'))
-        for ret in rets:
-            while None in ret:
-                time.sleep(0.25)
-
         results = list()
         for ret in rets:
-            results.append([r for r in ret])
+            for r in ret:
+                results.append(r)
         return results
 
     def salt_command(self, target, cmd, arg, opts=None, timeout=120):

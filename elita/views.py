@@ -577,6 +577,9 @@ class DeploymentContainerView(GenericView):
             if len(uninit_gd) > 0:
                 return self.Error(400, {"message": "gitdeploy not initialized on servers", "servers": uninit_gd})
 
+        if len(target['servers']) == 0:
+            return self.Error(400, "no servers specified for deployment (are you sure the gitdeploys are initialized?)")
+
         environments = body['environments'] if 'environments' in body else "(not specified)"
         groups = body['groups'] if 'groups' in body else "(not specified)"
         dpo = self.datasvc.deploysvc.NewDeployment(app, build_name, environments, groups, target['servers'], target['gitdeploys'])
