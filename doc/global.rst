@@ -18,13 +18,13 @@ View Users
 
    **Example request**:
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XGET '/global/users'
 
    **Example response**
 
-   .. sourcecode:: http
+   .. sourcecode:: json
 
       {
           "users": [
@@ -49,13 +49,13 @@ View Users
 
    **Example request**
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XGET '/global/users/joe?password=1234'
 
    **Example response**
 
-   .. sourcecode:: http
+   .. sourcecode:: json
 
       {
           "status": "ok",
@@ -91,13 +91,13 @@ View Computed User Permissions
 
    **Example request**
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XGET '/global/users/joe/permissions'
 
    **Example response**
 
-   .. sourcecode:: http
+   .. sourcecode:: json
 
       {
             "username": "joe",
@@ -169,7 +169,7 @@ Create User
 
    **Example request**
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XPOST '/global/users?username=joe&password=1234' -d '
       {
@@ -216,13 +216,13 @@ Modify User
 
    **Example request**
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XPATCH '/global/users/joe?password=1234' -d '{ "attributes": { "nickname": "joey" } }'
 
    **Example response**
 
-   .. sourcecode:: http
+   .. sourcecode:: json
 
       {
           "status": "ok",
@@ -267,7 +267,7 @@ Delete User
 
    **Example request**
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XDELETE '/global/users/joe'
 
@@ -284,7 +284,7 @@ View Tokens
 
    **Example request**
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XGET '/global/tokens'
 
@@ -298,7 +298,7 @@ View Tokens
 
    **Example request**
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XGET
       '/global/tokens/NWFoNzkwNWQ4M2QyNzY5MWJjMjVlJdu7ODMwM2E1M2EyMzBiZDIyMmMyMGE9Idjn4Yzg2ZjYwODQ1ZWYyNTVmM9'
@@ -316,7 +316,7 @@ Delete Token
 
    **Example request**
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XDELETE
       '/global/tokens/NWFoNzkwNWQ4M2QyNzY5MWJjMjVlJdu7ODMwM2E1M2EyMzBiZDIyMmMyMGE9Idjn4Yzg2ZjYwODQ1ZWYyNTVmM9'
@@ -333,7 +333,7 @@ View Gitproviders
 
    **Example request**
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XGET '/global/gitproviders'
 
@@ -344,7 +344,7 @@ View Gitproviders
 
    **Example request**
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XGET '/global/gitproviders/mygitprovider'
 
@@ -362,7 +362,7 @@ Create Gitprovider
 
    **Example JSON body**
 
-   .. sourcecode:: http
+   .. sourcecode:: json
 
       {
           "type": "bitbucket",
@@ -374,7 +374,7 @@ Create Gitprovider
 
    **Example request**
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XPUT '/global/gitproviders?name=mygitprovider' -d '{
           "type": "bitbucket",
@@ -399,7 +399,7 @@ Modify Gitprovider
 
    **Example request**
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XPATCH '/global/gitproviders/mygitprovider' -d '{ "auth": {
             "username": "my-username",
@@ -416,7 +416,7 @@ Delete Gitprovider
 
    **Example request**
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XGET '/global/gitproviders/mygitprovider'
 
@@ -432,7 +432,7 @@ View Keypairs
 
    **Example request**
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XGET '/global/keypairs'
 
@@ -443,7 +443,7 @@ View Keypairs
 
    **Example request**
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XGET '/global/keypairs/mykeypair'
 
@@ -468,7 +468,7 @@ Keypairs can be uploaded either as JSON-encoded strings (PUT request) or as file
    .. NOTE::
       Key data omitted from examples.
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       {
           "private_key": "-----BEGIN RSA PRIVATE KEY-----\\n...\\n-----END RSA PRIVATE KEY-----\\n",
@@ -477,7 +477,7 @@ Keypairs can be uploaded either as JSON-encoded strings (PUT request) or as file
 
    **Example request**
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XPUT '/global/keypairs?type=git&name=mykeypair' -d '{
           "private_key": "-----BEGIN RSA PRIVATE KEY-----\\n...\\n-----END RSA PRIVATE KEY-----\\n",
@@ -497,7 +497,7 @@ Keypairs can be uploaded either as JSON-encoded strings (PUT request) or as file
 
    **Example request**
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XPOST '/global/keypairs?type=git&name=mykeypair' -F "private_key=@/home/user/keys/mykey"
       -F "public_key=@/home/user/keys/mykey.pub"
@@ -515,7 +515,7 @@ Modify Keypair
 
    **Example request**
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XPATCH '/global/keypairs/mykeypair' -d '{
           "private_key": "-----BEGIN RSA PRIVATE KEY-----\\n...\\n-----END RSA PRIVATE KEY-----\\n",
@@ -532,7 +532,7 @@ Delete Keypair
 
    **Example request**
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XDELETE '/global/keypair/mykeypair'
 
