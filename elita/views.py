@@ -487,6 +487,14 @@ class ServerView(GenericView):
             'gitdeploys': self.datasvc.serversvc.GetGitDeploys(self.context.name)
         }
 
+    def DELETE(self):
+        self.datasvc.serversvc.DeleteServer(self.context.name)
+        return self.status_ok({
+            "server_deleted": {
+                "server_name": self.context.name
+            }
+        })
+
 class EnvironmentView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request)
