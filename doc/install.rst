@@ -30,9 +30,9 @@ In general installing on CentOS will be somewhat painful compared to Ubuntu, sin
 are available in the standard yum repositories. You'll need to install them each individually.
 
 First, CentOS 6.x ships with Python 2.6 by default, so you have to `compile and install Python 2.7.x
-<http://toomuchdata.com/2014/02/16/how-to-install-python-on-centos/>`_ first.
+<http://toomuchdata.com/2014/02/16/how-to-install-python-on-centos/>`_.
 
-After that's complete, install the dependencies listed above, probably by installing RPMs manually or compiling from scratch.
+After that's complete, install the dependencies listed above, most likely by installing RPMs manually or compiling from scratch.
 Once that's finished you should be able to install via the instructions below.
 
 Installation (Linux/POSIX)
@@ -54,6 +54,7 @@ To test that your installation is working correctly, do::
 
     $ curl -XGET 'http://localhost:2718/?pretty=true'
 
+Elita will listen on port 2718 on localhost only. By convention, external SSL-tunneled access is provided on port 2719.
 
 Administrative User
 -------------------
@@ -79,7 +80,8 @@ verifying your installation before exposing it to the public internet.
        }
 
    Just be sure that if you change the permissions on 'admin' (or delete it) that you have a different user with full
-   permissions, otherwise you could be locked out of your installation.
+   permissions, otherwise you could be locked out of your installation. You'll then have to manually hack in a new user
+   object into MongoDB.
 
 Configuration Files
 -------------------

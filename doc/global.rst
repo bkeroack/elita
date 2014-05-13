@@ -150,6 +150,11 @@ Create User
    simple convention. Only the existence of "read" and "write" substrings are checked,
    so "read;write" would work equally well.
 
+   .. NOTE::
+      There exists a special application named '_global'. This represents access to all administrative containers/endpoints
+      including nearly everythign under /global (with the exception of individual user objects, which can be accessed
+      by simple password auth, and tokens which are permissionless) as well as the jobs container (but not individual jobs).
+
    "read" allows access to the GET verb for all endpoints associated with that application while "write" allows
    access to all verbs which change state (PUT, POST, PATCH, DELETE).
 

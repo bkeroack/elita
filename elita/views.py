@@ -1245,7 +1245,7 @@ class UserContainerView(GenericView):
 
 class JobView(GenericView):
     def __init__(self, context, request):
-        GenericView.__init__(self, context, request)
+        GenericView.__init__(self, context, request, permissionless=True)  # job_id is the secret
         self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
 
     def GET(self):

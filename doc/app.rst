@@ -164,8 +164,6 @@ Delete Build
 Gitrepos
 --------
 
-.. _gitdeploy-endpoints:
-
 View Gitrepos
 ^^^^^^^^^^^^^
 
@@ -237,6 +235,8 @@ Delete Gitrepo
 
 Gitdeploys
 ----------
+
+.. _gitdeploy-endpoints:
 
 View Gitdeploys
 ^^^^^^^^^^^^^^^
@@ -483,8 +483,8 @@ Delete Gitdeploy
 Groups
 ------
 
-Application groups are logical groups of gitdeploys. Groups are used to combine gitdeploys into logical units in simple
-or complex ways--for example, different groups can share common gitdeploys. Server group membership is calculated
+Application groups are logical groups of gitdeploys. Groups are used to combine gitdeploys into logical units in various
+ways--for example, different groups can share common gitdeploys. Server group membership is calculated
 dynamically based on what gitdeploys are initialized on the servers.
 
 
@@ -508,7 +508,7 @@ View Group
 
 .. http:get::   /app/(string: app_name)/groups/(string: group_name)
 
-   :param name: environments (optional)
+   :param environemnts: (optional) filter by list of environments
    :type name: string (space-delimited list of environment names)
 
    View individual group. If *environments* is specified, the servers listed will be filtered by the environments
@@ -564,3 +564,23 @@ Delete Group
 
       $ curl -XDELETE '/app/widgetmakers/groups/WebFrontEnd'
 
+
+Deployments
+-----------
+
+Deployment endpoints allow you to push builds to servers/gitdeploys ("manual deployment") or environments/groups ("group
+deployment"). For details about the backend mechanism, see: :ref:`Gitdeploy Explanation <gitdeploy-explanation>`
+
+View Deployments
+^^^^^^^^^^^^^^^^
+
+.. http:get::   /app/(string: app_name)/deployments
+
+   View all deployments (by id).
+
+
+   **Example request**:
+
+   .. sourcecode:: bash
+
+      $ curl -XGET '/app/widgetmakers/deployments'

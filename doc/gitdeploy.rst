@@ -1,4 +1,5 @@
 
+.. _gitdeploy-explanation:
 
 ==========
 Gitdeploys
