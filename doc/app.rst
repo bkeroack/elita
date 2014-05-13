@@ -532,6 +532,8 @@ Create Group
 
    :param name: group name
    :type name: string
+   :param rolling_deploy: (optional) group requires a rolling (batched) deployment. Defaults to false.
+   :type rolling_deploy: boolean ("true"/"false")
    :jsonparam string body: JSON object containing list of gitdeploys
 
    Create a group. You must supply a JSON-encoded list of gitdeploys in the body of the request.
@@ -621,7 +623,7 @@ Execute Deployment
    deployments.
 
    A *group deployment* is one in which you specify only the *environment* and the *group(s)* to deploy to. Elita will
-   calculate the servers and gitdeploys that satisfy both specifications and--if the relevant gitdeploys specify it--
+   calculate the servers and gitdeploys that satisfy both specifications and--if the relevant groups require it--
    will perform an automatic batched rolling deploy.
 
 

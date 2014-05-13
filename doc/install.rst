@@ -81,7 +81,7 @@ verifying your installation before exposing it to the public internet.
 
    Just be sure that if you change the permissions on 'admin' (or delete it) that you have a different user with full
    permissions, otherwise you could be locked out of your installation. You'll then have to manually hack in a new user
-   object into MongoDB.
+   object into MongoDB, and into the root tree, which is not trivial.
 
 Configuration Files
 -------------------
