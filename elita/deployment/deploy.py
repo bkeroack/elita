@@ -192,12 +192,19 @@ class DeployController(GenericDeployController):
         res = self.rc.checkout_branch(self.servers, path, branch)
         elita.util.debugLog(self, "git checkout result: {}".format(str(res)))
 
+    def pull_callback(self, results, tag):
+        self.add_msg("pull tag: {} result: {}".format(tag, results))
+
     def git_pull_gitdeploys(self):
         #until salt Helium is released, we can only execute an SLS *file* as opposed to a single module call
         sls_list = [self.sc.get_gitdeploy_entry_name(self.application, gd) for gd in self.gitdeploys]
         self.current_step += 1
         self.add_msg("Executing states and git pull: {}".format(self.servers))
-        res = self.rc.run_sls_async(self.servers, sls_list)
+        callback = {
+            'func': self.pull_callback,
+            'tag': self.gitdeploys
+        }
+        res = self.rc.run_sls_async(callback, self.servers, sls_list)
         elita.util.debugLog(self, "git_pull_gitdeploys: results: {}".format(res))
         errors = dict()
         successes = dict()
@@ -224,7 +231,7 @@ class DeployController(GenericDeployController):
             elita.util.debugLog(self, "SLS error responses: {}".format(errors))
             self.error_msg("Errors detected in sls execution on servers: {}".format(errors.keys()))
         elif len(successes) > 0:
-            self.add_msg("Successful git pull and state executeion")
+            self.add_msg("Successful git pull and state execution")
         self.current_step += 1
         return len(errors) == 0
 

@@ -142,9 +142,9 @@ class RemoteCommands:
     def run_sls(self, server_list, sls_name):
         return self.sc.salt_command(server_list, 'state.sls', [sls_name], timeout=300)
 
-    def run_sls_async(self, server_list, sls_name_list):
+    def run_sls_async(self, callback, server_list, sls_name_list):
         cmd_group = [{'command': 'state.sls', 'arguments': [s]} for s in sls_name_list]
-        return self.sc.salt_command_async(server_list, cmd_group, timeout=30)
+        return self.sc.salt_command_async(callback, server_list, cmd_group, timeout=30)
 
 class SaltController:
     def __init__(self, settings):
@@ -159,7 +159,7 @@ class SaltController:
         except SaltClientError:
             elita.util.debugLog(self, "WARNING: SaltClientError")
 
-    def salt_command_async(self, target, cmd_group, opts=None, timeout=120):
+    def salt_command_async(self, callback, target, cmd_group, opts=None, timeout=120):
         rets = list()
         for c in cmd_group:
             rets.append(self.salt_client.cmd_iter(target, c['command'], c['arguments'], kwarg=opts,
@@ -167,6 +167,7 @@ class SaltController:
         results = list()
         for ret in rets:
             for r in ret:
+                callback['func'](r, callback['tag'])
                 results.append(r)
         return results
 
