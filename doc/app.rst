@@ -584,3 +584,59 @@ View Deployments
    .. sourcecode:: bash
 
       $ curl -XGET '/app/widgetmakers/deployments'
+
+
+View Deployment
+^^^^^^^^^^^^^^^
+
+.. http:get::   /app/(string: app_name)/deployments/(string: deployment_id)
+
+   View deployment detail.
+
+
+   **Example request**:
+
+   .. sourcecode:: bash
+
+      $ curl -XGET '/app/widgetmakers/deployments/53716bfddf15e00e19043b8f'
+
+
+Execute Deployment
+^^^^^^^^^^^^^^^^^^
+
+.. http:post::   /app/(string: app_name)/deployments
+
+   :param build_name: name of build to deploy
+   :type build_name: string
+   :param rolling_divisor: (optional) divisor for calculating rolling batches ("split into N batches"). Default is 2.
+   :type rolling_divisor: positive integer
+   :jsonparam string body: JSON object containing deployment target specification
+
+   Perform a deployment.
+
+   There are two general 'styles' of deployment: *manual deployment* and *group deployment*.
+
+   A *manual deployment* is one in which you specify the individual servers and gitdeploys to which you want to deploy
+   the build. This gives you the most flexibility but is also the most verbose. It also does not allow for automatic rolling
+   deployments.
+
+   A *group deployment* is one in which you specify only the *environment* and the *group(s)* to deploy to. Elita will
+   calculate the servers and gitdeploys that satisfy both specifications and--if the relevant gitdeploys specify it--
+   will perform an automatic batched rolling deploy.
+
+
+   **Example request (manual)**:
+
+   .. sourcecode:: bash
+
+      $ curl -XPOST '/app/widgetmakers/deployments?build_name=5-master' -d '{ "servers": [ "web01" ], "gitdeploys":
+       [ "WebApplication", "Configuration" ] }'
+
+
+   **Example request (group)**:
+
+   .. sourcecode:: bash
+
+      $ curl -XPOST '/app/widgetmakers/deployments?build_name=5-master&rolling_divisor=4' -d '{ "environments": [ "production" ],
+      "groups": [ "WebFrontEnd" ] }'
+

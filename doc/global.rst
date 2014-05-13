@@ -285,7 +285,7 @@ View Tokens
 
 .. http:get::   /global/tokens
 
-   Get list of issued auth tokens
+   Get list of issued auth tokens. This requires '_global' permissions to view.
 
    **Example request**
 
@@ -293,6 +293,9 @@ View Tokens
 
       $ curl -XGET '/global/tokens'
 
+
+View Token
+^^^^^^^^^^
 
 .. http:get::   /global/tokens/(string:token)
 
