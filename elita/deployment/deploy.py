@@ -3,13 +3,14 @@ __author__ = 'bkeroack'
 import sys
 import traceback
 import pprint
+import time
 
 import elita.util
 import gitservice
 import salt_control
 
 #async callable
-def run_deploy(datasvc, application, build_name, target, rolling_divisor, deployment):
+def run_deploy(datasvc, application, build_name, target, rolling_divisor, rolling_pause, deployment):
     sc = salt_control.SaltController(datasvc.settings)
     rc = salt_control.RemoteCommands(sc)
 
@@ -18,9 +19,11 @@ def run_deploy(datasvc, application, build_name, target, rolling_divisor, deploy
     # so we duplicate the functionality here
     try:
         if target['groups']:
+            elita.util.debugLog(run_deploy, "Doing rolling deployment")
             rdc = RollingDeployController(datasvc, rc)
-            ret = rdc.run(application, build_name, target, rolling_divisor)
+            ret = rdc.run(application, build_name, target, rolling_divisor, rolling_pause)
         else:
+            elita.util.debugLog(run_deploy, "Doing manual deployment")
             dc = DeployController(datasvc, rc)
             ret = dc.run(application, build_name, target['servers'], target['gitdeploys'], 0)
     except:
@@ -105,7 +108,7 @@ class RollingDeployController(GenericDeployController):
 
         return batches
 
-    def run(self, application, build_name, target, rolling_divisor):
+    def run(self, application, build_name, target, rolling_divisor, rolling_pause):
         groups = target['groups']
         rolling_groups = [g for g in groups if self.datasvc.groupsvc.GetGroup(application, g)['rolling_deploy']]
         if len(rolling_groups) > 0:
@@ -127,6 +130,9 @@ class RollingDeployController(GenericDeployController):
                     self.error_msg("error executing batch {}".format(i))
                     return False
                 self.add_msg("Done with batch {}".format(i))
+                if i != (len(batches)-1):
+                    self.add_msg("Pausing for {} secs before starting next batch".format(rolling_pause))
+                    time.sleep(rolling_pause)
             self.add_msg("Deployment finished")
         else:
             self.add_msg({"ManualDeployment": target})
@@ -179,32 +185,45 @@ class DeployController(GenericDeployController):
                 self.add_msg("Pushing changes to git provider")
                 res = gdm.push_repo()
                 elita.util.debugLog(self, "git push result: {}".format(str(res)))
+                # Changes detected, so add gitdeploy and the relevant servers that must be deployed to
+                self.changed_gitdeploys[gddoc['name']] = list(set(gddoc['servers']).intersection(set(self.servers)))
             gdm.update_repo_last_build(self.build_name)
         self.add_msg("Finished gitdeploy push")
 
     def salt_checkout_branch(self, gddoc):
-        branch = gddoc['location']['default_branch']
-        path = gddoc['location']['path']
+        if gddoc['name'] in self.changed_gitdeploys:
+            gd_servers = self.changed_gitdeploys[gddoc['name']]
+            branch = gddoc['location']['default_branch']
+            path = gddoc['location']['path']
+            self.add_msg("Discarding uncommitted changes and checking out gitdeploy branch")
+            res = self.rc.discard_git_changes(gd_servers, path)
+            elita.util.debugLog(self, "discard git changes result: {}".format(str(res)))
+            res = self.rc.checkout_branch(gd_servers, path, branch)
+            elita.util.debugLog(self, "git checkout result: {}".format(str(res)))
         self.current_step += 1
-        self.add_msg("Discarding uncommitted changes and checking out gitdeploy branch")
-        res = self.rc.discard_git_changes(self.servers, path)
-        elita.util.debugLog(self, "discard git changes result: {}".format(str(res)))
-        res = self.rc.checkout_branch(self.servers, path, branch)
-        elita.util.debugLog(self, "git checkout result: {}".format(str(res)))
 
     def pull_callback(self, results, tag):
-        self.add_msg("pull tag: {} result: {}".format(tag, results))
+        self.add_msg("pull target: {} result: {}".format(tag, results))
+
+    def get_gitdeploy_servers(self, gddoc):
+        '''
+        Filter self.servers to find only those with gitdeploy initialized on them
+        '''
+        return list(set(gddoc['servers']).intersection(set(self.servers)))
+
 
     def git_pull_gitdeploys(self):
         #until salt Helium is released, we can only execute an SLS *file* as opposed to a single module call
-        sls_list = [self.sc.get_gitdeploy_entry_name(self.application, gd) for gd in self.gitdeploys]
+        sls_map = {self.sc.get_gitdeploy_entry_name(self.application, gd): self.changed_gitdeploys[gd]
+                   for gd in self.changed_gitdeploys}
+        if len(sls_map) == 0:
+            self.add_msg("No servers to deploy to!")
+            self.current_step += 2
+            return True
         self.current_step += 1
         self.add_msg("Executing states and git pull: {}".format(self.servers))
-        callback = {
-            'func': self.pull_callback,
-            'tag': self.gitdeploys
-        }
-        res = self.rc.run_sls_async(callback, self.servers, sls_list)
+        elita.util.debugLog(self, "git_pull_gitdeploys: sls_map: {}".format(sls_map))
+        res = self.rc.run_slses_async(self.pull_callback, sls_map)
         elita.util.debugLog(self, "git_pull_gitdeploys: results: {}".format(res))
         errors = dict()
         successes = dict()
@@ -240,8 +259,9 @@ class DeployController(GenericDeployController):
         1. Decompress build to gitdeploy dir and push
             a. Iterate over server_specs to build list of gitdeploys to push to (make sure no dupes)
             b. Push desired build to gitdeploys
-        2. Issue salt highstate
-            a. Iterate over server_specs, issue highstate call for each
+        2. Determine which gitdeploys have changes (if any)
+            a. Build a mapping of gitdeploys_with_changes -> [ servers_to_deploy_it_to ]
+            b. Perform the state calls
         '''
         self.application = app_name
         self.build_name = build_name
@@ -250,6 +270,7 @@ class DeployController(GenericDeployController):
         self.gitdeploys = gitdeploys
         self.batch_number = batch_number
         self.total_steps = len(self.gitdeploys) * 11
+        self.changed_gitdeploys = dict()
 
         self.current_step += 1
 
@@ -260,7 +281,8 @@ class DeployController(GenericDeployController):
             self.push_to_gitdeploy(gdm, gddoc)
             self.salt_checkout_branch(gddoc)
 
-        self.git_pull_gitdeploys()
+        if not self.git_pull_gitdeploys():
+            self.add_msg("Errors detected during git pull!")
 
         self.current_step = self.total_steps
 

@@ -530,10 +530,19 @@ class DeploymentContainerView(GenericView):
             "servers": list(),
             "gitdeploys": list()
         }
-
-        rolling_divisor = int(self.req.params['rolling_divisor']) if 'rolling_divisor' in self.req.params else 2
+        try:
+            rolling_divisor = int(self.req.params['rolling_divisor']) if 'rolling_divisor' in self.req.params else 2
+        except ValueError:
+            return self.Error(400, "invalid rolling_divisor")
         if rolling_divisor < 1:
             return self.Error(400, "invalid rolling_divisor: {}".format(rolling_divisor))
+
+        try:
+            rolling_pause = int(self.req.params['rolling_pause']) if 'rolling_pause' in self.req.params else 15
+        except ValueError:
+            return self.Error(400, "invalid rolling_pause")
+        if rolling_pause < 1:
+            return self.Error(400, "invalid rolling_pause: {}".format(rolling_pause))
 
         if "environments" in body and "groups" in body:
             envs = self.datasvc.serversvc.GetEnvironments()
@@ -599,6 +608,7 @@ class DeploymentContainerView(GenericView):
             'build_name': build_name,
             'target': target,
             'rolling_divisor': rolling_divisor,
+            'rolling_pause': rolling_pause,
             'deployment': d_id
         }
         msg = self.run_async('deploy_{}_{}'.format(app,  build_name), "deployment", args,
@@ -612,6 +622,7 @@ class DeploymentContainerView(GenericView):
                 'environments': environments,
                 'groups': groups,
                 'rolling_divisor': rolling_divisor,
+                'rolling_pause': rolling_pause,
                 'servers': target['servers'],
                 'gitdeploys': target['gitdeploys'],
                 'message': msg

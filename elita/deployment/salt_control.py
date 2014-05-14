@@ -142,9 +142,13 @@ class RemoteCommands:
     def run_sls(self, server_list, sls_name):
         return self.sc.salt_command(server_list, 'state.sls', [sls_name], timeout=300)
 
-    def run_sls_async(self, callback, server_list, sls_name_list):
-        cmd_group = [{'command': 'state.sls', 'arguments': [s]} for s in sls_name_list]
-        return self.sc.salt_command_async(callback, server_list, cmd_group, timeout=30)
+    def run_slses_async(self, callback, sls_map):
+        '''
+        sls_map: { 'sls_name': [ list_of_servers ] }
+        Runs all listed SLSes asynchronously
+        '''
+        cmd_group = [{'command': 'state.sls', 'arguments': [s], 'servers': sls_map[s]} for s in sls_map]
+        return self.sc.salt_commands_async(callback, cmd_group, timeout=300)
 
 class SaltController:
     def __init__(self, settings):
@@ -159,15 +163,15 @@ class SaltController:
         except SaltClientError:
             elita.util.debugLog(self, "WARNING: SaltClientError")
 
-    def salt_command_async(self, callback, target, cmd_group, opts=None, timeout=120):
+    def salt_commands_async(self, callback, cmd_group, opts=None, timeout=120):
         rets = list()
         for c in cmd_group:
-            rets.append(self.salt_client.cmd_iter(target, c['command'], c['arguments'], kwarg=opts,
-                                      timeout=timeout, expr_form='list'))
+            rets.append((c, self.salt_client.cmd_iter(c['servers'], c['command'], c['arguments'], kwarg=opts,
+                                      timeout=timeout, expr_form='list')))
         results = list()
-        for ret in rets:
-            for r in ret:
-                callback['func'](r, callback['tag'])
+        for retc in rets:
+            for r in retc[1]:
+                callback(r, retc[0])
                 results.append(r)
         return results
 
