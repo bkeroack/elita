@@ -126,7 +126,7 @@ class RollingDeployController(GenericDeployController):
                 self.add_msg("Starting batch {}".format(i))
                 self.add_msg({"batch_target": b})
 
-                if not self.dc.run(application, build_name, b['servers'], b['gitdeploys'], i):
+                if not self.dc.run(application, build_name, b['servers'], b['gitdeploys'], i, force=i > 0):
                     self.error_msg("error executing batch {}".format(i))
                     return False
                 self.add_msg("Done with batch {}".format(i))
@@ -254,7 +254,7 @@ class DeployController(GenericDeployController):
         self.current_step += 1
         return len(errors) == 0
 
-    def run(self, app_name, build_name, servers, gitdeploys, batch_number):
+    def run(self, app_name, build_name, servers, gitdeploys, batch_number, force=False):
         '''
         1. Decompress build to gitdeploy dir and push
             a. Iterate over server_specs to build list of gitdeploys to push to (make sure no dupes)
@@ -280,6 +280,10 @@ class DeployController(GenericDeployController):
             gdm = gitservice.GitDeployManager(gddoc, self.datasvc)
             self.push_to_gitdeploy(gdm, gddoc)
             self.salt_checkout_branch(gddoc)
+            # if this is part of a rolling deployment and is anything other than the first batch,
+            # no gitdeploys will actually be "changed". Force says to do a pull on the servers anyway.
+            if force:
+                self.changed_gitdeploys[gddoc['name']] = list(set(gddoc['servers']).intersection(set(self.servers)))
 
         if not self.git_pull_gitdeploys():
             self.add_msg("Errors detected during git pull!")
