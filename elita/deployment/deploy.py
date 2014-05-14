@@ -25,7 +25,7 @@ def run_deploy(datasvc, application, build_name, target, rolling_divisor, rollin
         else:
             elita.util.debugLog(run_deploy, "Doing manual deployment")
             dc = DeployController(datasvc, rc)
-            ret = dc.run(application, build_name, target['servers'], target['gitdeploys'], 0)
+            ret, data = dc.run(application, build_name, target['servers'], target['gitdeploys'], 0)
     except:
         exc_type, exc_obj, tb = sys.exc_info()
         f_exc = traceback.format_exception(exc_type, exc_obj, tb)
@@ -122,11 +122,19 @@ class RollingDeployController(GenericDeployController):
                 }
             })
 
+            changed_gds = list()
             for i, b in enumerate(batches):
                 self.add_msg("Starting batch {}".format(i))
                 self.add_msg({"batch_target": b})
-
-                if not self.dc.run(application, build_name, b['servers'], b['gitdeploys'], i, force=i > 0):
+                # for first batch, we pass all gitdeploys
+                # for subsequent batches we only pass the gitdeploys that we know have changes
+                if i == 0:
+                    deploy_gds = b['gitdeploys']
+                else:
+                    deploy_gds = changed_gds
+                elita.util.debugLog(self, "doing DeployController.run: deploy_gds: {}".format(deploy_gds))
+                ok, changed_gds = self.dc.run(application, build_name, b['servers'], deploy_gds, i, force=i > 0)
+                if not ok:
                     self.error_msg("error executing batch {}".format(i))
                     return False
                 self.add_msg("Done with batch {}".format(i))
@@ -136,7 +144,8 @@ class RollingDeployController(GenericDeployController):
             self.add_msg("Deployment finished")
         else:
             self.add_msg({"ManualDeployment": target})
-            if not self.dc.run(application, build_name, target['servers'], target['gitdeploys'], 0):
+            ok, changed_gds = self.dc.run(application, build_name, target['servers'], target['gitdeploys'], 0)
+            if not ok:
                 self.error_msg("error executing deployment")
                 return False
             self.add_msg("Deployment finished")
@@ -287,8 +296,9 @@ class DeployController(GenericDeployController):
 
         if not self.git_pull_gitdeploys():
             self.add_msg("Errors detected during git pull!")
+            return False, None
 
         self.current_step = self.total_steps
 
-        return True
+        return True, self.changed_gitdeploys.keys()
 
