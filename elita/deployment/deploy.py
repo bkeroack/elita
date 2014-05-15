@@ -130,7 +130,7 @@ class RollingDeployController(GenericDeployController):
                 # for subsequent batches we only pass the gitdeploys that we know have changes
                 if i == 0:
                     deploy_gds = b['gitdeploys']
-                else:
+                elif i == 1:
                     deploy_gds = changed_gds
                 elita.util.debugLog(self, "doing DeployController.run: deploy_gds: {}".format(deploy_gds))
                 ok, changed_gds = self.dc.run(application, build_name, b['servers'], deploy_gds, i, force=i > 0)
