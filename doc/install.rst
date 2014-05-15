@@ -17,10 +17,12 @@ Prerequisites
 Ubuntu
 ------
 
-Installing the prerequistes on an Ubuntu system::
+Installing the prerequistes on an Ubuntu system:
 
-    # apt-get update
-    # apt-get install mongodb rabbitmq-server python-pip python-dev libssl-dev swig git nginx
+.. sourcecode:: bash
+
+   # apt-get update
+   # apt-get install mongodb rabbitmq-server python-pip python-dev libssl-dev swig git nginx
 
 
 CentOS
@@ -38,10 +40,12 @@ Once that's finished you should be able to install via the instructions below.
 Installation (Linux/POSIX)
 --------------------------
 
-After you have all the prerequisites installed and running, do::
+After you have all the prerequisites installed and running, do:
 
-    # pip install elita
-    # elita_install
+.. sourcecode:: bash
+
+   # pip install elita
+   # elita_install
 
 The first step may take a little while. The script 'elita_install' will move
 configuration files into their proper places, create the service user/group, install the init.d script and start Elita.
@@ -50,9 +54,11 @@ configuration files into their proper places, create the service user/group, ins
 Testing your Installation
 -------------------------
 
-To test that your installation is working correctly, do::
+To test that your installation is working correctly, do:
 
-    $ curl -XGET 'http://localhost:2718/?pretty=true'
+.. sourcecode:: bash
+
+   $ curl -XGET 'http://localhost:2718/?pretty=true'
 
 Elita will listen on port 2718 on localhost only. By convention, external SSL-tunneled access is provided on port 2719.
 
@@ -64,20 +70,22 @@ verifying your installation before exposing it to the public internet.
 
 .. NOTE::
    The 'admin' user is not treated in any special way, it is just an ordinary user with permissions to access anything.
-   You can create an equivalent user (with any name) by giving it the following permissions object::
+   You can create an equivalent user (with any name) by giving it the following permissions object:
 
-       {
-          "apps": {
-             "*": "read/write",
-             "_global": "read/write"
-          },
-          "actions": {
-             "*": {
-                "*": "execute"
-             }
-          },
-          "servers": [ "*" ]
-       }
+.. sourcecode:: json
+
+   {
+      "apps": {
+         "*": "read/write",
+         "_global": "read/write"
+      },
+      "actions": {
+         "*": {
+            "*": "execute"
+         }
+      },
+      "servers": [ "*" ]
+   }
 
    Just be sure that if you change the permissions on 'admin' (or delete it) that you have a different user with full
    permissions, otherwise you could be locked out of your installation. You'll then have to manually hack in a new user

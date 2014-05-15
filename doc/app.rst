@@ -624,7 +624,7 @@ Execute Deployment
    the build. This gives you the most flexibility but is also the most verbose. It also does not allow for automatic rolling
    deployments.
 
-   A *group deployment* is one in which you specify only the *environment* and the *group(s)* to deploy to. Elita will
+   A *group deployment* is one in which you specify only the *environment(s)* and the *group(s)* to deploy to. Elita will
    calculate the servers and gitdeploys that satisfy both specifications and--if the relevant groups require it--
    will perform an automatic batched rolling deploy.
 
