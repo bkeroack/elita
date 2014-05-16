@@ -155,6 +155,9 @@ class RollingDeployController(GenericDeployController):
 
 class DeployController(GenericDeployController):
 
+    def add_to_changed_gitdeploys(self, gddoc):
+        self.changed_gitdeploys[gddoc['name']] = list(set(gddoc['servers']).intersection(set(self.servers)))
+
     def push_to_gitdeploy(self, gdm, gddoc):
         self.add_msg("Starting push to gitdeploy: {}".format(gddoc['name']))
         package = gddoc['package']
@@ -195,8 +198,14 @@ class DeployController(GenericDeployController):
                 res = gdm.push_repo()
                 elita.util.debugLog(self, "git push result: {}".format(str(res)))
                 # Changes detected, so add gitdeploy and the relevant servers that must be deployed to
-                self.changed_gitdeploys[gddoc['name']] = list(set(gddoc['servers']).intersection(set(self.servers)))
+                self.add_to_changed_gitdeploys(gddoc)
             gdm.update_repo_last_build(self.build_name)
+        # in the event that the gitrepo hasn't changed, but the gitdeploy indicates that we haven't successfully
+        # deployed to all servers, we want to force git pull
+        # this can happen if multiple gitdeploys share the same gitrepo
+        if gdm.stale:
+            if gddoc['name'] not in self.changed_gitdeploys:
+                self.add_to_changed_gitdeploys(gddoc)
         self.add_msg("Finished gitdeploy push")
 
     def salt_checkout_branch(self, gddoc):
@@ -283,11 +292,13 @@ class DeployController(GenericDeployController):
 
         self.current_step += 1
 
+        gdm_map = dict()
+
         for gd in self.gitdeploys:
             self.add_msg("Processing gitdeploy: {}".format(gd))
             gddoc = self.datasvc.gitsvc.GetGitDeploy(self.application, gd)
-            gdm = gitservice.GitDeployManager(gddoc, self.datasvc)
-            self.push_to_gitdeploy(gdm, gddoc)
+            gdm_map[gd] = gitservice.GitDeployManager(gddoc, self.datasvc)
+            self.push_to_gitdeploy(gdm_map[gd], gddoc)
             self.salt_checkout_branch(gddoc)
             # if this is part of a rolling deployment and is anything other than the first batch,
             # no gitdeploys will actually be "changed". Force says to do a pull on the servers anyway.
@@ -297,6 +308,10 @@ class DeployController(GenericDeployController):
         if not self.git_pull_gitdeploys():
             self.add_msg("Errors detected during git pull!")
             return False, None
+
+        #update deployed_build
+        for gdm in gdm_map:
+            gdm_map[gdm].update_last_deployed(self.build_name)
 
         self.current_step = self.total_steps
 

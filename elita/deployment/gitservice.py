@@ -315,6 +315,15 @@ class GitDeployManager:
             elita.util.debugLog(self, "WARNING: found gitrepo without last_build")
             self.last_build = None
 
+        self.deployed_build = gitdeploy['deployed_build']
+        self.stale = False
+
+    def update_stale(self):
+        self.gitdeploy = self.datasvc.gitsvc.GetGitDeploy(self.gitdeploy['application'], self.gitdeploy['name'])
+        self.last_build = self.gitdeploy['location']['gitrepo']['last_build']
+        self.deployed_build = self.gitdeploy['deployed_build']
+        self.stale = self.last_build != self.deployed_build
+
     def initialize(self, server_list):
         return {
             'prehook': self.run_init_prehook(server_list),
@@ -517,5 +526,11 @@ class GitDeployManager:
         gitrepo = self.datasvc.gitsvc.GetGitRepo(self.gitdeploy['application'], gitrepo_name)
         gitrepo['last_build'] = build_name
         self.datasvc.gitsvc.UpdateGitRepo(self.gitdeploy['application'], gitrepo_name, gitrepo)
+        self.update_stale()
+
+    def update_last_deployed(self, build_name):
+        self.datasvc.gitsvc.UpdateGitDeploy(self.gitdeploy['application'], self.gitdeploy['name'],
+                                            {'deployed_build': build_name})
+        self.update_stale()
 
 

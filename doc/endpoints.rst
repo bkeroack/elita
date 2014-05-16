@@ -62,7 +62,7 @@ The following parameters are available on all endpoints for all verbs:
 
 .. NOTE::
    Exactly one of auth_token or Auth-Token must be provided for every resource that requires authorization. Multiple auth_token
-   parameters/headers are considered errors and will result in authentication failure.
+   parameters and/or headers is considered an error and will result in authentication failure.
 
 * ``pretty``: Pretty-print JSON response? ("true", "false", "yes", "no")
 

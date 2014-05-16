@@ -977,6 +977,7 @@ class GitDeployView(GenericView):
                 'name': gddoc['name'],
                 'package': gddoc['package'],
                 'application': gddoc['application'],
+                'deployed_build': gddoc['deployed_build'],
                 'attributes': gddoc['attributes'],
                 'servers': gddoc['servers'] if 'servers' in gddoc else "(not found)",
                 'options': gddoc['options'],

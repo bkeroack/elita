@@ -21,8 +21,8 @@ Installing the prerequistes on an Ubuntu system:
 
 .. sourcecode:: bash
 
-   # apt-get update
-   # apt-get install mongodb rabbitmq-server python-pip python-dev libssl-dev swig git nginx
+   $ sudo apt-get update
+   $ sudo apt-get install mongodb rabbitmq-server python-pip python-dev libssl-dev swig git nginx
 
 
 CentOS
@@ -44,8 +44,8 @@ After you have all the prerequisites installed and running, do:
 
 .. sourcecode:: bash
 
-   # pip install elita
-   # elita_install
+   $ sudo pip install elita
+   $ sudo elita_install
 
 The first step may take a little while. The script 'elita_install' will move
 configuration files into their proper places, create the service user/group, install the init.d script and start Elita.
@@ -87,9 +87,9 @@ verifying your installation before exposing it to the public internet.
       "servers": [ "*" ]
    }
 
-   Just be sure that if you change the permissions on 'admin' (or delete it) that you have a different user with full
-   permissions, otherwise you could be locked out of your installation. You'll then have to manually hack in a new user
-   object into MongoDB, and into the root tree, which is not trivial.
+Just be sure that if you change the permissions on 'admin' (or delete it) that you have a different user with full
+permissions, otherwise you could be locked out of your installation. You'll then have to manually hack in a new user
+object into MongoDB, and into the root tree, which is not trivial.
 
 Configuration Files
 -------------------

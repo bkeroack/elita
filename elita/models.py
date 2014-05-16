@@ -442,6 +442,7 @@ class GitDataService(GenericChildDataService):
             'name': name,
             'application': app_name,
             'servers': list(),
+            'deployed_build': None,
             'options': {
                 'favor': 'ours',
                 'ignore-whitespace': 'true',
@@ -477,6 +478,7 @@ class GitDataService(GenericChildDataService):
             'servers': gd.servers,
             'package': gd.package,
             'attributes': gd.attributes,
+            'deployed_build': gd.deployed_build,
             'options': gd.options,
             'actions': gd.actions,
             'location': gd.location
@@ -912,6 +914,7 @@ class GitDeploy(GenericDataModel):
         'package': 'master',
         'servers': list(),
         'attributes': dict(),
+        'deployed_build': None,
         'options': {
             'favor': 'ours',
             'ignore-whitespace': 'true',
@@ -1106,22 +1109,17 @@ class RootTree(collections.MutableMapping):
         return self.doc is not None and self.doc['_class'] == 'ActionContainer'
 
     def __getitem__(self, key):
-        #util.debugLog(self, "__getitem__: key: {}".format(key))
         key = self.__keytransform__(key)
         if self.is_action():
-            #util.debugLog(self, "__getitem__: is_application: subtree: {}".format(self.tree[key]))
             return self.tree[key]
         if key in self.tree:
             if key == '_doc':
                 return self.tree[key]
             doc = self.db.dereference(self.tree[key]['_doc'])
             if doc is None:
-                #util.debugLog(self, "__getitem__: doc is none")
                 raise KeyError
-            #util.debugLog(self, "__getitem__: returning subtree")
             return RootTree(self.db, self.updater, self.tree[key], doc)
         else:
-            #util.debugLog(self, "__getitem__: key not found in tree ")
             raise KeyError
 
     def __setitem__(self, key, value):
@@ -1161,8 +1159,6 @@ class RootTreeUpdater:
                         del self.tree['app'][a]['actions'][action]
 
     def update(self):
-        #pp = pprint.PrettyPrinter(indent=4)
-        #util.debugLog(self, "self.tree: {}".format(pp.pformat(self.tree)))
         self.clean_actions()
         root_tree = self.db['root_tree'].find_one()
         self.db['root_tree'].update({"_id": root_tree['_id']}, self.tree)
@@ -1515,6 +1511,14 @@ class DataValidator:
                 util.debugLog(self, "WARNING: duplicate server entries found in gitdeploy {}; fixing".format(d['_id']))
                 d['servers'] = list(set(tuple(d['servers'])))
                 fix = True
+            if 'deployed_build' not in d:
+                util.debugLog(self, "WARNING: deployed_build not found in gitdeploy {}".format(d['_id']))
+                gr_doc = self.db.dereference(d['location']['gitrepo'])
+                if not gr_doc or 'last_build' not in gr_doc:
+                    util.debugLog(self, "...ERROR: referenced gitrepo not found! Aborting fix...")
+                else:
+                    d['deployed_build'] = gr_doc['last_build']
+                    fix = True
             if fix:
                 fixlist.append(d)
         for f in fixlist:
