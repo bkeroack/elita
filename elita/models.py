@@ -249,17 +249,20 @@ class ApplicationDataService(GenericChildDataService):
             census[e] = dict()
             for g in groups:
                 g_servers = self.parent.groupsvc.GetGroupServers(app_name, g, environments=[e])
+                census[e][g] = dict()
                 for s in g_servers:
-                    census[e][s] = dict()
+                    census[e][g][s] = dict()
                     group_doc = self.parent.groupsvc.GetGroup(app_name, g)
                     for gd in group_doc['gitdeploys']:
                         gd_doc = self.parent.gitsvc.GetGitDeploy(app_name, gd)
-                        census[e][s][gd] = {
+                        census[e][g][s][gd] = {
                             "committed": gd_doc['location']['gitrepo']['last_build'],
                             "deployed": gd_doc['deployed_build']
                         }
-                    if len(census[e][s]) == 0:
-                        del census[e][s]
+                    if len(census[e][g][s]) == 0:
+                        del census[e][g][s]
+                if len(census[e][g]) == 0:
+                    del census[e][g]
             if len(census[e]) == 0:
                 del census[e]
         return census
