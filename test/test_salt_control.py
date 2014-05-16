@@ -3,7 +3,7 @@ __author__ = 'bkeroack'
 import unittest2
 import tempfile
 import yaml
-import daft.salt_control
+import elita.deployment.salt_control
 import shutil
 import pprint
 
@@ -67,8 +67,8 @@ class SaltControllerTests(unittest2.TestCase):
         with open(self.tempfile_config, 'w+') as f:
             f.write(yaml.dump(self.saltsettings))
         self.settings = {
-            'daft.salt.config': "{}/master".format(self.dtemp),
-            'daft.salt.dir': self.dtemp
+            'elita.salt.config': "{}/master".format(self.dtemp),
+            'elita.salt.dir': self.dtemp
         }
 
     def tearDown(self):
@@ -106,7 +106,7 @@ class SaltControllerTests(unittest2.TestCase):
                 'default_branch': 'mydefaultbranch'
             }
         }
-        sc = daft.salt_control.SaltController(self.settings)
+        sc = elita.deployment.salt_control.SaltController(self.settings)
         sc.add_gitdeploy_to_yaml(gitdeploy)
         with open(self.tempfile, 'r') as f:
             content = yaml.load(f)

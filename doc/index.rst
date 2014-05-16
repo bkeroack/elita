@@ -12,6 +12,8 @@ Contents:
    :maxdepth: 2
 
    intro.rst
+   install.rst
+   quickstart.rst
    gitdeploy.rst
    endpoints.rst
    urlmap.rst

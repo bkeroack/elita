@@ -1,0 +1,9 @@
+#!/bin/bash
+
+LOG_DIR="/var/log/elita"
+SYNC_LOG="${LOG_DIR}/elita.log"
+ASYNC_LOG="${LOG_DIR}/elita-celery-worker.log"
+HOME_DIR="/var/run/elita"
+INI_FILE="/etc/elita/elita.ini"
+
+ASYNC_WORKERS=10

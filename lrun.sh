@@ -1,4 +1,4 @@
 #!/bin/bash
 
 #python ./setup.py develop
-~/.virtualenvs/daft/bin/pserve ./development.ini
+/Users/bkeroack/.virtualenvs/daft/bin/pserve ./development.ini

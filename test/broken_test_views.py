@@ -4,7 +4,7 @@ __author__ = 'bkeroack'
 # import json
 # from pyramid import testing
 #
-# from daft import views, models
+# from elita import views, models
 #
 #
 # class DataModel:

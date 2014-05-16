@@ -25,13 +25,13 @@ View Servers
 
    **Example request**:
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XGET '/server'
 
    **Example response**
 
-   .. sourcecode:: http
+   .. sourcecode:: json
 
       {
             "servers": [
@@ -52,13 +52,13 @@ View Server Detail
 
    **Example request**:
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XGET '/server/server0'
 
    **Example response**
 
-   .. sourcecode:: http
+   .. sourcecode:: json
 
       {
             "created_datetime": "2014-01-27 20:23:58+00:00",
@@ -72,13 +72,52 @@ View Server Detail
 Create Server
 ^^^^^^^^^^^^^
 
-Modify Server
+.. http:put::   /server
+
+   :param name: server name (salt minion name)
+   :type name: string
+   :param environment: environment name
+   :type environment: string
+   :param existing: does server exist (currently unused)
+   :type existing: boolean ("true"/"false")
+
+   Create a server object.
+
+   .. ATTENTION::
+      Elita assumes that any server can be accessed via salt by name. For example, if you create a server object 'web01',
+      you should be able to issue the following command successfully from the machine running Elita:
+      .. sourcecode:: bash
+
+         $ salt 'web01' test.ping
+
+   **Example request**:
+
+   .. sourcecode:: bash
+
+      $ curl -XPUT '/server?name=web01&environment=production&existing=true'
+
+Delete Server
 ^^^^^^^^^^^^^
+
+.. http:delete::   /server/(string: server_name)
+
+   Remove a server object. This does not remove the server from Salt.
+
+   **Example request**:
+
+   .. sourcecode:: bash
+
+      $ curl -XDELETE '/server/web01'
+
 
 Environments
 ------------
 
 Environments are created using an attribute specified on the server object, used to logically group servers.
+
+.. NOTE::
+   Elita environments are entirely independent from Salt environments. They are calculated from the "environment"
+   field on all available server objects.
 
 View Available Environments
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -90,13 +129,13 @@ View Available Environments
 
    **Example request**:
 
-   .. sourcecode:: http
+   .. sourcecode:: bash
 
       $ curl -XGET '/server/environments'
 
    **Example response**
 
-   .. sourcecode:: http
+   .. sourcecode:: json
 
       {
             "environments": {
