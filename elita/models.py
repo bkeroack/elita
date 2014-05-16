@@ -450,22 +450,16 @@ class ServerDataService(GenericChildDataService):
     def GetEnvironments(self):
         environments = dict()
         srvs = self.GetServers()
-        print(srvs)
         for s in srvs:
             server = [d for d in self.db['servers'].find({'name': s})]
-            print("server: {}".format(server))
-            print("s: {}".format(s))
             if len(server) > 1:
                 util.debugLog(self, "(Server->)GetEnvironments: more than one doc found for server {}".format(s))
             doc = server[0]
-            print("doc: {}".format(doc))
             env = doc['environment']
-            print("env: {}".format(env))
             if env in environments:
                 environments[env].update([s])
             else:
                 environments[env] = {s}
-        print("environments: {}".format(environments))
         return {k: list(environments[k]) for k in environments}
 
 

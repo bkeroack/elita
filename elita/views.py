@@ -1202,7 +1202,6 @@ class GroupView(GenericView):
             if ('environments' in self.req.params and len(self.req.params['environments']) > 0) else None
         if environments:
             existing_groups = self.datasvc.serversvc.GetEnvironments()
-            print(existing_groups)
             if not self.check_against_existing(existing_groups, environments):
                 return self.Error(400, "unknown environments: {}".format(self.get_unknown(existing_groups, environments)))
         return {
