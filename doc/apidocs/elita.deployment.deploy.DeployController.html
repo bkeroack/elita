@@ -10,7 +10,7 @@
     
   </head>
   <body>
-    <h1 class="class">e.d.d.DeployController : class documentation</h1>
+    <h1 class="class">e.d.d.DeployController(<a href="elita.deployment.deploy.GenericDeployController.html">GenericDeployController</a>) : class documentation</h1>
     <p>
       <span id="part">Part of <a href="elita.html">elita</a>.<a href="elita.deployment.html">deployment</a>.<a href="elita.deployment.deploy.html">deploy</a></span>
       
@@ -25,32 +25,14 @@
 
     
     <div id="splitTables">
-      <table class="children sortable" id="id20">
+      <table class="children sortable" id="id23">
   
   
   <tr class="method">
     
     
     <td>Method</td>
-    <td><a href="elita.deployment.deploy.DeployController.html#__init__">__init__</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
-  </tr><tr class="method">
-    
-    
-    <td>Method</td>
-    <td><a href="elita.deployment.deploy.DeployController.html#add_msg">add_msg</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
-  </tr><tr class="method">
-    
-    
-    <td>Method</td>
-    <td><a href="elita.deployment.deploy.DeployController.html#error_msg">error_msg</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
-  </tr><tr class="method">
-    
-    
-    <td>Method</td>
-    <td><a href="elita.deployment.deploy.DeployController.html#done_msg">done_msg</a></td>
+    <td><a href="elita.deployment.deploy.DeployController.html#add_to_changed_gitdeploys">add_to_changed_gitdeploys</a></td>
     <td><span class="undocumented">Undocumented</span></td>
   </tr><tr class="method">
     
@@ -68,7 +50,20 @@
     
     
     <td>Method</td>
-    <td><a href="elita.deployment.deploy.DeployController.html#salt_highstate_server">salt_highstate_server</a></td>
+    <td><a href="elita.deployment.deploy.DeployController.html#pull_callback">pull_callback</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.deploy.DeployController.html#get_gitdeploy_servers">get_gitdeploy_servers</a></td>
+    <td><span>Filter self.servers to find only those with gitdeploy initialized on 
+them</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.deploy.DeployController.html#git_pull_gitdeploys">git_pull_gitdeploys</a></td>
     <td><span class="undocumented">Undocumented</span></td>
   </tr><tr class="method">
     
@@ -76,98 +71,51 @@
     <td>Method</td>
     <td><a href="elita.deployment.deploy.DeployController.html#run">run</a></td>
     <td><span class="undocumented">No summary</span></td>
-  </tr><tr class="method private">
+  </tr>
+</table>
+      <invisible>
+        <p>
+          Inherited from <a href="elita.deployment.deploy.GenericDeployController.html">GenericDeployController</a>:
+        </p>
+        <table class="children sortable" id="id24">
+  
+  
+  <tr class="basemethod">
     
     
     <td>Method</td>
-    <td><a href="elita.deployment.deploy.DeployController.html#_push_msg">_push_msg</a></td>
+    <td><a href="elita.deployment.deploy.GenericDeployController.html#__init__">__init__</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.deploy.GenericDeployController.html#add_msg">add_msg</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.deploy.GenericDeployController.html#error_msg">error_msg</a></td>
     <td><span class="undocumented">Undocumented</span></td>
   </tr>
 </table>
-      
+      </invisible>
     </div>
     
     
 
     <div class="function">
-  <a name="elita.deployment.deploy.DeployController.__init__">
+  <a name="elita.deployment.deploy.DeployController.add_to_changed_gitdeploys">
     
   </a>
-  <a name="__init__">
-    
-  </a>
-  <div class="functionHeader">
-    
-    def
-    __init__(self, datasvc, remote_controller):
-    
-  </div>
-  <div class="docstring functionBody">
-    
-    <div class="undocumented">Undocumented</div>
-  </div>
-</div><div class="function">
-  <a name="elita.deployment.deploy.DeployController._push_msg">
-    
-  </a>
-  <a name="_push_msg">
+  <a name="add_to_changed_gitdeploys">
     
   </a>
   <div class="functionHeader">
     
     def
-    _push_msg(self, status, msg):
-    
-  </div>
-  <div class="docstring functionBody">
-    
-    <div class="undocumented">Undocumented</div>
-  </div>
-</div><div class="function">
-  <a name="elita.deployment.deploy.DeployController.add_msg">
-    
-  </a>
-  <a name="add_msg">
-    
-  </a>
-  <div class="functionHeader">
-    
-    def
-    add_msg(self, desc, data):
-    
-  </div>
-  <div class="docstring functionBody">
-    
-    <div class="undocumented">Undocumented</div>
-  </div>
-</div><div class="function">
-  <a name="elita.deployment.deploy.DeployController.error_msg">
-    
-  </a>
-  <a name="error_msg">
-    
-  </a>
-  <div class="functionHeader">
-    
-    def
-    error_msg(self, desc, data):
-    
-  </div>
-  <div class="docstring functionBody">
-    
-    <div class="undocumented">Undocumented</div>
-  </div>
-</div><div class="function">
-  <a name="elita.deployment.deploy.DeployController.done_msg">
-    
-  </a>
-  <a name="done_msg">
-    
-  </a>
-  <div class="functionHeader">
-    
-    def
-    done_msg(self, msg):
+    add_to_changed_gitdeploys(self, gddoc):
     
   </div>
   <div class="docstring functionBody">
@@ -184,7 +132,7 @@
   <div class="functionHeader">
     
     def
-    push_to_gitdeploy(self, gddoc):
+    push_to_gitdeploy(self, gdm, gddoc):
     
   </div>
   <div class="docstring functionBody">
@@ -209,16 +157,51 @@
     <div class="undocumented">Undocumented</div>
   </div>
 </div><div class="function">
-  <a name="elita.deployment.deploy.DeployController.salt_highstate_server">
+  <a name="elita.deployment.deploy.DeployController.pull_callback">
     
   </a>
-  <a name="salt_highstate_server">
+  <a name="pull_callback">
     
   </a>
   <div class="functionHeader">
     
     def
-    salt_highstate_server(self):
+    pull_callback(self, results, tag):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.deploy.DeployController.get_gitdeploy_servers">
+    
+  </a>
+  <a name="get_gitdeploy_servers">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    get_gitdeploy_servers(self, gddoc):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Filter self.servers to find only those with gitdeploy initialized on 
+them</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.deploy.DeployController.git_pull_gitdeploys">
+    
+  </a>
+  <a name="git_pull_gitdeploys">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    git_pull_gitdeploys(self):
     
   </div>
   <div class="docstring functionBody">
@@ -235,7 +218,7 @@
   <div class="functionHeader">
     
     def
-    run(self, app_name, build_name, servers, gitdeploys):
+    run(self, app_name, build_name, servers, gitdeploys, batch_number, force=False):
     
   </div>
   <div class="docstring functionBody">
@@ -247,14 +230,15 @@
     desired build to gitdeploys
   </li>
   <li>
-    Issue salt highstate a. Iterate over server_specs, issue highstate call
-    for each
+    Determine which gitdeploys have changes (if any) a. Build a mapping of 
+    gitdeploys_with_changes -&gt; [ servers_to_deploy_it_to ] b. Perform 
+    the state calls
   </li>
 </ol><table class="fieldTable"></table></div>
   </div>
 </div>
     <address>
-      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-04-22 12:17:03.
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-05-15 18:24:09.
     </address>
   </body>
 </html>
