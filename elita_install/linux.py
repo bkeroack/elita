@@ -92,9 +92,17 @@ def setup_nginx():
 def create_salt_dirs():
     mk_dir('/srv')
     mk_dir('/srv/salt')
+    mk_dir('/srv/salt/elita')
+    mk_dir('/srv/salt/elita/files')
+    mk_dir('/srv/salt/elita/win')
+    mk_dir('/srv/salt/elita/linux')
     mk_dir('/srv/pillar')
     chown("elita:elita", "/srv/pillar", R=True)
     chown("elita:elita", "/srv/salt", R=True)
+
+def copy_salt_files():
+    git_setup_location = os.path.join(get_root_dir(), "util", "git_wrapper_setup.ps1")
+    cp_file_checkperms(git_setup_location, '/srv/salt/elita/files/win/git_wrapper_setup.ps1')
 
 def create_data_dirs():
     mk_dir(ELITA_DATADIR)
@@ -148,6 +156,8 @@ def InstallUbuntu():
     do_step("Making init.d script executable", chmod_ax_initd)
 
     do_step("Creating salt base dirs if necessary", create_salt_dirs)
+
+    do_step("Copying salt distributed files", copy_salt_files)
 
     do_step("Adding elita to salt client_acl", add_salt_client_acl)
 
