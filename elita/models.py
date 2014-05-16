@@ -228,6 +228,41 @@ class ApplicationDataService(GenericChildDataService):
     def DeleteApplication(self, app_name):
         self.parent.DeleteObject(self.root['app'], app_name, 'applications')
 
+    def GetApplicationCensus(self, app_name):
+        '''
+        Generates a census of all environments, groups, servers and builds deployed:
+        {
+          "env_name": {
+            "group_name": {
+                "server_name": {
+                    "gitdeploy_name": {
+                        "committed": "build_name",
+                        "deployed": "build_name"
+                }
+            }
+        }
+        '''
+        groups = self.parent.groupsvc.GetGroups(app_name)
+        envs = self.parent.serversvc.GetEnvironments()
+        census = dict()
+        for e in envs:
+            census[e] = dict()
+            for g in groups:
+                g_servers = self.parent.groupsvc.GetGroupServers(app_name, g, environments=[e])
+                for s in g_servers:
+                    census[e][s] = dict()
+                    group_doc = self.parent.groupsvc.GetGroup(app_name, g)
+                    for gd in group_doc['gitdeploys']:
+                        gd_doc = self.parent.gitsvc.GetGitDeploy(app_name, gd)
+                        census[e][s][gd] = {
+                            "committed": gd_doc['location']['gitrepo']['last_build'],
+                            "deployed": gd_doc['deployed_build']
+                        }
+                    if len(census[e][s]) == 0:
+                        del census[e][s]
+            if len(census[e]) == 0:
+                del census[e]
+        return census
 
 class GroupDataService(GenericChildDataService):
     def GetGroups(self, app):

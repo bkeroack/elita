@@ -267,9 +267,12 @@ class ApplicationView(GenericView):
         self.set_params({"GET": [], "PUT": [], "POST": ["app_name"], "DELETE": []})
 
     def GET(self):
-        return {"application": self.context.app_name,
-                "created": self.get_created_datetime_text(),
-                self.context.app_name: self.datasvc.GetAppKeys(self.context.app_name)}
+        return {
+            "application": self.context.app_name,
+            "created": self.get_created_datetime_text(),
+            self.context.app_name: self.datasvc.GetAppKeys(self.context.app_name),
+            "census": self.datasvc.appsvc.GetApplicationCensus(self.context.app_name)
+        }
 
     def PATCH(self):
         pass

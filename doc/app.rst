@@ -22,6 +22,46 @@ View Applications
 
       $ curl -XGET '/app'
 
+
+View Application
+^^^^^^^^^^^^^^^^
+
+.. http:get::   /app/(string: app_name)
+
+   Returns detail about the application including creation datetime, child resources available and a census of
+   environments/groups/servers/gitdeploys and the builds deployed to them.
+
+   The format of census is as follows:
+
+   .. sourcecode:: json
+
+      {
+        "ENVIRONMENT_NAME": {
+            "GROUP_NAME": {
+                "SERVER_NAME": {
+                    "GITDEPLOY_NAME": {
+                        "committed": "BUILD_NAME",
+                        "deployed": "BUILD_NAME"
+                    }
+                }
+            }
+        }
+      }
+
+   The difference between *committed* and *deployed* occurs when different gitdeploys share a common gitrepo. If
+   gitdeployA and gitdeployB share a common gitrepoFoo, after FooBuild is deployed to gitdeployA (or any groups that
+   contain gitdeployA), FooBuild will be shown as committed and deployed to gitdeployA. However it will be only shown
+   as *committed* to gitdeployB (because it shares gitrepoFoo), while not deployed yet (the *deployed* field will still
+   show the previous build). This can also happen with failed rolling deployments when only a fraction of the servers
+   in a group are successfully deployed to.
+
+   **Example request**:
+
+   .. sourcecode:: bash
+
+      $ curl -XGET '/app/widgetmaker'
+
+
 Create Application
 ^^^^^^^^^^^^^^^^^^
 
