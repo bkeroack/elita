@@ -1,3 +1,5 @@
+.. _elita-install:
+
 Installation
 ============
 
