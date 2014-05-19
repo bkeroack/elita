@@ -101,12 +101,13 @@ Just be sure that if you change the permissions on 'admin' (or delete it) that y
 permissions, otherwise you could be locked out of your installation. You'll then have to manually hack in a new user
 object into MongoDB, and into the root tree, which is not trivial.
 
-Configuration Files
--------------------
+Installed Files
+---------------
 
 =======================  ==================================================================
 File                     Purpose
 =======================  ==================================================================
+/etc/init.d/elita        Start/stop script
 /etc/elita/elita.ini     Pyramid/WSGI and general configuration (MongoDB host, data paths)
 /etc/default/elita       Startup options (logs, number of workers, PID files)
 /etc/logrotate.d/elita   (optional) Logrotate script
