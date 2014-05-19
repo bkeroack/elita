@@ -11,7 +11,7 @@ the machines.
 Motivation
 ----------
 
-When confronted with the task of getting a web application from a CI server to production servers--and doing so in an
+When faced with the task of getting a web application from a CI server to production servers--and doing so in an
 automated and repeatable way--instead of writing YASDS (Yet Another Set of Deployment Scripts) I decided to try to
 design a general framework that would only have to be written once. If the deployment methodology or server
 layout changed it wouldn't have to be thrown out but could be reconfigured or modified instead.
@@ -24,7 +24,7 @@ custom actions triggered by REST endpoints.
 
 Elita can be thought of as
 middleware between a continuous integration server (Jenkins, Teamcity, Bamboo) and the infrastructure that
-actually runs the code (production and QA/staging servers, supporting machines, etc.). Elita allows programmatic code
+runs the code (production and QA/staging servers, supporting machines, etc.). Elita allows programmatic code
 deployment, build (re-)packaging and custom actions triggered by REST endpoints.
 
 
@@ -41,7 +41,6 @@ executed asynchronously in a Celery worker.
 The backend uses `salt <http://www.saltstack.org>`_ for remote execution and an external git provider (BitBucket) for
 deployment.
 
-.. contents:: Contents
 
 Design Goals
 ------------
