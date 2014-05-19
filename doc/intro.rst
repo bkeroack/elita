@@ -50,13 +50,13 @@ Design Goals
 * UI independent
 
 Flexibility
------------
+^^^^^^^^^^^
 
 Elita exposes hook points and has a "named action" object type which allows plugins to implement custom
 routines and code.
 
 Security
---------
+^^^^^^^^
 
 Elita has a granular permissions system which can be used to whitelist/blacklist resources on a per-user and
 per-application basis.
@@ -66,18 +66,18 @@ per-application basis.
    to port 2718 on localhost only.
 
 Application Agnosticism
------------------------
+^^^^^^^^^^^^^^^^^^^^^^^
 
 API functionality is generic and useful for all application types.
 
 UI independence
----------------
+^^^^^^^^^^^^^^^
 
 No UI is required. All functionality can be accessed via REST endpoints. Endpoints and JSON output are intended to be
 automation-friendly to facilitate UI development.
 
 salt Interaction
-----------------
+^^^^^^^^^^^^^^^^
 
 Elita uses salt as the remote execution backend but tries hard not to interfere with any existing salt configuration
 or states that might be present (for example, it will not interfere with your existing highstates). All

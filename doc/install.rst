@@ -8,6 +8,7 @@ Prerequisites
 -------------
 
 * Python 2.7+ (not tested on 3.x)
+* salt
 * MongoDB
 * RabbitMQ (for Celery)
 * SWIG (for crypto-related dependencies)
@@ -16,10 +17,17 @@ Prerequisites
 * nginx (for external access)
 
 
+Salt
+----
+
+Due to technical constraints in salt, you *must* install Elita on the same machine running salt-master. The salt
+system should be installed and running with your managed servers (minions) accessible to salt commands.
+
+
 Ubuntu
 ------
 
-Installing the prerequistes on an Ubuntu system:
+Installing the non-salt prerequistes on an Ubuntu system:
 
 .. sourcecode:: bash
 
