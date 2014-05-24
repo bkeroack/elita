@@ -232,7 +232,7 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
 
     #until salt Helium is released, we can only execute an SLS *file* as opposed to a single module call
     sls_map = {sc.get_gitdeploy_entry_name(application, gd_name): servers}
-    if len(sls_map) == 0:
+    if len(servers) == 0:
         datasvc.jobsvc.NewJobData({"DeployServers": {gd_name: "no servers"}})
         return True
 
@@ -287,111 +287,6 @@ class DeployController:
     def __init__(self, datasvc):
         self.datasvc = datasvc
         self.changed_gitdeploys = dict()
-
-    # def add_to_changed_gitdeploys(self, gddoc):
-    #     self.changed_gitdeploys[gddoc['name']] = list(set(gddoc['servers']).intersection(set(self.servers)))
-    #
-    # def push_to_gitdeploy(self, gdm, gddoc):
-    #     self.add_msg("Starting push to gitdeploy: {}".format(gddoc['name']))
-    #     package = gddoc['package']
-    #     package_doc = self.build_doc['packages'][package]
-    #     self.current_step += 1
-    #     #self.add_msg("Checking out default git branch")
-    #     res = gdm.checkout_default_branch()
-    #     elita.util.debugLog(self, "git checkout output: {}".format(str(res)))
-    #     self.current_step += 1
-    #     if gdm.last_build == self.build_name:
-    #         self.add_msg("Build already committed to local gitrepo; skipping package decompression")
-    #         self.current_step += 5
-    #     else:
-    #         self.add_msg("Decompressing package to master gitdeploy repo")
-    #         gdm.decompress_to_repo(package_doc)
-    #         self.current_step += 1
-    #         elita.util.debugLog(self, "Checking for changes")
-    #         res = gdm.check_repo_status()
-    #         elita.util.debugLog(self, "git status results: {}".format(str(res)))
-    #
-    #         if "nothing to commit" in res:
-    #             self.current_step += 4
-    #             self.add_msg("No changes to commit/push")
-    #         else:
-    #             self.current_step += 1
-    #             self.add_msg("Adding changed files to commit")
-    #             res = gdm.add_files_to_repo()
-    #             elita.util.debugLog(self, "git add result: {}".format(str(res)))
-    #             self.current_step += 1
-    #             self.add_msg("Committing changes")
-    #             res = gdm.commit_to_repo(self.build_name)
-    #             elita.util.debugLog(self, "git commit result: {}".format(str(res)))
-    #             self.current_step += 1
-    #             res = gdm.inspect_latest_diff()
-    #             elita.util.debugLog(self, "inspect diff result: {}".format(str(res)))
-    #             self.current_step += 1
-    #             self.add_msg("Pushing changes to git provider")
-    #             res = gdm.push_repo()
-    #             elita.util.debugLog(self, "git push result: {}".format(str(res)))
-    #             # Changes detected, so add gitdeploy and the relevant servers that must be deployed to
-    #             self.add_to_changed_gitdeploys(gddoc)
-    #         gdm.update_repo_last_build(self.build_name)
-    #     # in the event that the gitrepo hasn't changed, but the gitdeploy indicates that we haven't successfully
-    #     # deployed to all servers, we want to force git pull
-    #     # this can happen if multiple gitdeploys share the same gitrepo
-    #     if gdm.stale:
-    #         if gddoc['name'] not in self.changed_gitdeploys:
-    #             self.add_to_changed_gitdeploys(gddoc)
-    #     self.add_msg("Finished gitdeploy push")
-
-    # def pull_callback(self, results, tag):
-    #     self.add_msg("pull target: {} result: {}".format(tag, results))
-    #
-    # def get_gitdeploy_servers(self, gddoc):
-    #     '''
-    #     Filter self.servers to find only those with gitdeploy initialized on them
-    #     '''
-    #     return list(set(gddoc['servers']).intersection(set(self.servers)))
-    #
-    #
-    # def git_pull_gitdeploys(self):
-    #     #until salt Helium is released, we can only execute an SLS *file* as opposed to a single module call
-    #     sls_map = {self.sc.get_gitdeploy_entry_name(self.application, gd): self.changed_gitdeploys[gd]
-    #                for gd in self.changed_gitdeploys}
-    #     if len(sls_map) == 0:
-    #         self.add_msg("No servers to deploy to!")
-    #         self.current_step += 2
-    #         return True
-    #     self.current_step += 1
-    #     self.add_msg("Executing states and git pull: {}".format(self.servers))
-    #     elita.util.debugLog(self, "git_pull_gitdeploys: sls_map: {}".format(sls_map))
-    #     res = self.rc.run_slses_async(self.pull_callback, sls_map)
-    #     elita.util.debugLog(self, "git_pull_gitdeploys: results: {}".format(res))
-    #     errors = dict()
-    #     successes = dict()
-    #     for r in res:
-    #         for host in r:
-    #             for cmd in r[host]:
-    #                 if "gitdeploy" in cmd:
-    #                     if "result" in r[host][cmd]:
-    #                         if not r[host][cmd]["result"]:
-    #                             errors[host] = r[host][cmd]["changes"] if "changes" in r[host][cmd] else r[host][cmd]
-    #                         else:
-    #                             if host not in successes:
-    #                                 successes[host] = dict()
-    #                             module, state, command, subcommand = str(cmd).split('|')
-    #                             if state not in successes[host]:
-    #                                 successes[host][state] = dict()
-    #                             successes[host][state][command] = {
-    #                                 "stdout": r[host][cmd]["changes"]["stdout"],
-    #                                 "stderr": r[host][cmd]["changes"]["stderr"],
-    #                                 "retcode": r[host][cmd]["changes"]["retcode"],
-    #                             }
-    #     if len(errors) > 0:
-    #         elita.util.debugLog(self, "SLS error servers: {}".format(errors.keys()))
-    #         elita.util.debugLog(self, "SLS error responses: {}".format(errors))
-    #         self.error_msg("Errors detected in sls execution on servers: {}".format(errors.keys()))
-    #     elif len(successes) > 0:
-    #         self.add_msg("Successful git pull and state execution")
-    #     self.current_step += 1
-    #     return len(errors) == 0
 
     def run(self, app_name, build_name, servers, gitdeploys, force=False):
         '''
