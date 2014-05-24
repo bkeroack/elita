@@ -12,6 +12,9 @@ import elita.actions.action
 
 #async callable
 def run_deploy(datasvc, application, build_name, target, rolling_divisor, rolling_pause, deployment):
+    '''
+    Asynchronous entry point for deployments
+    '''
 
     # normally there's a higher level try/except block for all async actions
     # we want to make sure the error is saved in the deployment object as well, not just the job
@@ -40,7 +43,10 @@ def run_deploy(datasvc, application, build_name, target, rolling_divisor, rollin
 
 
 class RollingDeployController:
-    '''Break deployment up into server/gitdeploy batches, then invoke DeployController with them'''
+    '''
+    Break deployment up into server/gitdeploy batches, then invoke DeployController with each batch sequentially
+    '''
+
     def __init__(self, datasvc):
         self.datasvc = datasvc
 
@@ -48,6 +54,12 @@ class RollingDeployController:
         return list(set(all_groups) - set(rolling_groups))
 
     def compute_batches(self, application, target, rolling_groups, rolling_divisor):
+        '''
+        Given a list of application groups that require rolling deployment and an (optional) list that do not,
+        compute the optimal batches of server/gitdeploy pairs. All non-rolling groups are added to the first batch.
+        Splitting algorithm is tolerant of outrageously large rolling_divisors.
+        '''
+
         non_rolling_groups = self.get_nonrolling_groups(rolling_groups, target['groups'])
         non_rolling_group_docs = {g: self.datasvc.groupsvc.GetGroup(application, g) for g in non_rolling_groups}
         rolling_group_docs = {g: self.datasvc.groupsvc.GetGroup(application, g) for g in rolling_groups}
@@ -86,6 +98,9 @@ class RollingDeployController:
         return batches
 
     def run(self, application, build_name, target, rolling_divisor, rolling_pause):
+        '''
+        Run rolling deployment. This should be called iff the deployment is called via groups/environments
+        '''
 
         dc = DeployController(self.datasvc)
 
@@ -283,6 +298,10 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
 
 
 class DeployController:
+    '''
+    Class that runs deploys. Only knows about server/gitdeploy pairs, so is used for both manual-style deployments
+    and group/environment deployments.
+    '''
 
     def __init__(self, datasvc):
         self.datasvc = datasvc
@@ -291,11 +310,10 @@ class DeployController:
     def run(self, app_name, build_name, servers, gitdeploys, force=False):
         '''
         1. Decompress build to gitdeploy dir and push
-            a. Iterate over server_specs to build list of gitdeploys to push to (make sure no dupes)
-            b. Push desired build to gitdeploys
+            a. Attempts to optimize by determining if build has already been decompressed to gitdeploy and skips if so
         2. Determine which gitdeploys have changes (if any)
             a. Build a mapping of gitdeploys_with_changes -> [ servers_to_deploy_it_to ]
-            b. Perform the state calls
+            b. Perform the state calls only to the server/gitdeploy pairs that have changes
         '''
         build_doc = self.datasvc.buildsvc.GetBuildDoc(app_name, build_name)
         gitdeploy_docs = dict()
