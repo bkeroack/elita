@@ -5,7 +5,8 @@ import random
 import string
 
 def debugLog(self, msg):
-    views.logger.debug("{}: {}".format(self.__class__.__name__, msg))
+    views.logger.debug("{}: {}".format(self.__class__.__name__ if self.__class__.__name__ != 'str'
+    or self.__class__.__name__ != 'function' else self, msg))
 
 def change_dict_keys(obj, char, rep):
     '''Recursively replaces char in nested dict keys with rep'''
