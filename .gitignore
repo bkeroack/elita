@@ -8,3 +8,4 @@ elita.egg-info/
 doc/_build
 celerybeat-schedule*
 atlassian-ide-plugin.xml
+**/.vagrant
