@@ -1,6 +1,7 @@
 __author__ = 'bkeroack'
 
 import sys
+import logging
 import traceback
 import time
 import multiprocessing
@@ -21,11 +22,11 @@ def run_deploy(datasvc, application, build_name, target, rolling_divisor, rollin
     # so we duplicate the functionality here
     try:
         if target['groups']:
-            elita.util.debugLog(run_deploy, "Doing rolling deployment")
+            logging.debug("run_deploy: Doing rolling deployment")
             rdc = RollingDeployController(datasvc)
             ret = rdc.run(application, build_name, target, rolling_divisor, rolling_pause)
         else:
-            elita.util.debugLog(run_deploy, "Doing manual deployment")
+            logging.debug("run_deploy: Doing manual deployment")
             dc = DeployController(datasvc)
             ret, data = dc.run(application, build_name, target['servers'], target['gitdeploys'])
     except:
@@ -35,7 +36,7 @@ def run_deploy(datasvc, application, build_name, target, rolling_divisor, rollin
             "error": "unhandled exception during callable!",
             "exception": f_exc
         }
-        elita.util.debugLog(run_deploy, "EXCEPTION: {}".format(f_exc))
+        logging.debug("run_deploy: EXCEPTION: {}".format(f_exc))
         datasvc.deploysvc.UpdateDeployment(application, deployment, {"status": "error"})
         return {"deploy_status": "error", "details": results}
     datasvc.deploysvc.UpdateDeployment(application, deployment, {"status": "complete" if ret else "error"})
@@ -46,9 +47,11 @@ class RollingDeployController:
     '''
     Break deployment up into server/gitdeploy batches, then invoke DeployController with each batch sequentially
     '''
+    __metaclass__ = elita.util.LoggingMetaClass
 
-    def __init__(self, datasvc):
+    def __init__(self, datasvc, deploy_controller):
         self.datasvc = datasvc
+        self.dc = deploy_controller
 
     def get_nonrolling_groups(self, rolling_groups, all_groups):
         return list(set(all_groups) - set(rolling_groups))
@@ -102,8 +105,6 @@ class RollingDeployController:
         Run rolling deployment. This should be called iff the deployment is called via groups/environments
         '''
 
-        dc = DeployController(self.datasvc)
-
         groups = target['groups']
         rolling_groups = [g for g in groups if self.datasvc.groupsvc.GetGroup(application, g)['rolling_deploy']]
         if len(rolling_groups) > 0:
@@ -125,9 +126,9 @@ class RollingDeployController:
                     deploy_gds = b['gitdeploys']
                 elif i == 1:
                     deploy_gds = changed_gds
-                elita.util.debugLog(self, "doing DeployController.run: deploy_gds: {}".format(deploy_gds))
-                ok, results = dc.run(application, build_name, b['servers'], deploy_gds, force=i > 0)
-                changed_gds = dc.changed_gitdeploys.keys()
+                logging.debug("doing DeployController.run: deploy_gds: {}".format(deploy_gds))
+                ok, results = self.dc.run(application, build_name, b['servers'], deploy_gds, force=i > 0)
+                changed_gds = self.dc.changed_gitdeploys.keys()
                 if not ok:
                     self.datasvc.jobsvc.NewJobData({"RollingDeployment": "error"})
                     return False
@@ -144,7 +145,7 @@ class RollingDeployController:
                 }
             })
 
-            ok, results = dc.run(application, build_name, target['servers'], target['gitdeploys'])
+            ok, results = self.dc.run(application, build_name, target['servers'], target['gitdeploys'])
             if not ok:
                 self.datasvc.jobsvc.NewJobData({"RollingDeployment": "error"})
                 return False
@@ -169,18 +170,18 @@ def _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, settings, jo
     gdm = gitservice.GitDeployManager(gddoc, datasvc)
 
     res = gdm.checkout_default_branch()
-    elita.util.debugLog("_threadsafe_process_gitdeploy", "git checkout output: {}".format(str(res)))
+    logging.debug("_threadsafe_process_gitdeploy: git checkout output: {}".format(str(res)))
 
-    if gdm.last_build == build_doc['name']:
+    if gdm.last_build == build_doc['build_name']:
         datasvc.jobsvc.NewJobData({"ProcessGitdeploys": {gddoc['name']: "already processed"}})
     else:
 
         datasvc.jobsvc.NewJobData({"ProcessGitdeploys": {gddoc['name']: "processing"}})
         gdm.decompress_to_repo(package_doc)
 
-        elita.util.debugLog("_threadsafe_process_gitdeploy", "Checking for changes")
+        logging.debug("_threadsafe_process_gitdeploy: Checking for changes")
         res = gdm.check_repo_status()
-        elita.util.debugLog("_threadsafe_process_gitdeploy", "git status results: {}".format(str(res)))
+        logging.debug("_threadsafe_process_gitdeploy: git status results: {}".format(str(res)))
 
         if "nothing to commit" in res:
             datasvc.jobsvc.NewJobData({"ProcessGitdeploys": {gddoc['name']: "no changes"}})
@@ -188,22 +189,22 @@ def _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, settings, jo
 
             datasvc.jobsvc.NewJobData({"ProcessGitdeploys": {gddoc['name']: "adding to repository"}})
             res = gdm.add_files_to_repo()
-            elita.util.debugLog("_threadsafe_process_gitdeploy", "git add result: {}".format(str(res)))
+            logging.debug("_threadsafe_process_gitdeploy: git add result: {}".format(str(res)))
 
             datasvc.jobsvc.NewJobData({"ProcessGitdeploys": {gddoc['name']: "committing"}})
-            res = gdm.commit_to_repo(build_doc['name'])
-            elita.util.debugLog("_threadsafe_process_gitdeploy", "git commit result: {}".format(str(res)))
+            res = gdm.commit_to_repo(build_doc['build_name'])
+            logging.debug("_threadsafe_process_gitdeploy: git commit result: {}".format(str(res)))
 
             datasvc.jobsvc.NewJobData({"ProcessGitdeploys": {gddoc['name']: "checking diff"}})
             res = gdm.inspect_latest_diff()
-            elita.util.debugLog("_threadsafe_process_gitdeploy", "inspect diff result: {}".format(str(res)))
+            logging.debug("_threadsafe_process_gitdeploy: inspect diff result: {}".format(str(res)))
 
             datasvc.jobsvc.NewJobData({"ProcessGitdeploys": {gddoc['name']: "pushing"}})
             res = gdm.push_repo()
-            elita.util.debugLog("_threadsafe_process_gitdeploy", "git push result: {}".format(str(res)))
+            logging.debug("_threadsafe_process_gitdeploy: git push result: {}".format(str(res)))
             # Changes detected, so add gitdeploy and the relevant servers that must be deployed to
             changed = True
-        gdm.update_repo_last_build(build_doc['name'])
+        gdm.update_repo_last_build(build_doc['build_name'])
     # in the event that the gitrepo hasn't changed, but the gitdeploy indicates that we haven't successfully
     # deployed to all servers, we want to force git pull
     # this can happen if multiple gitdeploys share the same gitrepo
@@ -220,9 +221,9 @@ def _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, settings, jo
         branch = gddoc['location']['default_branch']
         path = gddoc['location']['path']
         res = rc.discard_git_changes(servers, path)
-        elita.util.debugLog("_threadsafe_process_gitdeploy", "discard git changes result: {}".format(str(res)))
+        logging.debug("_threadsafe_process_gitdeploy: discard git changes result: {}".format(str(res)))
         res = rc.checkout_branch(servers, path, branch)
-        elita.util.debugLog("_threadsafe_process_gitdeploy", "git checkout result: {}".format(str(res)))
+        logging.debug("_threadsafe_process_gitdeploy: git checkout result: {}".format(str(res)))
 
 def _threadsafe_pull_callback(results, tag, **kwargs):
     '''
@@ -237,7 +238,7 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
     gitdeploy_struct: { "gitdeploy_name": [ list_of_servers_to_deploy_to ] }
     '''
 
-    datasvc = elita.actions.action.regen_datasvc(settings, job_id)
+    client, datasvc = elita.actions.action.regen_datasvc(settings, job_id)
     sc = salt_control.SaltController(settings)
     rc = salt_control.RemoteCommands(sc)
 
@@ -252,9 +253,9 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
         return True
 
     datasvc.jobsvc.NewJobData({"DeployServers": {gd_name: "deploying", "servers": servers}})
-    elita.util.debugLog("_threadsafe_pull_gitdeploy", "sls_map: {}".format(sls_map))
+    logging.debug("_threadsafe_pull_gitdeploy: sls_map: {}".format(sls_map))
     res = rc.run_slses_async(_threadsafe_pull_callback, sls_map, args={'datasvc': datasvc})
-    elita.util.debugLog("_threadsafe_pull_gitdeploy", "results: {}".format(res))
+    logging.debug("_threadsafe_pull_gitdeploy: results: {}".format(res))
     errors = dict()
     successes = dict()
     for r in res:
@@ -276,8 +277,8 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
                                 "retcode": r[host][cmd]["changes"]["retcode"],
                             }
     if len(errors) > 0:
-        elita.util.debugLog("_threadsafe_pull_gitdeploy", "SLS error servers: {}".format(errors.keys()))
-        elita.util.debugLog("_threadsafe_pull_gitdeploy", "SLS error responses: {}".format(errors))
+        logging.debug("_threadsafe_pull_gitdeploy: SLS error servers: {}".format(errors.keys()))
+        logging.debug("_threadsafe_pull_gitdeploy: SLS error responses: {}".format(errors))
 
     deploy_results = {
         gd_name: {
@@ -302,6 +303,8 @@ class DeployController:
     Class that runs deploys. Only knows about server/gitdeploy pairs, so is used for both manual-style deployments
     and group/environment deployments.
     '''
+
+    __metaclass__ = elita.util.LoggingMetaClass
 
     def __init__(self, datasvc):
         self.datasvc = datasvc
@@ -334,13 +337,13 @@ class DeployController:
             # if this is part of a rolling deployment and is anything other than the first batch,
             # no gitdeploys will actually be "changed". Force says to do a pull on the servers anyway.
             if force:
-                elita.util.debugLog(self, "Force flag set, adding gitdeploy servers to deploy list: {}".format(gd))
+                logging.debug("Force flag set, adding gitdeploy servers to deploy list: {}".format(gd))
                 queue.put({gd: determine_deployabe_servers(gddoc['servers'], servers)})
 
         for p in procs:
             p.join(300)
             if p.is_alive():
-                elita.util.debugLog(self, "ERROR: _threadsafe_process_gitdeploy: timeout waiting for child process!")
+                logging.debug("ERROR: _threadsafe_process_gitdeploy: timeout waiting for child process!")
 
         while not queue.empty():
             gd = queue.get()
@@ -359,7 +362,7 @@ class DeployController:
         for p in procs:
             p.join(600)
             if p.is_alive():
-                elita.util.debugLog(self, "ERROR: _threadsafe_pull_gitdeploy: timeout waiting for child process!")
+                logging.debug("ERROR: _threadsafe_pull_gitdeploy: timeout waiting for child process!")
 
         results = list()
         while not queue.empty():

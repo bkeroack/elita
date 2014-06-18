@@ -11,7 +11,7 @@ import logging
 from clint.textui import puts, colored, indent
 
 
-ELITA_HOME = "/var/run/elita"
+ELITA_HOME = "/home/elita"
 ELITA_LOG_DIR = "/var/log/elita"
 ELITA_ETC = "/etc/elita"
 ELITA_INITD = "/etc/init.d/elita"

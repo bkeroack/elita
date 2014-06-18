@@ -1,6 +1,6 @@
 #from M2Crypto import BIO, RSA
 #import base64
-
+import elita.util
 
 
 __author__ = 'bkeroack'
@@ -8,6 +8,8 @@ __author__ = 'bkeroack'
 
 
 class KeyPair:
+    __metaclass__ = elita.util.LoggingMetaClass
+
     def __init__(self, private_key, public_key):
         pass
         #self.private_key = BIO.MemoryBuffer(private_key)

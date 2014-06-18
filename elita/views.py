@@ -18,6 +18,7 @@ import auth
 import elita.deployment.gitservice
 import elita_exceptions
 import elita.deployment.deploy
+import elita.util
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
@@ -31,6 +32,8 @@ AFFIRMATIVE_SYNONYMS = ("true", "True", "TRUE", "yup", "yep", "yut", "yes", "yea
 
 
 class GenericView:
+    __metaclass__ = elita.util.LoggingMetaClass
+
     def __init__(self, context, request, app_name="_global", permissionless=False, allow_pw_auth=False, is_action=False):
         self.required_params = {"GET": [], "PUT": [], "POST": [], "DELETE": []}  # { reqverb: [ params ] }
         logger.debug("{}: {} ; {}".format(self.__class__.__name__, context.__class__.__name__, request.subpath))

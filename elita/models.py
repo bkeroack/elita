@@ -9,6 +9,7 @@ import bson
 import pprint
 import datetime
 import pytz
+import logging
 
 import elita
 from elita.crypto import keypair
@@ -35,6 +36,8 @@ class Request:
     db = None
 
 class GenericChildDataService:
+    __metaclass__ = elita.util.LoggingMetaClass
+
     def __init__(self, parent):
         self.parent = parent
         self.db = parent.db
@@ -757,6 +760,8 @@ class KeyDataService(GenericChildDataService):
 
 
 class DataService:
+    __metaclass__ = elita.util.LoggingMetaClass
+
     def __init__(self, settings, db, root, job_id=None):
         self.settings = settings
         self.db = db
@@ -778,7 +783,7 @@ class DataService:
         if job_id is not None:
             self.salt_controller = salt_control.SaltController(self.settings)
             self.remote_controller = salt_control.RemoteCommands(self.salt_controller)
-            self.deploy_controller = deploy.DeployController(self, self.remote_controller)
+            self.deploy_controller = deploy.DeployController(self)
 
     def refresh_root(self):
         # when running long async actions the root tree passed to constructor may be stale by the time we try to update
@@ -846,6 +851,8 @@ class SupportedFileType:
 
 
 class GenericDataModel:
+    __metaclass__ = elita.util.LoggingMetaClass
+
     default_values = {}
 
     def __init__(self, doc):
@@ -1078,6 +1085,8 @@ class Group(GenericDataModel):
     }
 
 class GenericContainer:
+    __metaclass__ = elita.util.LoggingMetaClass
+
     def __init__(self, doc):
         self.name = doc['name']
         self.parent = doc['parent']

@@ -1,3 +1,3 @@
 base:
-  server0:
+  server*:
     server-provision

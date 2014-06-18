@@ -10,20 +10,20 @@ requires = [
     'pyramid',
     'gunicorn',
     'gevent',
-    'unittest2',
+    'nose',
     'pymongo',
     'celery',
     'requests',
     'python-slugify',
     'salt',
-    #'M2Crypto',
     'PyYAML',
     'lockfile',
     'sh',
     'simplejson',
     'gitpython>=0.3.2.RC1',
-    'clint'
-    ]
+    'clint',
+    'mock'
+]
 
 setup(name='elita',
       version="0.39",
