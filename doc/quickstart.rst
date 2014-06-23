@@ -53,6 +53,14 @@ request. You can pass the auth token as a header (like we do below) or as the UR
 Create Application
 ^^^^^^^^^^^^^^^^^^
 
+Applications provide separate namespaces for the child endpoints (gitrepos, gitdeploys, deployments, etc). In general,
+you should create a separate application for each top-level project in your continuous integration environment. If your
+project has multiple deployables (subapplications) they can be deployed as separate groups under a single application.
+
+(Splitting between groups and applications is somewhat arbitrary--but since builds are created per-application, generally
+anything that is built together should go into a single application. Use groups to distinguish between different binaries
+built together.)
+
 .. sourcecode:: bash
 
    $ curl -XPUT 'http://localhost:2718/app?app_name=testapp&pretty=true' -H
@@ -102,7 +110,7 @@ is generally more convenient.
 
 .. sourcecode:: bash
 
-   $ curl -XPOST 'http://localhost:2718/global/keypairs?type=git&name=kp1&pretty=true' -F "private_key=@/home/user/keys/mykey"
+   $ curl -XPOST 'http://localhost:2718/global/keypairs?type=git&name=kp1&from=files&pretty=true' -F "private_key=@/home/user/keys/mykey"
    -F "public_key=@/home/user/keys/mykey.pub" -H
    'Auth-Token: OGNkODA4YzA1MTg5YjAwNWFlZGNhYzRhODZmOWNlMDI0OWM5OGM2YjhhNWM2Njc2ZTY5NjMxYjlhNTRkZDQ5Ng'
 
