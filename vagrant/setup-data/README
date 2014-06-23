@@ -1,0 +1,12 @@
+FOR VAGRANT TESTING:
+
+- Put your (testing!) Bitbucket credentials in this directory using the following naming convention:
+
+"bb_username.txt" - Bitbucket username in plain text format (no newlines: $ echo -n "username" > bb_username.txt)
+"bb_password.txt" - Password for above account (no newlines)
+"private.key" - SSH private key with permissions to push to repositories under the above BitBucket account
+"public.key" - SSH public key corresponding to private key above
+
+The setup_data.sh script (run as the last part of Vagrant provisioning) will use these credentials to automatically
+create the Elita objects (keypair, gitprovider, server, application) so you don't have to do this manually after each
+vagrant up.

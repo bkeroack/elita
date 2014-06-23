@@ -32,6 +32,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     elita.vm.synced_folder "salt/keys", "/srv/keys"
   
     elita.vm.synced_folder "..", "/home/vagrant/elita"
+
+    elita.vm.synced_folder "setup-data", "/home/vagrant/setup-data"
     
     elita.vm.synced_folder "../../elita_scorebig", "/home/vagrant/elita_scorebig"
   
@@ -50,6 +52,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
     
     elita.vm.provision :shell, path: "provision-elita.sh"
+    elita.vm.provision :shell, path: "setup_data.sh"
   
   end
   

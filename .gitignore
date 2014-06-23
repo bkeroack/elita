@@ -9,3 +9,5 @@ doc/_build
 celerybeat-schedule*
 atlassian-ide-plugin.xml
 **/.vagrant
+vagrant/setup-data/*.key
+vagrant/setup-data/*.txt
