@@ -8,8 +8,7 @@ import random
 import shutil
 import string
 import yaml
-import time
-import copy
+import logging
 import elita.deployment.gitservice
 
 try:
@@ -29,12 +28,14 @@ class OSTypes:
     Unix_like = 1
 
 class RemoteCommands:
+    __metaclass__ = elita.util.LoggingMetaClass
+
     def __init__(self, sc):
         self.sc = sc
 
     def get_os(self, server):
         resp = self.sc.salt_command(server, 'grains.item', ["os"])
-        elita.util.debugLog(self, "get_os: resp: {}".format(resp))
+        logging.debug("get_os: resp: {}".format(resp))
         return OSTypes.Windows if resp[server]['os'] == "Windows" else OSTypes.Unix_like
 
     def create_directory(self, server_list, path):
@@ -72,10 +73,10 @@ class RemoteCommands:
         new_fullpath = "{}/{}".format(root, newname)
         shutil.copy(local_path, new_fullpath)
         salt_uri = 'salt://{}/{}'.format(self.sc.settings['elita.salt.slsdir'], newname)
-        elita.util.debugLog(self, "push_file: salt_uri: {}".format(salt_uri))
-        elita.util.debugLog(self, "push_file: remote_path: {}".format(remote_path))
+        logging.debug("push_file: salt_uri: {}".format(salt_uri))
+        logging.debug("push_file: remote_path: {}".format(remote_path))
         res = self.sc.salt_command(target, 'cp.get_file', [salt_uri, remote_path])
-        elita.util.debugLog(self, "push_file: resp: {}".format(res))
+        logging.debug("push_file: resp: {}".format(res))
         os.unlink(new_fullpath)
         return {'success': {'target': target, 'remote_path': remote_path}}
 
@@ -151,6 +152,8 @@ class RemoteCommands:
         return self.sc.salt_commands_async(callback, args, cmd_group, timeout=300)
 
 class SaltController:
+    __metaclass__ = elita.util.LoggingMetaClass
+
     def __init__(self, settings):
         self.settings = settings
         self.salt_client = salt.client.LocalClient()
@@ -161,7 +164,7 @@ class SaltController:
         try:
             self.load_salt_info()
         except SaltClientError:
-            elita.util.debugLog(self, "WARNING: SaltClientError")
+            logging.debug("WARNING: SaltClientError")
 
     def salt_commands_async(self, callback, args, cmd_group, opts=None, timeout=120):
         rets = list()
@@ -182,7 +185,6 @@ class SaltController:
         return self.salt_command(target, 'cmd.run', [cmd], opts={"shell": shell}, timeout=timeout)
 
     def load_salt_info(self):
-        elita.util.debugLog(self, "load_salt_info")
         master_config = salt.config.master_config(os.environ.get('SALT_MASTER_CONFIG', '/etc/salt/master'))
         self.file_roots = master_config['file_roots']
         for e in self.file_roots:
@@ -217,13 +219,13 @@ class SaltController:
         name = gitdeploy['name']
         app = gitdeploy['application']
         filename = self.get_gd_file_name(app, name)
-        elita.util.debugLog(self, "rm_gitdeploy_yaml: gitdeploy: {}/{}".format(app, name))
-        elita.util.debugLog(self, "rm_gitdeploy_yaml: filename: {}".format(filename))
+        logging.debug("rm_gitdeploy_yaml: gitdeploy: {}/{}".format(app, name))
+        logging.debug("rm_gitdeploy_yaml: filename: {}".format(filename))
         if not os.path.isfile(filename):
-            elita.util.debugLog(self, "rm_gitdeploy_yaml: WARNING: file not found!")
+            logging.debug("rm_gitdeploy_yaml: WARNING: file not found!")
             return
         lock = lockfile.FileLock(filename)
-        elita.util.debugLog(self, "rm_gitdeploy_yaml: acquiring lock on {}".format(filename))
+        logging.debug("rm_gitdeploy_yaml: acquiring lock on {}".format(filename))
         lock.acquire(timeout=60)
         os.unlink(filename)
         lock.release()
@@ -233,15 +235,15 @@ class SaltController:
         name = gitdeploy['name']
         app = gitdeploy['application']
         filename = self.get_gd_file_name(app, name)
-        elita.util.debugLog(self, "add_gitdeploy_to_yaml: acquiring lock on {}".format(filename))
+        logging.debug("add_gitdeploy_to_yaml: acquiring lock on {}".format(filename))
         lock = lockfile.FileLock(filename)
         lock.acquire(timeout=60)  # throws exception if timeout
         if os.path.isfile(filename):
-            elita.util.debugLog(self, "add_gitdeploy_to_yaml: existing yaml sls")
+            logging.debug("add_gitdeploy_to_yaml: existing yaml sls")
             with open(filename, 'r') as f:
                 existing = yaml.load(f, Loader=Loader)
         else:
-            elita.util.debugLog(self, "add_gitdeploy_to_yaml: yaml sls does not exist")
+            logging.debug("add_gitdeploy_to_yaml: yaml sls does not exist")
             existing = dict()
         slsname = 'gitdeploy_{}'.format(name)
         favor = "theirs" if gitdeploy['options']['favor'] in ('theirs', 'remote') else 'ours'

@@ -9,7 +9,7 @@ import multiprocessing
 import elita.util
 import gitservice
 import salt_control
-import elita.actions.action
+from elita.actions.action import regen_datasvc
 
 #async callable
 def run_deploy(datasvc, application, build_name, target, rolling_divisor, rolling_pause, deployment):
@@ -100,7 +100,7 @@ class RollingDeployController:
 
         return batches
 
-    def run(self, application, build_name, target, rolling_divisor, rolling_pause):
+    def run(self, application, build_name, target, rolling_divisor, rolling_pause, parallel=True):
         '''
         Run rolling deployment. This should be called iff the deployment is called via groups/environments
         '''
@@ -109,6 +109,8 @@ class RollingDeployController:
         rolling_groups = [g for g in groups if self.datasvc.groupsvc.GetGroup(application, g)['rolling_deploy']]
         if len(rolling_groups) > 0:
             batches = self.compute_batches(application, target, rolling_groups, rolling_divisor)
+
+            logging.debug("computed batches: {}".format(batches))
 
             self.datasvc.jobsvc.NewJobData({
                 "RollingDeployment": {
@@ -127,7 +129,7 @@ class RollingDeployController:
                 elif i == 1:
                     deploy_gds = changed_gds
                 logging.debug("doing DeployController.run: deploy_gds: {}".format(deploy_gds))
-                ok, results = self.dc.run(application, build_name, b['servers'], deploy_gds, force=i > 0)
+                ok, results = self.dc.run(application, build_name, b['servers'], deploy_gds, force=i > 0, parallel=parallel)
                 changed_gds = self.dc.changed_gitdeploys.keys()
                 if not ok:
                     self.datasvc.jobsvc.NewJobData({"RollingDeployment": "error"})
@@ -145,7 +147,7 @@ class RollingDeployController:
                 }
             })
 
-            ok, results = self.dc.run(application, build_name, target['servers'], target['gitdeploys'])
+            ok, results = self.dc.run(application, build_name, target['servers'], target['gitdeploys'], parallel=parallel)
             if not ok:
                 self.datasvc.jobsvc.NewJobData({"RollingDeployment": "error"})
                 return False
@@ -166,7 +168,7 @@ def _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, settings, jo
     package_doc = build_doc['packages'][package]
     changed = False
 
-    datasvc = elita.actions.action.regen_datasvc(settings, job_id)
+    client, datasvc = regen_datasvc(settings, job_id)
     gdm = gitservice.GitDeployManager(gddoc, datasvc)
 
     res = gdm.checkout_default_branch()
@@ -238,7 +240,7 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
     gitdeploy_struct: { "gitdeploy_name": [ list_of_servers_to_deploy_to ] }
     '''
 
-    client, datasvc = elita.actions.action.regen_datasvc(settings, job_id)
+    client, datasvc = regen_datasvc(settings, job_id)
     sc = salt_control.SaltController(settings)
     rc = salt_control.RemoteCommands(sc)
 
@@ -310,7 +312,7 @@ class DeployController:
         self.datasvc = datasvc
         self.changed_gitdeploys = dict()
 
-    def run(self, app_name, build_name, servers, gitdeploys, force=False):
+    def run(self, app_name, build_name, servers, gitdeploys, force=False, parallel=True):
         '''
         1. Decompress build to gitdeploy dir and push
             a. Attempts to optimize by determining if build has already been decompressed to gitdeploy and skips if so
@@ -323,16 +325,22 @@ class DeployController:
         #reset changed gitdeploys
         self.changed_gitdeploys = dict()
 
+
         queue = multiprocessing.Queue()
         procs = list()
         for gd in gitdeploys:
             gddoc = self.datasvc.gitsvc.GetGitDeploy(app_name, gd)
             gitdeploy_docs[gd] = gddoc
-            p = multiprocessing.Process(target=_threadsafe_process_gitdeploy,
-                                        args=(gddoc, build_doc, servers, queue, self.datasvc.settings,
-                                              self.datasvc.job_id))
-            p.start()
-            procs.append(p)
+            if parallel:
+                p = multiprocessing.Process(target=_threadsafe_process_gitdeploy,
+                                            args=(gddoc, build_doc, servers, queue, self.datasvc.settings,
+                                                  self.datasvc.job_id))
+                p.start()
+                procs.append(p)
+
+            else:
+                _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, self.datasvc.settings,
+                                              self.datasvc.job_id)
 
             # if this is part of a rolling deployment and is anything other than the first batch,
             # no gitdeploys will actually be "changed". Force says to do a pull on the servers anyway.
@@ -340,10 +348,11 @@ class DeployController:
                 logging.debug("Force flag set, adding gitdeploy servers to deploy list: {}".format(gd))
                 queue.put({gd: determine_deployabe_servers(gddoc['servers'], servers)})
 
-        for p in procs:
-            p.join(300)
-            if p.is_alive():
-                logging.debug("ERROR: _threadsafe_process_gitdeploy: timeout waiting for child process!")
+        if parallel:
+            for p in procs:
+                p.join(300)
+                if p.is_alive():
+                    logging.debug("ERROR: _threadsafe_process_gitdeploy: timeout waiting for child process!")
 
         while not queue.empty():
             gd = queue.get()
@@ -353,16 +362,20 @@ class DeployController:
         queue = multiprocessing.Queue()
         procs = list()
         for gd in self.changed_gitdeploys:
-            p = multiprocessing.Process(target=_threadsafe_pull_gitdeploy,
-                                        args=(app_name, {gd: self.changed_gitdeploys[gd]}, queue, self.datasvc.settings,
-                                              self.datasvc.job_id))
-            p.start()
-            procs.append(p)
-
-        for p in procs:
-            p.join(600)
-            if p.is_alive():
-                logging.debug("ERROR: _threadsafe_pull_gitdeploy: timeout waiting for child process!")
+            if parallel:
+                p = multiprocessing.Process(target=_threadsafe_pull_gitdeploy,
+                                            args=(app_name, {gd: self.changed_gitdeploys[gd]}, queue, self.datasvc.settings,
+                                                  self.datasvc.job_id))
+                p.start()
+                procs.append(p)
+            else:
+                _threadsafe_pull_gitdeploy(app_name, {gd: self.changed_gitdeploys[gd]}, queue, self.datasvc.settings,
+                                           self.datasvc.job_id)
+        if parallel:
+            for p in procs:
+                p.join(600)
+                if p.is_alive():
+                    logging.debug("ERROR: _threadsafe_pull_gitdeploy: timeout waiting for child process!")
 
         results = list()
         while not queue.empty():
