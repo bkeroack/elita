@@ -20,6 +20,10 @@ import elita.util
 
 __author__ = 'bkeroack'
 
+WINDOWS_KEY_LOCATION = 'C:\Program Files (x86)\Git\.ssh'
+UNIX_KEY_LOCATION = '~/.ssh'
+UNIX_MINION_USER = 'root'  # hack
+
 class FatalSaltError(Exception):
     pass
 
@@ -89,16 +93,63 @@ class RemoteCommands:
                 'os': ost,
                 'results': []
             }
+            # on Windows, salt-minion runs as LOCALSYSTEM which does not have a home directory
+            # therefore we have to create a place to put keys
             if ost == OSTypes.Windows:
-                path = 'C:\Program Files (x86)\Git\.ssh'
-                fullpath = path + "\{}{}".format("id_rsa", ext)
+                path = WINDOWS_KEY_LOCATION
+                fullpath = path + "\\{}{}".format("id_rsa", ext)
             elif ost == OSTypes.Unix_like:
-                path = '/etc/elita/keys'
-                fullpath = path + '/{}{}'.format("id_rsa", ext)
+                path = UNIX_KEY_LOCATION
+                fullpath = os.path.join(path, "id_rsa{}".format(ext))
             results['results'].append(self.create_directory([s], path))
             results['results'].append(self.push_file(s, file, fullpath))
             res.append(results)
         return res
+
+    def add_ssh_alias(self, server_list, alias_name, real_hostname, keyname):
+        '''
+        Append alias to ssh config
+        '''
+        win_servers = list()
+        unix_servers = list()
+        for s in server_list:
+            ost = self.get_os(s)
+            if ost == OSTypes.Windows:
+                win_servers.append(s)
+            elif ost == OSTypes.Unix_like:
+                unix_servers.append(s)
+        unix_sshconfig = os.path.join(UNIX_KEY_LOCATION, "config")
+        win_sshconfig = "{}\\{}".format(WINDOWS_KEY_LOCATION, "config")
+        alias = """
+Host {alias}
+\tHostname {hostname}
+\tIdentityFile {keyfile}
+\t
+asdf
+""".format()
+        return {
+            'unix_servers': self.sc.salt_command(unix_servers,
+                                                 ['file.mkdir',
+                                                  'file.touch',
+                                                  'file.append',
+                                                  'file.check_perms'],
+                                                 [
+                                                     [UNIX_KEY_LOCATION],
+                                                     [unix_sshconfig],
+                                                     [unix_sshconfig, alias],
+                                                     [unix_sshconfig, '{}', UNIX_MINION_USER, UNIX_MINION_USER, '600']
+                                                 ]),
+            'windows_servers': self.sc.salt_command(win_servers,
+                                                    ['file.mkdir',
+                                                    'file.touch',
+                                                    'file.append'],
+                                                    [
+                                                        [WINDOWS_KEY_LOCATION],
+                                                        [win_sshconfig],
+                                                        [win_sshconfig, alias]
+                                                    ])
+        }
+
 
     def clone_repo(self, server_list, repo_uri, dest):
         cwd, dest_dir = os.path.split(dest)

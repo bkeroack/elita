@@ -3,9 +3,7 @@ from slugify import slugify
 import tempfile
 import os
 import shutil
-import stat
 import sh
-import lockfile
 import git
 import copy
 import socket
@@ -14,6 +12,7 @@ import logging
 import elita.util
 import salt_control
 import elita.builds
+import sshconfig
 
 __author__ = 'bkeroack'
 
@@ -137,49 +136,21 @@ class GitRepoService:
         logging.debug("create_repo not implemented")
 
     def get_alias(self, gitrepo_name, app):
-        return "{}-{}".format(app, gitrepo_name)
+        sshc = sshconfig.SSHController()
+        return sshc.get_alias(gitrepo_name, app)
 
     def get_alias_uri(self, alias, original_uri):
         orig_domain = 'bitbucket.org' if self.gp_type == 'bitbucket' else 'github.com'
         return original_uri.replace(orig_domain, alias)
 
     def key_setup(self, gitrepo_name, application, keypair):
-        #copy keypair to user ssh dir
-        #add alias in ~/.ssh/config
-        home_dir = os.path.expanduser('~elita')
-        home_sshdir = "{}/.ssh".format(home_dir)
-        if not os.path.isdir(home_sshdir):
-            os.mkdir(home_sshdir)
-        priv_key_name = "{}/{}-{}".format(home_sshdir, application, gitrepo_name)
-        pub_key_name = "{}.pub".format(priv_key_name)
-
-        logging.debug("key_setup: home_dir: {}".format(home_dir))
-        logging.debug("key_setup: priv_key_name: {}".format(priv_key_name))
-        logging.debug("key_setup: pub_key_name: {}".format(pub_key_name))
-
-        logging.debug("key_setup: writing keypairs")
-        with open(pub_key_name, 'w') as f:
-            f.write(keypair['public_key'].decode('string_escape'))
-
-        with open(priv_key_name, 'w') as f:
-            f.write(keypair['private_key'].decode('string_escape'))
-
-        logging.debug("key_setup: chmod private key to owner read/write only")
-        os.chmod(priv_key_name, stat.S_IWUSR | stat.S_IRUSR)
-
-        logging.debug("key_setup: adding alias to ssh config")
-        ssh_config = "{}/config".format(home_sshdir)
-        alias_name = self.get_alias(gitrepo_name, application)
-        lock = lockfile.FileLock(ssh_config)
-        lock.acquire(timeout=60)
-        with open(ssh_config, 'a') as f:
-            f.write("\nHost {}\n".format(alias_name))
-            f.write("\tHostName {}\n".format("bitbucket.org" if self.gp_type == 'bitbucket' else "github.com"))
-            f.write("\tPreferredAuthentications publickey\n")
-            f.write("\tStrictHostKeyChecking no\n")
-            f.write("\tIdentityFile {}\n".format(priv_key_name))
-        os.chmod(ssh_config, stat.S_IWUSR | stat.S_IRUSR)
-        lock.release()
+        '''
+        copy keypair to user ssh dir
+        add alias in ~/.ssh/config
+        '''
+        sshc = sshconfig.SSHController()
+        alias_name = sshc.write_local_keys(application, self.gp_type, gitrepo_name, keypair['private_key'],
+                                           keypair['public_key'])
         return alias_name
 
     def git_user_config(self, cwd):
@@ -417,9 +388,10 @@ class GitDeployManager:
         with open(tf_priv, 'w') as f:
             f.write(self.gitdeploy['location']['gitrepo']['keypair']['private_key'].decode('string_escape'))
 
-        res_pub = self.rc.push_key(server_list, tf_pub, self.gitdeploy['name'], '.pub')
+        keyname = "{}-{}".format(self.gitdeploy['application'], self.gitdeploy['name'])
+        res_pub = self.rc.push_key(server_list, tf_pub, keyname, '.pub')
         logging.debug(self, "push_keypair: push pub resp: {}".format(res_pub))
-        res_priv = self.rc.push_key(server_list, tf_priv, self.gitdeploy['name'], '')
+        res_priv = self.rc.push_key(server_list, tf_priv, keyname, '')
         logging.debug(self, "push_keypair: push priv resp: {}".format(res_priv))
         os.unlink(tf_pub)
         os.unlink(tf_priv)

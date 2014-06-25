@@ -1,0 +1,6 @@
+client_acl:
+   elita:
+      - .*
+
+log_level_logfile: DEBUG
+file_recv: True

@@ -64,7 +64,7 @@ def chown_dir(dirname):
 
 def create_user_and_group():
     try:
-        useradd("elita", s="/bin/false", d=ELITA_HOME)
+        useradd("elita", s="/bin/false", d=ELITA_HOME, G='root')    # root group so elita can run salt
     except:
         puts(colored.red("Error creating user/group elita!"))
 
@@ -143,6 +143,8 @@ def InstallUbuntu():
     do_step("Setting ownership on config directory", chown_dir, [ELITA_ETC])
 
     do_step("Creating running directory: {}".format(ELITA_HOME), mk_dir, [ELITA_HOME])
+
+    do_step("Creating Python egg cache directory", mk_dir, [os.path.join(ELITA_HOME, ".python-eggs")])
 
     do_step("Setting ownership on running directory", chown_dir, [ELITA_HOME])
 

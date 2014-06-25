@@ -7,21 +7,37 @@ README = open(os.path.join(here, 'README.rst')).read()
 CHANGES = open(os.path.join(here, 'CHANGES.txt')).read()
 
 requires = [
+    #core deps
     'pyramid',
     'gunicorn',
     'gevent',
-    'nose',
-    'pymongo',
+    'salt',
     'celery',
+    'pymongo',
+
+    # direct git integration
+    'gitpython>=0.3.2.RC1',
+
+    #for api calls, calculate slugs for BitBucket URLs
     'requests',
     'python-slugify',
-    'salt',
-    'PyYAML',
-    'lockfile',
-    'sh',
     'simplejson',
-    'gitpython>=0.3.2.RC1',
+
+    # to parse salt states
+    'PyYAML',
+
+    # to parse ssh config
+    #'paramiko',
+
+    # we need to lock, eg, salt state files during modification
+    'lockfile',
+
+    # for installation primarily
+    'sh',
     'clint',
+
+    #testing
+    'nose',
     'mock'
 ]
 

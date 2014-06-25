@@ -835,7 +835,11 @@ class GitRepoContainerView(GenericView):
         if not existing:
             uri = None
             kp = self.datasvc.keysvc.GetKeyPair(keypair)
+            if not kp:
+                return self.Error(400, "unknown keypair")
             gp_doc = self.datasvc.gitsvc.GetGitProvider(gitprovider)
+            if not gp_doc:
+                return self.Error(400, "unkown gitprovider")
             logger.debug("GitRepoContainerView: gp_doc: {}".format(gp_doc))
             repo_callable = elita.deployment.gitservice.create_repo_callable_from_type(gp_doc['type'])
             if not repo_callable:

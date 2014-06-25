@@ -67,7 +67,7 @@ class BuildDataService(GenericChildDataService):
         if len(existing) > 0:
             if len(existing) > 1:
                 # we should never have more than one, if so keep the 'top' one
-                util.debugLog(self, "WARNING: multiple build documents found, dropping all but the first")
+                logging.debug("WARNING: multiple build documents found, dropping all but the first")
                 for id in existing[1:]:
                     self.db['builds'].remove({'_id': id})
             new_doc['_id'] = existing[0]
@@ -89,15 +89,15 @@ class BuildDataService(GenericChildDataService):
         })
 
     def UpdateBuild(self, app, doc):
-        util.debugLog(self, "UpdateBuild: app: {}; doc: {}".format(app, doc))
+        logging.debug("UpdateBuild: app: {}; doc: {}".format(app, doc))
         self.parent.UpdateGenericObject(doc['build_name'], doc, "builds", "Build", {'build_name': doc['build_name'],
                                                                                     'app_name': app})
     def DeleteBuildStorage(self, app_name, build_name):
         dir = self.settings['elita.builds.dir']
         path = "{root_dir}/{app}/{build}".format(root_dir=dir, app=app_name, build=build_name)
-        util.debugLog(self, "DeleteBuildStorage: path: {}".format(path))
+        logging.debug("DeleteBuildStorage: path: {}".format(path))
         if os.path.isdir(path):
-            util.debugLog(self, "DeleteBuildStorage: remove_build: deleting")
+            logging.debug("DeleteBuildStorage: remove_build: deleting")
             shutil.rmtree(path)
 
     def DeleteBuild(self, app_name, build_name):
@@ -164,10 +164,10 @@ class UserDataService(GenericChildDataService):
 
     def GetUserFromToken(self, token):
         pp = pprint.PrettyPrinter(indent=4)
-        util.debugLog(self, "GetUserFromToken: token: {}".format(token))
+        logging.debug("GetUserFromToken: token: {}".format(token))
         tok = self.root['global']['tokens'][token]
         doc = tok.doc
-        util.debugLog(self, "GetUserFromToken: doc: {}".format(pp.pformat(doc)))
+        logging.debug("GetUserFromToken: doc: {}".format(pp.pformat(doc)))
         return doc['username']
 
     def GetAllTokens(self):
@@ -209,7 +209,7 @@ class ApplicationDataService(GenericChildDataService):
         docs = [d for d in self.db['application'].find({'app_name': app_name})]
         assert len(docs) > 0
         if len(docs) > 1:
-            elita.util.debugLog(self, "GetApplication: WARNING: more than one application named {}".format(app_name))
+            elita.logging.debug("GetApplication: WARNING: more than one application named {}".format(app_name))
         return {k: docs[0][k] for k in docs[0] if k[0] != '_'}
 
     def NewApplication(self, app_name):
@@ -278,7 +278,7 @@ class GroupDataService(GenericChildDataService):
         docs = [d for d in self.db['groups'].find({'application': app, 'name': name})]
         assert len(docs) > 0
         if len(docs) > 1:
-            elita.util.debugLog(self, "GetGroup: WARNING: more than one group {} in application {}".format(name, app))
+            elita.logging.debug("GetGroup: WARNING: more than one group {} in application {}".format(name, app))
         doc = docs[0]
         return {k: doc[k] for k in doc if k[0] != '_'}
 
@@ -380,19 +380,19 @@ class JobDataService(GenericChildDataService):
         res = self.db['jobs'].update({'job_id': self.parent.job_id}, {'$set': {'status': "completed",
                                                                    'completed_datetime': now,
                                                                    'duration_in_seconds': diff}})
-        util.debugLog(self, "SaveJobResults: update job doc: {}".format(res))
+        logging.debug("SaveJobResults: update job doc: {}".format(res))
         self.NewJobData({"completed_results": results})
 
     def NewAction(self, app_name, action_name, params):
-        util.debugLog(self, "NewAction: app_name: {}".format(app_name))
-        util.debugLog(self, "NewAction: action_name: {}".format(action_name))
+        logging.debug("NewAction: app_name: {}".format(app_name))
+        logging.debug("NewAction: action_name: {}".format(action_name))
         self.parent.refresh_root()
         self.root['app'][app_name]['actions'][action_name] = Action(app_name, action_name, params, self)
         if app_name in self.parent.appsvc.GetApplications():
             self.parent.refresh_root()
             self.root['app'][app_name]['actions'][action_name] = Action(app_name, action_name, params, self)
         else:
-            util.debugLog(self, "NewAction: application '{}' not found".format(app_name))
+            logging.debug("NewAction: application '{}' not found".format(app_name))
 
     def ExecuteAction(self, app_name, action_name, params):
         return self.parent.actionsvc.async(app_name, action_name, params)
@@ -444,7 +444,7 @@ class ServerDataService(GenericChildDataService):
         assert servers
         s = servers[0]
         if len(servers) > 1:
-            util.debugLog(self, "(Server->)GetGitDeploys: WARNING: {} server docs found for {}; removing all but the first".format(len(servers), name))
+            logging.debug("(Server->)GetGitDeploys: WARNING: {} server docs found for {}; removing all but the first".format(len(servers), name))
             for s in servers[1:]:
                 self.db['servers'].remove({'_id': s['_id']})
         s['gitdeploys'] = [self.db.dereference(d) for d in s['gitdeploys']]
@@ -456,7 +456,7 @@ class ServerDataService(GenericChildDataService):
         for s in srvs:
             server = [d for d in self.db['servers'].find({'name': s})]
             if len(server) > 1:
-                util.debugLog(self, "(Server->)GetEnvironments: more than one doc found for server {}".format(s))
+                logging.debug("(Server->)GetEnvironments: more than one doc found for server {}".format(s))
             doc = server[0]
             env = doc['environment']
             if env in environments:
@@ -469,7 +469,7 @@ class ServerDataService(GenericChildDataService):
 class GitDataService(GenericChildDataService):
     def NewGitDeploy(self, name, app_name, package, options, actions, location, attributes):
         gitrepo_doc = self.db['gitrepos'].find_one({'name': location['gitrepo']})
-        util.debugLog(self, "NewGitDeploy: gitrepo_doc: {}".format(gitrepo_doc))
+        logging.debug("NewGitDeploy: gitrepo_doc: {}".format(gitrepo_doc))
         if gitrepo_doc is None:
             return {'error': "invalid gitrepo (not found)"}
         location['gitrepo'] = bson.DBRef("gitrepos", gitrepo_doc['_id'])
@@ -563,6 +563,8 @@ class GitDataService(GenericChildDataService):
 
     def GetGitProvider(self, name):
         doc = self.db['gitproviders'].find_one({'name': name})
+        if not doc:
+            return None
         return {k: doc[k] for k in doc if k[0] != '_'}
 
     def NewGitProvider(self, name, type, auth):
@@ -640,12 +642,12 @@ class GitDataService(GenericChildDataService):
         if len(existing) > 0:
             if len(existing) > 1:
                 # we should never have more than one, if so keep the 'top' one
-                util.debugLog(self, "WARNING: multiple gitrepo documents found, dropping all but the first")
+                logging.debug("WARNING: multiple gitrepo documents found, dropping all but the first")
                 for id in existing[1:]:
                     self.db['gitrepos'].remove({'_id': id})
             grd['_id'] = existing[0]
         else:
-            util.debugLog(self, "UpdateGitRepo: WARNING: existing doc not found!")
+            logging.debug("UpdateGitRepo: WARNING: existing doc not found!")
             return
         grd['_class'] = "GitRepo"
         self.db['gitrepos'].save(grd)
@@ -703,7 +705,10 @@ class KeyDataService(GenericChildDataService):
         return [k for k in self.root['global']['keypairs'].keys() if k[0] != '_']
 
     def GetKeyPair(self, name):
-        kobj = KeyPair(self.db['keypairs'].find_one({'name': name}))
+        doc = self.db['keypairs'].find_one({'name': name})
+        if not doc:
+            return None
+        kobj = KeyPair(doc)
         return kobj.get_doc()
 
     def NewKeyPair(self, name, attribs, key_type, private_key, public_key):
@@ -717,7 +722,7 @@ class KeyDataService(GenericChildDataService):
             })
         except:
             exc_type, exc_obj, tb = sys.exc_info()
-            util.debugLog(self, "exception: {}, {}".format(exc_type, exc_obj))
+            logging.debug("exception: {}, {}".format(exc_type, exc_obj))
             if exc_type == elita_exceptions.InvalidPrivateKey:
                 err = "Invalid private key"
             if exc_type == elita_exceptions.InvalidPublicKey:
@@ -797,7 +802,7 @@ class DataService:
         docs = [d for d in self.db[collection_name].find({name_key: name})]
         assert len(docs) > 0
         if len(docs) > 1:
-            elita.util.debugLog(self, "ModifyObject: found multiple docs in collection: {}; name: {}"
+            elita.logging.debug("ModifyObject: found multiple docs in collection: {}; name: {}"
                                 .format(collection_name, name))
             for d in docs[1:]:
                 self.db[collection_name].remove({'_id': d['_id']})
@@ -1139,6 +1144,7 @@ class Root(GenericContainer):
     pass
 
 class RootTree(collections.MutableMapping):
+
     def __init__(self, db, updater, tree, doc, *args, **kwargs):
         self.pp = pprint.PrettyPrinter(indent=4)
         self.db = db
@@ -1183,6 +1189,8 @@ class RootTree(collections.MutableMapping):
         return key
 
 class RootTreeUpdater:
+    __metaclass__ = util.LoggingMetaClass
+
     def __init__(self, tree, db):
         self.tree = tree
         self.db = db
@@ -1208,12 +1216,14 @@ class DataValidator:
     '''Independent class to migrate/validate the root tree and potentially all docs
         Intended to run prior to main application, to migrate schema or fix problems
     '''
+    __metaclass__ = util.LoggingMetaClass
+
     def __init__(self, root, db):
         self.root = root
         self.db = db
 
     def run(self):
-        util.debugLog(self, "running")
+        logging.debug("running")
         self.check_root()
         self.check_doc_consistency()
         self.check_toplevel()
@@ -1258,45 +1268,45 @@ class DataValidator:
         for c in collects:
             for d in self.db[c].find():
                 if '_class' not in d:
-                    util.debugLog(self, "WARNING: class specification not found in object {} from collection {}"
+                    logging.debug("WARNING: class specification not found in object {} from collection {}"
                     .format(d['_id'], c))
-                    util.debugLog(self, "...deleting malformed object")
+                    logging.debug("...deleting malformed object")
                     self.db[c].remove({'_id': d['_id']})
                 if c == 'applications':
                     if d['app_name'] not in self.root['app']:
-                        util.debugLog(self, "WARNING: orphan application object: '{}', adding to root tree".format(d['app_name']))
+                        logging.debug("WARNING: orphan application object: '{}', adding to root tree".format(d['app_name']))
                         self.root['app'][d['app_name']] = {'_doc': bson.DBRef('applications', d['_id'])}
                 if c == 'builds':
                     if d['build_name'] not in self.root['app'][d['app_name']]['builds']:
-                        util.debugLog(self, "WARNING: orphan build object: '{}/{}', adding to root tree".format(d['app_name'], d['build_name']))
+                        logging.debug("WARNING: orphan build object: '{}/{}', adding to root tree".format(d['app_name'], d['build_name']))
                         self.root['app'][d['app_name']]['builds'][d['build_name']] = {'_doc': bson.DBRef('builds', d['_id'])}
                 if c == 'gitproviders':
                     if d['name'] not in self.root['global']['gitproviders']:
-                        util.debugLog(self, "WARNING: orphan gitprovider object: '{}', adding to root tree".format(d['name']))
+                        logging.debug("WARNING: orphan gitprovider object: '{}', adding to root tree".format(d['name']))
                         self.root['global']['gitproviders'][d['name']] = {'_doc': bson.DBRef('gitproviders', d['_id'])}
                 if c == 'gitrepos':
                     if d['name'] not in self.root['app'][d['application']]['gitrepos']:
-                        util.debugLog(self, "WARNING: orphan gitrepo object: '{}/{}', adding to root tree".format(d['application'], d['name']))
+                        logging.debug("WARNING: orphan gitrepo object: '{}/{}', adding to root tree".format(d['application'], d['name']))
                         self.root['app'][d['application']]['gitrepo'][d['name']] = {'_doc': bson.DBRef('gitrepos', d['_id'])}
                 if c == 'gitdeploys':
                     if d['name'] not in self.root['app'][d['application']]['gitdeploys']:
-                        util.debugLog(self, "WARNING: orphan gitdeploy object: '{}/{}', adding to root tree".format(d['application'], d['name']))
+                        logging.debug("WARNING: orphan gitdeploy object: '{}/{}', adding to root tree".format(d['application'], d['name']))
                         self.root['app'][d['application']]['gitdeploys'][d['name']] = {'_doc': bson.DBRef('gitdeploys', d['_id'])}
                 if c == 'jobs':
                     if d['job_id'] not in self.root['job']:
-                        util.debugLog(self, "WARNING: orphan job object: '{}', adding to root tree".format(d['job_id']))
+                        logging.debug("WARNING: orphan job object: '{}', adding to root tree".format(d['job_id']))
                         self.root['job'][d['job_id']] = {'_doc': bson.DBRef('jobs', d['_id'])}
                 if c == 'tokens':
                     if d['token'] not in self.root['global']['tokens']:
-                        util.debugLog(self, "WARNING: orphan token object: '{}', adding to root tree".format(d['token']))
+                        logging.debug("WARNING: orphan token object: '{}', adding to root tree".format(d['token']))
                         self.root['global']['tokens'][d['token']] = {'_doc': bson.DBRef('tokens', d['_id'])}
                 if c == 'users':
                     if d['name'] not in self.root['global']['users']:
-                        util.debugLog(self, "WARNING: orphan user object: '{}', adding to root tree".format(d['name']))
+                        logging.debug("WARNING: orphan user object: '{}', adding to root tree".format(d['name']))
                         self.root['global']['users'][d['name']] = {'_doc': bson.DBRef('users', d['_id'])}
                 if c == 'servers':
                     if d['name'] not in self.root['server']:
-                        util.debugLog(self, "WARNING: orphan server object: '{}', adding to root tree".format(d['name']))
+                        logging.debug("WARNING: orphan server object: '{}', adding to root tree".format(d['name']))
                         self.root['server'][d['name']] = {'_doc': bson.DBRef('servers', d['_id'])}
 
 
@@ -1317,11 +1327,11 @@ class DataValidator:
         }
         for l in global_levels:
             if l not in self.root['global']:
-                util.debugLog(self, "WARNING: '{}' not found under global".format(l))
+                logging.debug("WARNING: '{}' not found under global".format(l))
                 self.root['global'][l] = dict()
                 self.root['global'][l]['_doc'] = self.NewContainer(global_levels[l]['class'], l, "")
         if 'admin' not in self.root['global']['users']:
-            util.debugLog(self, "WARNING: admin user not found")
+            logging.debug("WARNING: admin user not found")
             uobj = User({
                 'name': 'admin',
                 'password': 'elita',
@@ -1354,7 +1364,7 @@ class DataValidator:
         for u in self.root['global']['users']:
             if u != '_doc':
                 if "permissions" not in self.root['global']['users'][u]:
-                    util.debugLog(self, "WARNING: permissions container object not found under user {} in root tree; "
+                    logging.debug("WARNING: permissions container object not found under user {} in root tree; "
                                         "fixing".format(u))
                     pid = self.db['userpermissions'].insert({
                             "_class": "UserPermissions",
@@ -1370,7 +1380,7 @@ class DataValidator:
     def check_user_permissions(self):
         for u in self.db['users'].find():
             if 'permissions' not in u:
-                util.debugLog(self, "WARNING: permissions object not found for user {}; fixing with empty obj"
+                logging.debug("WARNING: permissions object not found for user {}; fixing with empty obj"
                               .format(u['name']))
                 u['permissions'] = {
                     'apps': {},
@@ -1379,16 +1389,16 @@ class DataValidator:
                 }
             for o in ('apps', 'actions', 'servers'):
                 if o not in u['permissions']:
-                    util.debugLog(self, "WARNING: {} not found in permissions object for user {}; fixing with empty "
+                    logging.debug("WARNING: {} not found in permissions object for user {}; fixing with empty "
                                         "obj".format(o, u['name']))
                     u['permissions'][o] = list() if o == 'servers' else dict()
             if not isinstance(u['permissions']['servers'], list):
-                util.debugLog(self, "WARNING: servers key under permissions object for user {} is not a list; fixing"
+                logging.debug("WARNING: servers key under permissions object for user {} is not a list; fixing"
                               .format(u['name']))
                 u['permissions']['servers'] = list(u['permissions']['servers'])
             for o in ('apps', 'actions'):
                 if not isinstance(u['permissions'][o], dict):
-                    util.debugLog(self, "WARNING: {} key under permissions object for user {} is not a dict; invalid "
+                    logging.debug("WARNING: {} key under permissions object for user {} is not a dict; invalid "
                                         "so replacing with empty dict".format(o, u['name']))
                     u['permissions'][o] = dict()
             self.db['users'].save(u)
@@ -1398,7 +1408,7 @@ class DataValidator:
         for j in self.root['job']:
             if j[0] != '_':
                 if self.db.dereference(self.root['job'][j]['_doc']) is None:
-                    util.debugLog(self, "WARNING: found dangling job ref in root tree: {}; deleting".format(j))
+                    logging.debug("WARNING: found dangling job ref in root tree: {}; deleting".format(j))
                     djs.append(j)
         for j in djs:
             del self.root['job'][j]
@@ -1406,11 +1416,11 @@ class DataValidator:
         for doc in self.db['jobs'].find():
             if doc['job_id'] not in self.root['job']:
                 job_id = doc['job_id']
-                util.debugLog(self, "WARNING: found orphan job: {}; adding to root tree".format(doc['job_id']))
+                logging.debug("WARNING: found orphan job: {}; adding to root tree".format(doc['job_id']))
                 self.root['job'][job_id] = {'_doc': bson.DBRef('jobs', doc['_id'])}
             for k in ('job_type', 'data', 'name'):
                 if k not in doc:
-                    util.debugLog(self, "WARNING: found job without {}: {}; adding blank".format(k, doc['job_id']))
+                    logging.debug("WARNING: found job without {}: {}; adding blank".format(k, doc['job_id']))
                     doc[k] = ""
                     job_fixlist.append(doc)
         for d in job_fixlist:
@@ -1440,19 +1450,18 @@ class DataValidator:
         for a in self.root['app']:
             if a[0] != '_':
                 if 'action' in self.root['app'][a]:
-                    util.debugLog(self, "WARNING: found old 'action' container under app {}; deleting".format(a))
+                    logging.debug("WARNING: found old 'action' container under app {}; deleting".format(a))
                     del self.root['app'][a]['action']
                 for sl in app_sublevels:
                     if sl not in self.root['app'][a]:
-                        util.debugLog(self, "WARNING: '{}' not found under {}".format(sl, a))
+                        logging.debug("WARNING: '{}' not found under {}".format(sl, a))
                         self.root['app'][a][sl] = dict()
                         self.root['app'][a][sl]['_doc'] = self.NewContainer(app_sublevels[sl]['class'], sl, a)
                     d_o = list()
                     for o in self.root['app'][a][sl]:
                         if o[0] != '_' and '_doc' in self.root['app'][a][sl][o]:
                             if self.db.dereference(self.root['app'][a][sl][o]['_doc']) is None:
-                                util.debugLog(self,
-                                              "WARNING: dangling {} reference '{}' in app {}; deleting".format(sl, o, a))
+                                logging.debug("WARNING: dangling {} reference '{}' in app {}; deleting".format(sl, o, a))
                                 d_o.append(o)
                     for d in d_o:
                         del self.root['app'][a][sl][d]
@@ -1462,14 +1471,14 @@ class DataValidator:
         for s in self.root['server']:
             if s[0] != '_':
                 if self.db.dereference(self.root['server'][s]['_doc']) is None:
-                    util.debugLog(self, "WARNING: found dangling server ref in root tree: {}; deleting".format(s))
+                    logging.debug("WARNING: found dangling server ref in root tree: {}; deleting".format(s))
                     ds.append(s)
         for s in ds:
             del self.root['server'][s]
         update_list = list()
         for d in self.db['servers'].find():
             if 'environment' not in d:
-                util.debugLog(self, "WARNING: environment field not found for server {}; fixing".format(d['_id']))
+                logging.debug("WARNING: environment field not found for server {}; fixing".format(d['_id']))
                 d['environment'] = ""
                 update_list.append(d)
         for d in update_list:
@@ -1479,7 +1488,7 @@ class DataValidator:
         update_list = list()
         for d in self.db['deployments'].find():
             if 'server_specs' in d:
-                util.debugLog(self, "WARNING: found deployment with old-style server_specs object: {}; fixing".format(
+                logging.debug("WARNING: found deployment with old-style server_specs object: {}; fixing".format(
                     d['_id']))
                 d['deployment'] = {
                     'servers': d['server_specs']['spec'],
@@ -1487,16 +1496,16 @@ class DataValidator:
                 }
                 update_list.append(d)
             if 'job_id' not in d:
-                util.debugLog(self, "WARNING: found deployment without job_id: {}; fixing with blank job".format(d[
+                logging.debug("WARNING: found deployment without job_id: {}; fixing with blank job".format(d[
                     '_id']))
                 d['job_id'] = ""
                 update_list.append(d)
             if 'results' in d:
-                util.debugLog(self, "WARNING: found deployment with old-style results field: {}; removing"
+                logging.debug("WARNING: found deployment with old-style results field: {}; removing"
                               .format(d['_id']))
                 update_list.append(d)
             if 'status' not in d:
-                util.debugLog(self, "WARNING: found deployment without status: {}; fixing with blank".format(d['_id']))
+                logging.debug("WARNING: found deployment without status: {}; fixing with blank".format(d['_id']))
                 d['status'] = ""
                 update_list.append(d)
         for d in update_list:
@@ -1514,7 +1523,7 @@ class DataValidator:
                         doc = self.db.dereference(self.root['app'][a]['deployments'][d]['_doc'])
                         assert doc is not None
                         if 'name' not in doc:
-                            util.debugLog(self, "WARNING: name not found under deployment {}; fixing".format(d))
+                            logging.debug("WARNING: name not found under deployment {}; fixing".format(d))
                             doc['name'] = d
                             update_list.append(doc)
         if len(update_list) > 0:
@@ -1528,35 +1537,35 @@ class DataValidator:
             delete = False
             for k in ('application', 'name', 'package', 'location'):
                 if k not in d:
-                    util.debugLog(self, "WARNING: mandatory key '{}' not found under gitdeploy {}; removing".
+                    logging.debug("WARNING: mandatory key '{}' not found under gitdeploy {}; removing".
                                   format(k, d['_id']))
                     dlist.append(d['_id'])
                     delete = True
             fix = False
             if 'attributes' not in d and not delete:
-                util.debugLog(self, "WARNING: attributes not found under gitdeploy {}; fixing".format(d['_id']))
+                logging.debug("WARNING: attributes not found under gitdeploy {}; fixing".format(d['_id']))
                 d['attributes'] = dict()
                 fix = True
             if 'actions' not in d and not delete:
-                util.debugLog(self, "WARNING: actions not found under gitdeploy {}; fixing".format(d['_id']))
+                logging.debug("WARNING: actions not found under gitdeploy {}; fixing".format(d['_id']))
                 d['actions'] = {
                     'prepull': dict(),
                     'postpull': dict()
                 }
                 fix = True
             if 'servers' not in d and not delete:
-                util.debugLog(self, "WARNING: servers not found under gitdeploy {}; fixing".format(d['_id']))
+                logging.debug("WARNING: servers not found under gitdeploy {}; fixing".format(d['_id']))
                 d['servers'] = list()
                 fix = True
             if len([x for x, y in collections.Counter(d['servers']).items() if y > 1]) > 0 and not delete:
-                util.debugLog(self, "WARNING: duplicate server entries found in gitdeploy {}; fixing".format(d['_id']))
+                logging.debug("WARNING: duplicate server entries found in gitdeploy {}; fixing".format(d['_id']))
                 d['servers'] = list(set(tuple(d['servers'])))
                 fix = True
             if 'deployed_build' not in d:
-                util.debugLog(self, "WARNING: deployed_build not found in gitdeploy {}".format(d['_id']))
+                logging.debug("WARNING: deployed_build not found in gitdeploy {}".format(d['_id']))
                 gr_doc = self.db.dereference(d['location']['gitrepo'])
                 if not gr_doc or 'last_build' not in gr_doc:
-                    util.debugLog(self, "...ERROR: referenced gitrepo not found! Aborting fix...")
+                    logging.debug("...ERROR: referenced gitrepo not found! Aborting fix...")
                 else:
                     d['deployed_build'] = gr_doc['last_build']
                     fix = True
@@ -1573,15 +1582,15 @@ class DataValidator:
         for d in self.db['gitrepos'].find():
             if 'uri' in d:
                 if d['uri'] is not None and ':' in d['uri']:
-                    util.debugLog(self, "WARNING: found gitrepo URI with ':'; replacing with '/' ({})".format(d['name']))
+                    logging.debug("WARNING: found gitrepo URI with ':'; replacing with '/' ({})".format(d['name']))
                     d['uri'] = d['uri'].replace(':', '/')
                     fixlist.append(d)
             else:
-                util.debugLog(self, "WARNING: found gitrepo without URI ({}); adding empty field".format(d['name']))
+                logging.debug("WARNING: found gitrepo without URI ({}); adding empty field".format(d['name']))
                 d['uri'] = ""
                 fixlist.append(d)
             if 'last_build' not in d:
-                util.debugLog(self, "WARNING: found gitrepo without last_build: {}; adding empty field".format(d['name']))
+                logging.debug("WARNING: found gitrepo without last_build: {}; adding empty field".format(d['name']))
                 d['last_build'] = None
                 fixlist.append(d)
         for d in fixlist:
@@ -1592,15 +1601,15 @@ class DataValidator:
         for d in self.db['groups'].find():
             fix = False
             if 'description' not in d:
-                util.debugLog(self, "WARNING: found group without description: {}; fixing".format(d['name']))
+                logging.debug("WARNING: found group without description: {}; fixing".format(d['name']))
                 d['description'] = None
                 fix = True
             if 'servers' in d:
-                util.debugLog(self, "WARNING: found group with explicit server list: {}; removing".format(d['name']))
+                logging.debug("WARNING: found group with explicit server list: {}; removing".format(d['name']))
                 del d['servers']
                 fix = True
             if 'rolling_deploy' not in d:
-                util.debugLog(self, "WARNING: found group without rolling_deploy flag: {}; fixing".format(d['name']))
+                logging.debug("WARNING: found group without rolling_deploy flag: {}; fixing".format(d['name']))
                 d['rolling_deploy'] = False
                 fix = True
             if fix:
@@ -1625,12 +1634,12 @@ class DataValidator:
         }
         for tl in top_levels:
             if tl not in self.root:
-                util.debugLog(self, "WARNING: '{}' not found under root".format(tl))
+                logging.debug("WARNING: '{}' not found under root".format(tl))
                 self.root[tl] = dict()
                 self.root[tl]['_doc'] = self.NewContainer(top_levels[tl]['class'], tl, "")
             if tl == 'server':
                 if "environments" not in self.root[tl] or isinstance(self.root[tl]['environments'], bson.DBRef):
-                    util.debugLog(self, "WARNING: environments endpoint not found under servers container; fixing")
+                    logging.debug("WARNING: environments endpoint not found under servers container; fixing")
                     eid = self.db['environments'].insert({
                         '_class': "Environment",
                         'environments': ""
@@ -1643,7 +1652,7 @@ class DataValidator:
         update_list = list()
         for c in self.db['containers'].find():
             if c['_class'] == 'AppContainer':
-                util.debugLog(self, "WARNING: found Application container with incorrect 'AppContainer' class; fixing")
+                logging.debug("WARNING: found Application container with incorrect 'AppContainer' class; fixing")
                 c['_class'] = 'ApplicationContainer'
                 update_list.append(c)
         for c in update_list:
@@ -1652,8 +1661,8 @@ class DataValidator:
     def check_root(self):
         self.root = dict() if self.root is None else self.root
         if '_class' in self.root:
-            util.debugLog(self, "WARNING: '_class' found in base of root; deleting")
+            logging.debug("WARNING: '_class' found in base of root; deleting")
             del self.root['_class']
         if '_doc' not in self.root:
-            util.debugLog(self, "WARNING: '_doc' not found in base of root")
+            logging.debug("WARNING: '_doc' not found in base of root")
             self.root['_doc'] = self.NewContainer('Root', 'Root', '')
