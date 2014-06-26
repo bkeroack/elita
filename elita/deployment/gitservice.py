@@ -351,16 +351,8 @@ class GitDeployManager:
     def add_sls(self):
         self.sc.new_gitdeploy_yaml(self.gitdeploy)
 
-    #def add_to_top(self, server_list):
-    #    return self.sc.add_gitdeploy_servers_to_elita_top(server_list, self.gitdeploy['application'],
-    #                                                     self.gitdeploy['name'])
-
     def rm_sls(self):
         self.sc.rm_gitdeploy_yaml(self.gitdeploy)
-
-    #def remove_from_top(self, server_list):
-    #    return self.sc.rm_gitdeploy_servers_from_elita_top(server_list, self.gitdeploy['application'],
-    #                                                      self.gitdeploy['name'])
 
     def delete_remote_dir(self, server_list):
         logging.debug(self, "delete_remote_dir")
@@ -380,22 +372,13 @@ class GitDeployManager:
         return {'status': 'noop'}
 
     def push_keypair(self, server_list):
-        f_pub, tf_pub = tempfile.mkstemp(text=True)
-        with open(tf_pub, 'w') as f:
-            f.write(self.gitdeploy['location']['gitrepo']['keypair']['public_key'].decode('string_escape'))
-
-        f_priv, tf_priv = tempfile.mkstemp(text=True)
-        with open(tf_priv, 'w') as f:
-            f.write(self.gitdeploy['location']['gitrepo']['keypair']['private_key'].decode('string_escape'))
-
-        keyname = "{}-{}".format(self.gitdeploy['application'], self.gitdeploy['name'])
-        res_pub = self.rc.push_key(server_list, tf_pub, keyname, '.pub')
-        logging.debug(self, "push_keypair: push pub resp: {}".format(res_pub))
-        res_priv = self.rc.push_key(server_list, tf_priv, keyname, '')
-        logging.debug(self, "push_keypair: push priv resp: {}".format(res_priv))
-        os.unlink(tf_pub)
-        os.unlink(tf_priv)
-        return res_pub, res_priv
+        '''
+        Push the keypair to the target servers and set up SSH alias
+        '''
+        sshc = sshconfig.SSHController()
+        return sshc.push_remote_keys(self.rc, server_list, self.gitdeploy['application'], self.gitdeploy['gitrepo']['name'],
+                                     self.gitdeploy['location']['gitrepo']['keypair']['private_key'],
+                                     self.gitdeploy['location']['gitrepo']['keypair']['public_key'])
 
     def clone_repo(self, server_list):
         logging.debug(self, "clone_repo: cloning")
@@ -417,7 +400,7 @@ class GitDeployManager:
                     f.write("{}\n".format(l))
         logging.debug(self, "create_ignore: pushing gitignore")
         remote_filename = os.path.join(repo_path, ".gitignore")
-        res = self.rc.push_file(server_list, temp_name, remote_filename)
+        res = self.rc.push_files(server_list, {temp_name: remote_filename})
         logging.debug(self, "create_ignore: push resp: {}".format(res))
         logging.debug(self, "create_ignore: autocrlf")
         res = self.rc.set_git_autocrlf(server_list, repo_path)

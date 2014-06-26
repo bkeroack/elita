@@ -20,10 +20,6 @@ import elita.util
 
 __author__ = 'bkeroack'
 
-WINDOWS_KEY_LOCATION = 'C:\Program Files (x86)\Git\.ssh'
-UNIX_KEY_LOCATION = '~/.ssh'
-UNIX_MINION_USER = 'root'  # hack
-
 class FatalSaltError(Exception):
     pass
 
@@ -70,86 +66,40 @@ class RemoteCommands:
             res.append(self.delete_directory_unix(unix_s, path))
         return res
 
-    def push_file(self, target, local_path, remote_path):
+    def _get_salt_uri(self, local_path):
+        '''
+        For pushing local files to remote servers, need to copy it to a random location in salt tree
+        so we can push via cp.get_file. This file should be deleted after that call returns.
+        '''
+
         r_postfix = ''.join(random.sample(string.letters + string.digits, 20))
         root = self.sc.sls_dir
         newname = os.path.basename(local_path) + r_postfix
         new_fullpath = "{}/{}".format(root, newname)
         shutil.copy(local_path, new_fullpath)
-        salt_uri = 'salt://{}/{}'.format(self.sc.settings['elita.salt.slsdir'], newname)
-        logging.debug("push_file: salt_uri: {}".format(salt_uri))
-        logging.debug("push_file: remote_path: {}".format(remote_path))
-        res = self.sc.salt_command(target, 'cp.get_file', [salt_uri, remote_path])
-        logging.debug("push_file: resp: {}".format(res))
-        os.unlink(new_fullpath)
-        return {'success': {'target': target, 'remote_path': remote_path}}
+        return 'salt://{}/{}'.format(self.sc.settings['elita.salt.slsdir'], newname), new_fullpath
 
-    def push_key(self, server_list, file, name, ext):
-        res = list()
-        for s in server_list:
-            ost = self.get_os(s)
-            results = {
-                'server': s,
-                'os': ost,
-                'results': []
-            }
-            # on Windows, salt-minion runs as LOCALSYSTEM which does not have a home directory
-            # therefore we have to create a place to put keys
-            if ost == OSTypes.Windows:
-                path = WINDOWS_KEY_LOCATION
-                fullpath = path + "\\{}{}".format("id_rsa", ext)
-            elif ost == OSTypes.Unix_like:
-                path = UNIX_KEY_LOCATION
-                fullpath = os.path.join(path, "id_rsa{}".format(ext))
-            results['results'].append(self.create_directory([s], path))
-            results['results'].append(self.push_file(s, file, fullpath))
-            res.append(results)
-        return res
-
-    def add_ssh_alias(self, server_list, alias_name, real_hostname, keyname):
+    def push_files(self, target, local_remote_path_mapping):
         '''
-        Append alias to ssh config
-        '''
-        win_servers = list()
-        unix_servers = list()
-        for s in server_list:
-            ost = self.get_os(s)
-            if ost == OSTypes.Windows:
-                win_servers.append(s)
-            elif ost == OSTypes.Unix_like:
-                unix_servers.append(s)
-        unix_sshconfig = os.path.join(UNIX_KEY_LOCATION, "config")
-        win_sshconfig = "{}\\{}".format(WINDOWS_KEY_LOCATION, "config")
-        alias = """
-Host {alias}
-\tHostname {hostname}
-\tIdentityFile {keyfile}
-\t
-asdf
-""".format()
-        return {
-            'unix_servers': self.sc.salt_command(unix_servers,
-                                                 ['file.mkdir',
-                                                  'file.touch',
-                                                  'file.append',
-                                                  'file.check_perms'],
-                                                 [
-                                                     [UNIX_KEY_LOCATION],
-                                                     [unix_sshconfig],
-                                                     [unix_sshconfig, alias],
-                                                     [unix_sshconfig, '{}', UNIX_MINION_USER, UNIX_MINION_USER, '600']
-                                                 ]),
-            'windows_servers': self.sc.salt_command(win_servers,
-                                                    ['file.mkdir',
-                                                    'file.touch',
-                                                    'file.append'],
-                                                    [
-                                                        [WINDOWS_KEY_LOCATION],
-                                                        [win_sshconfig],
-                                                        [win_sshconfig, alias]
-                                                    ])
-        }
+        Push a list of files to corresponding remote paths. Make sure each remote path exists first.
+        Do all pushes in a single salt call (faster).
 
+        local_remote_path_mapping = { 'local_path': 'remote_path' }
+        '''
+        calls = list()
+        params = list()
+        for local_path in local_remote_path_mapping:
+            remote_path = local_remote_path_mapping[local_path]
+            calls.append('file.mkdir')
+            calls.append('cp.get_file')
+            params.append([remote_path])
+            params.append([self._get_salt_uri(local_path), remote_path])
+            logging.debug("push_files: remote_path: {}".format(remote_path))
+
+        return self.sc.salt_command(target, calls, params)
+
+    def append_to_file(self, server_list, remote_path, text_block):
+        return self.sc.salt_command(server_list, 'file.append', [remote_path, text_block])
 
     def clone_repo(self, server_list, repo_uri, dest):
         cwd, dest_dir = os.path.split(dest)
