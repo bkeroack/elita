@@ -243,6 +243,8 @@ class SaltController:
             logging.debug("add_gitdeploy_to_yaml: existing yaml sls")
             with open(filename, 'r') as f:
                 existing = yaml.load(f, Loader=Loader)
+            if not existing:    # if empty file this will be None
+                existing = dict()
         else:
             logging.debug("add_gitdeploy_to_yaml: yaml sls does not exist")
             existing = dict()
