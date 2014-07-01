@@ -56,16 +56,13 @@ class RollingDeployController:
     def get_nonrolling_groups(self, rolling_groups, all_groups):
         return list(set(all_groups) - set(rolling_groups))
 
-    def compute_batches(self, application, target, rolling_groups, rolling_divisor):
+    def compute_batches(self, rolling_group_docs, nonrolling_group_docs, rolling_divisor):
         '''
         Given a list of application groups that require rolling deployment and an (optional) list that do not,
         compute the optimal batches of server/gitdeploy pairs. All non-rolling groups are added to the first batch.
         Splitting algorithm is tolerant of outrageously large rolling_divisors.
         '''
 
-        non_rolling_groups = self.get_nonrolling_groups(rolling_groups, target['groups'])
-        non_rolling_group_docs = {g: self.datasvc.groupsvc.GetGroup(application, g) for g in non_rolling_groups}
-        rolling_group_docs = {g: self.datasvc.groupsvc.GetGroup(application, g) for g in rolling_groups}
         server_steps = dict()
         batches = list()
         for i in range(0, rolling_divisor):
@@ -75,8 +72,8 @@ class RollingDeployController:
             })
 
         #we assume a single rolling_divisor for all rolling groups
-        for g in rolling_groups:
-            group_servers = self.datasvc.groupsvc.GetGroupServers(application, g)
+        for g in rolling_group_docs:
+            group_servers = rolling_group_docs[g]['servers']
             group_steps = elita.util.split_seq(group_servers, rolling_divisor)
             server_steps[g] = group_steps
 
@@ -87,11 +84,11 @@ class RollingDeployController:
                 batches[i]['gitdeploys'] += rolling_group_docs[g]['gitdeploys']
 
         #add all non-rolling groups to first batch
-        if len(non_rolling_groups) > 0:
-            non_rolling_group_servers = {g: self.datasvc.groupsvc.GetGroupServers(application, g) for g in non_rolling_groups}
-            for nrg in non_rolling_group_servers:
-                batches[0]['servers'] += non_rolling_group_servers[nrg]
-                batches[0]['gitdeploys'] += non_rolling_group_docs[nrg]['gitdeploys']
+        if len(nonrolling_group_docs) > 0:
+            nonrolling_group_servers = {g: nonrolling_group_docs[g]['servers'] for g in nonrolling_group_docs}
+            for nrg in nonrolling_group_servers:
+                batches[0]['servers'] += nonrolling_group_servers[nrg]
+                batches[0]['gitdeploys'] += nonrolling_group_docs[nrg]['gitdeploys']
 
         #dedupe
         for b in batches:
@@ -107,8 +104,12 @@ class RollingDeployController:
 
         groups = target['groups']
         rolling_groups = [g for g in groups if self.datasvc.groupsvc.GetGroup(application, g)['rolling_deploy']]
+        rolling_group_docs = {g: self.datasvc.groupsvc.GetGroup(application, g) for g in rolling_groups}
+        nonrolling_groups = self.get_nonrolling_groups(rolling_groups, groups)
+        nonrolling_group_docs = {g: self.datasvc.groupsvc.GetGroup(application, g) for g in nonrolling_groups}
+
         if len(rolling_groups) > 0:
-            batches = self.compute_batches(application, target, rolling_groups, rolling_divisor)
+            batches = self.compute_batches(rolling_group_docs, nonrolling_group_docs, rolling_divisor)
 
             logging.debug("computed batches: {}".format(batches))
 
