@@ -405,6 +405,8 @@ class ServerDataService(GenericChildDataService):
         try:
             server = Server({
                 'name': name,
+                'status': 'new',
+                'server_type': 'unknown',
                 'environment': environment,
                 'attributes': attribs
             })
@@ -420,6 +422,8 @@ class ServerDataService(GenericChildDataService):
         }, update={
             '_class': "Server",
             'name': server.name,
+            'status': server.status,
+            'server_type': server.server_type,
             'environment': server.environment,
             'gitdeploys': [],
             'attributes': server.attributes
@@ -435,6 +439,22 @@ class ServerDataService(GenericChildDataService):
                 'status': 'ok'
             }
       }
+
+    def ChangeServer(self, name, changed_keys):
+        '''
+        Modify data in existing server. changed_keys is a dict of top-level keys to replace. Each one will *replace*
+        the entire top-level key!
+        '''
+        prototype = Server({})
+        assert isinstance(changed_keys, dict)
+        # do each key separately to keep atomic
+        for k in changed_keys:
+            if hasattr(prototype, k):
+                self.db['servers'].find_and_modify(query={
+                    'name': name
+                }, update={
+                    '$set': {k: changed_keys[k]}
+                })
 
     def DeleteServer(self, name):
         self.parent.DeleteObject(self.root['server'], name, 'servers')
@@ -919,6 +939,7 @@ class Server(GenericDataModel):
     default_values = {
         "name": None,
         "server_type": None,
+        "status": None,
         "environment": None,
         "attributes": dict(),
         "gitdeploys": [bson.DBRef("", None)],
@@ -987,6 +1008,7 @@ class Deployment(GenericDataModel):
         'servers': None,
         'gitdeploys': None,
         'status': None,
+        'progress': dict(),
         'job_id': None
     }
 
@@ -1481,6 +1503,9 @@ class DataValidator:
                 logging.debug("WARNING: environment field not found for server {}; fixing".format(d['_id']))
                 d['environment'] = ""
                 update_list.append(d)
+            if 'status' not in d:
+                logging.debug("WARNING: status field not found for server {}; fixing".format(d['_id']))
+                d['status'] = "ok"
         for d in update_list:
             self.db['servers'].save(d)
 
@@ -1507,6 +1532,10 @@ class DataValidator:
             if 'status' not in d:
                 logging.debug("WARNING: found deployment without status: {}; fixing with blank".format(d['_id']))
                 d['status'] = ""
+                update_list.append(d)
+            if 'progress' not in d:
+                logging.debug("WARNING: found deployment without progress: {}; fixing with empty dict".format(d['_id']))
+                d['progress'] = dict()
                 update_list.append(d)
         for d in update_list:
             if 'server_specs' in d:

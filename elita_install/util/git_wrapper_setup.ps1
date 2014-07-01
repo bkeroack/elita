@@ -3,25 +3,23 @@ param($cmd)
 #git will run this wrapper script instead of ssh directly
 $gitwrapper = @"
 @echo off
-ssh -F "C:\elita-git\ssh_config" -o StrictHostKeyChecking=no %*
+ssh -F "C:\Program Files (x86)\Git\.ssh" -o StrictHostKeyChecking=no %*
 "@
 
 #no spaces in path--screws up git
-$git_script = "C:\elita-git\git-ssh-wrapper.bat"
+$git_script_dir = "C:\elita-git"
+$git_script = "${git_script_dir}\git-ssh-wrapper.bat"
 
 $bin_path = "C:\Program Files (x86)\Git\bin\"
 
-if (!(Test-Path "C:\elita-git")) {
-	New-Item -Type Directory "C:\git" |Out-Null
-}
-if (!(Test-Path "C:\elita-git\.ssh")) {
-    New-Item 'C:\elita-git\.ssh' -Type Directory |Out-Null
+if (!(Test-Path "${git_script_dir}")) {
+	New-Item -Type Directory "${git_script_dir}" |Out-Null
 }
 
 #make sure git is in system PATH
 $oldpath = (Get-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment' -Name PATH).Path
 if (!($oldpath.Contains($bin_path))) {
-	$newpath = $oldpath + ";C:\Program Files (x86)\Git\bin\"
+	$newpath = $oldpath + ";C:\Program Files (x86)\Git\bin\" + ";${git_script_dir}"
 	Set-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment' -Name PATH -Value $newpath
 	$env:PATH = (Get-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment' -Name PATH).Path
 }

@@ -38,6 +38,15 @@ class RemoteCommands:
         logging.debug("get_os: resp: {}".format(resp))
         return OSTypes.Windows if resp[server]['os'] == "Windows" else OSTypes.Unix_like
 
+    def get_os_text(self, server):
+        ost = self.get_os(server)
+        if ost == OSTypes.Windows:
+            return "windows"
+        elif ost == OSTypes.Unix_like:
+            return "unix"
+        else:
+            return "unknown"
+
     def create_directory(self, server_list, path):
         assert isinstance(server_list, list)
         return self.sc.salt_command(server_list, 'file.mkdir', [path])
@@ -88,15 +97,30 @@ class RemoteCommands:
         '''
         calls = list()
         params = list()
+        temp_files = list()
         for local_path in local_remote_path_mapping:
+            if 'salt://' in local_path:
+                salt_uri = local_path
+            else:
+                salt_uri, tf = self._get_salt_uri(local_path)
+                temp_files.append(tf)
             remote_path = local_remote_path_mapping[local_path]
             calls.append('file.mkdir')
             calls.append('cp.get_file')
             params.append([remote_path])
-            params.append([self._get_salt_uri(local_path), remote_path])
+            params.append([salt_uri, remote_path])
             logging.debug("push_files: remote_path: {}".format(remote_path))
 
-        return self.sc.salt_command(target, calls, params)
+        rets = self.sc.salt_command(target, calls, params)
+        for tf in temp_files:
+            os.unlink(tf)
+        return rets
+
+    def run_powershell_script(self, server_list, script_path):
+        return self.sc.salt_command(server_list, 'cmd.run', [script_path], opts={'shell': 'powershell'})
+
+    def run_shell_command(self, server_list, cmd):
+        return self.sc.salt_command(server_list, 'cmd.run', [cmd])
 
     def append_to_file(self, server_list, remote_path, text_block):
         return self.sc.salt_command(server_list, 'file.append', [remote_path, text_block])

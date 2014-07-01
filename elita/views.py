@@ -15,6 +15,7 @@ from elita.actions import action
 import models
 import builds
 import auth
+import servers
 import elita.deployment.gitservice
 import elita_exceptions
 import elita.deployment.deploy
@@ -457,7 +458,12 @@ class ServerContainerView(GenericView):
         if not existing:
             msg = {"error": "server provisioning not implemented yet!"}
         else:
-            msg = "none"
+            job_data = {
+                'server': name,
+                'environment': environment,
+                'existing': existing
+            }
+            msg = self.run_async("setup_new_server", "async", job_data, servers.setup_new_server, {'name': name})
         if res['NewServer']['status'] == 'ok':
             return self.status_ok({
                 "new_server": {
@@ -487,6 +493,8 @@ class ServerView(GenericView):
     def GET(self):
         return {
             'server_name': self.context.name,
+            'server_type': self.context.server_type,
+            'status': self.context.status,
             'created_datetime': self.get_created_datetime_text(),
             'environment': self.context.environment,
             'attributes': self.context.attributes,
@@ -654,7 +662,8 @@ class DeploymentView(GenericView):
                 'build': self.context.build_name,
                 'servers': self.context.servers if hasattr(self.context, 'servers') else None,
                 'gitdeploys': self.context.gitdeploys if hasattr(self.context, 'gitdeploys') else None,
-                'status': self.context.status
+                'status': self.context.status,
+                'progress': self.context.progress
             }
         }
 
