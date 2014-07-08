@@ -6,6 +6,8 @@ import traceback
 import time
 import multiprocessing
 import itertools
+import pprint
+pp = pprint.PrettyPrinter(indent=4)
 
 import elita.util
 import gitservice
@@ -44,6 +46,118 @@ def run_deploy(datasvc, application, build_name, target, rolling_divisor, rollin
     return {"deploy_status": "done" if ret else "error"}
 
 
+class BatchCompute:
+    '''
+        Given a list of application groups that require rolling deployment and an (optional) list that do not,
+        compute the optimal batches of server/gitdeploy pairs. All non-rolling groups are added to the first batch.
+        Splitting algorithm is tolerant of outrageously large rolling_divisors.
+
+        Written in a functional style to facilitate testing.
+    '''
+
+    @staticmethod
+    def add_nonrolling_groups(batches, nonrolling_docs):
+        '''
+        Add servers and gitdeploys from nonrolling groups to the first batch
+        Not written in a functional style because that was totally unreadable
+        '''
+        if nonrolling_docs and len(nonrolling_docs) > 0:
+            assert len(batches) > 0
+            assert all(map(lambda x: 'servers' in x and 'gitdeploys' in x, batches))
+            assert all(map(lambda x: 'servers' in x[1] and 'gitdeploys' in x[1], nonrolling_docs.iteritems()))
+            for g in nonrolling_docs:
+                for k in ('servers', 'gitdeploys'):
+                    batches[0][k] += nonrolling_docs[g][k]
+        return batches
+
+    @staticmethod
+    def dedupe_batches(batches):
+        '''
+        Dedupe servers and gitdeploys list in the combined batches list:
+        [
+            { "servers": [ "server1", "server1", ...], "gitdeploys": [ "gd1", "gd1", ...] },  #batch 0 (all groups)
+            { "servers": [ "server1", "server1", ...], "gitdeploys": [ "gd1", "gd1", ...] },  #batch 1 (all groups)
+            ...
+        ]
+        '''
+        assert len(batches) > 0
+        assert all(map(lambda x: 'servers' in x and 'gitdeploys' in x, batches))
+        return map(lambda x: {"servers": list(set(x['servers'])), "gitdeploys": list(set(x['gitdeploys']))}, batches)
+
+    @staticmethod
+    def reduce_group_batches(accumulated, update):
+        assert 'servers' in accumulated and 'servers' in update
+        assert 'gitdeploys' in accumulated and 'gitdeploys' in update
+        return {
+            "servers": accumulated['servers'] + update['servers'],
+            "gitdeploys": accumulated['gitdeploys'] + update['gitdeploys']
+        }
+
+    @staticmethod
+    def coalesce_batches(batches):
+        '''
+        Combine the big list of batches into a single list.
+
+        Function is passed a list of lists:
+        [
+            [ { "servers": [...], "gitdeploys": [...] }, ... ],     # batches 0-n for group A
+            [ { "servers": [...], "gitdeploys": [...] }, ... ],     # batches 0-n for broup B
+            ...
+        ]
+
+        Each nested list represents the computed batches for an individual group. All nested lists are expected to be
+        the same length.
+        '''
+        assert len(batches) > 0
+        assert all(map(lambda x: len(x) == len(batches[0]), batches))  # all batches must be the same length
+
+        return map(
+            lambda batch_aggregate: reduce(
+                lambda acc, upd:
+                {
+                    'servers': acc['servers'] + upd['servers'],
+                    'gitdeploys': acc['gitdeploys'] + upd['gitdeploys']
+                }, batch_aggregate
+            ), zip(*batches))
+
+    @staticmethod
+    def compute_group_batches(divisor, group):
+        '''
+        Compute batches for group.
+        Group is iteritems() result from group dict. group[0] is key (name), group[1] is dict of servers/gitdeploys
+
+        return list of dicts: [ { 'servers': [...], 'gitdeploys': [...] }, ... ]
+        '''
+        assert len(group) == 2
+        assert 'servers' in group[1]
+        assert 'gitdeploys' in group[1]
+
+        servers = group[1]['servers']
+        gitdeploys = group[1]['gitdeploys']
+        server_batches = elita.util.split_seq(servers, divisor)
+        gd_multiplier = len(server_batches)  # gitdeploy_batches multipler
+        if isinstance(gitdeploys[0], list):
+            # duplicate all server batches by the length of the gitdeploy list-of-lists
+            server_batches = [x for item in server_batches for x in itertools.repeat(item, len(gitdeploys))]
+        gitdeploy_batches = list(gitdeploys) * gd_multiplier
+        assert len(gitdeploy_batches) == len(server_batches)
+        return [{'servers': sb, 'gitdeploys': gd} for sb, gd in zip(server_batches, gitdeploy_batches)]
+
+    @staticmethod
+    def compute_rolling_batches(divisor, rolling_group_docs, nonrolling_group_docs):
+        assert isinstance(divisor, int)
+        assert len(rolling_group_docs) > 0
+        assert isinstance(rolling_group_docs, dict)
+        assert all(map(lambda x: 'servers' in x[1] and 'gitdeploys' in x[1], rolling_group_docs.iteritems()))
+        return BatchCompute.dedupe_batches(
+            BatchCompute.add_nonrolling_groups(
+                BatchCompute.coalesce_batches(
+                    map(lambda x: BatchCompute.compute_group_batches(divisor, x), rolling_group_docs.iteritems())
+                ), nonrolling_group_docs
+            )
+        )
+
+
 class RollingDeployController:
     '''
     Break deployment up into server/gitdeploy batches, then invoke DeployController with each batch sequentially
@@ -57,120 +171,8 @@ class RollingDeployController:
     def get_nonrolling_groups(self, rolling_groups, all_groups):
         return list(set(all_groups) - set(rolling_groups))
 
-    def dedupe_batches(self, batches):
-        '''
-        Dedupe servers and gitdeploys list in the combined batches list:
-        [
-            { "servers": [ "server1", "server1", ...], "gitdeploys": [ "gd1", "gd1", ...] },  #batch 0 (all groups)
-            { "servers": [ "server1", "server1", ...], "gitdeploys": [ "gd1", "gd1", ...] },  #batch 1 (all groups)
-            ...
-        ]
-        '''
-        return map(lambda x: {"servers": list(set(x['servers'])), "gitdeploys": list(set(x['gitdeploys']))}, batches)
-
-    def _add_group_batches(self, accumulated, update):
-        assert 'servers' in accumulated and 'servers' in update
-        assert 'gitdeploys' in accumulated and 'gitdeploys' in update
-        return {
-            "servers": accumulated['servers'] + update['servers'],
-            "gitdeploys": accumulated['gitdeploys'] + update['gitdeploys']
-        }
-
-    def coalesce_batches(self, batches):
-        '''
-        Combine the big list of batches into a single list and dedupe for each batch.
-
-        Function is passed a list of lists:
-        [
-            [ { "servers": [...], "gitdeploys": [...] }, ... ],     # batches 0-n for group A
-            [ { "servers": [...], "gitdeploys": [...] }, ... ],     # batches 0-n for broup B
-            ...
-        ]
-
-        Each nested list represents the computed batches for an individual group. All nested lists are expected to be
-        the same length.
-        '''
-        assert all(map(lambda x: len(x) == len(batches[0]), batches))  # all batches must be the same length
-        return map(lambda x: reduce(self._add_group_batches, x), batches)
-
-    def compute_group_batches(self, divisor, group):
-        '''
-        Compute batches for group.
-        return list of dicts: [ { 'servers': [...], 'gitdeploys': [...] }, ... ]
-        '''
-        assert len(group) == 2
-        assert 'servers' in group[1]
-        assert 'gitdeploys' in group[1]
-
-        servers = group[1]['servers']
-        gitdeploys = group[1]['gitdeploys']
-        server_batches = elita.util.split_seq(servers, divisor)
-        if isinstance(gitdeploys[0], list):
-            # duplicate all server batches by the length of the gitdeploy list-of-lists
-            server_batches = [x for item in server_batches for x in itertools.repeat(item, len(gitdeploys))]
-            gitdeploy_batches = [gitdeploys] * len(server_batches)
-        else:
-            gitdeploy_batches = gitdeploys * len(server_batches)
-        assert len(gitdeploy_batches) == len(server_batches)
-        return [{'servers': sb, 'gitdeploys': gd} for sb in server_batches for gd in gitdeploy_batches]
-
-    def compute_rolling_batches(self, divisor, rolling_group_docs):
-        return self.coalesce_batches(
-            map(lambda x: self.compute_group_batches(divisor, x), rolling_group_docs.iteritems())
-        )
-
     def compute_batches(self, rolling_group_docs, nonrolling_group_docs, rolling_divisor):
-        '''
-        Given a list of application groups that require rolling deployment and an (optional) list that do not,
-        compute the optimal batches of server/gitdeploy pairs. All non-rolling groups are added to the first batch.
-        Splitting algorithm is tolerant of outrageously large rolling_divisors.
-        '''
-
-        server_steps = dict()   # map: group_name -> server batches
-        batches = list()
-        for i in range(0, rolling_divisor):
-            batches.append({
-                "servers": list(),
-                "gitdeploys": list()
-            })
-
-        # We have groups: { "servers": [ blah, blah ], "gitdeploys": [ foo, bar ] }
-        # or: { "servers": [ blah, blah ], "gitdeploys": [ [ foo ], [ bar, baz ] }
-
-        #what we need:
-        # [ { "servers": [ blah ], "gitdeploys": [ foo, bar ] }, ... ]
-
-        # IOW, we need to keep the same structure, but split it out into batches
-
-        # Complication is that gitdeploys may or may not require ordering
-
-
-        #we assume a single rolling_divisor for all rolling groups
-        #for each rolling group, split up the servers into required number of groups
-        for g in rolling_group_docs:
-            group_servers = rolling_group_docs[g]['servers']
-            group_steps = elita.util.split_seq(group_servers, rolling_divisor)
-            server_steps[g] = group_steps
-
-        #coalesce into global batches
-        for g in server_steps:
-            for i in range(0, rolling_divisor):
-                batches[i]['servers'] += server_steps[g][i]
-                batches[i]['gitdeploys'] += rolling_group_docs[g]['gitdeploys']
-
-        #add all non-rolling groups to first batch
-        if len(nonrolling_group_docs) > 0:
-            nonrolling_group_servers = {g: nonrolling_group_docs[g]['servers'] for g in nonrolling_group_docs}
-            for nrg in nonrolling_group_servers:
-                batches[0]['servers'] += nonrolling_group_servers[nrg]
-                batches[0]['gitdeploys'] += nonrolling_group_docs[nrg]['gitdeploys']
-
-        #dedupe
-        for b in batches:
-            b['servers'] = list(set(b['servers']))
-            b['gitdeploys'] = list(set(b['gitdeploys']))
-
-        return batches
+        return BatchCompute.compute_rolling_batches(rolling_divisor, rolling_group_docs, nonrolling_group_docs)
 
     def run(self, application, build_name, target, rolling_divisor, rolling_pause, parallel=True):
         '''

@@ -108,4 +108,4 @@ def test_rolling_deployment(mockRD, mockGitDeployManager, mockRemoteCommands, mo
 
     rdc.run("example_app", "example_build", {"groups": ["gp0", "gp1"], "environments": ["testing"]}, 2, 30, parallel=False)
 
-    assert False
+    #assert False
