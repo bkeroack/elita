@@ -79,7 +79,17 @@ def test_ordered_rolling_batches():
     assert all([sorted(batches[x]['servers']) == sorted(['server11', 'server13']) for x in (2, 3)])
 
 
+def test_ordered_and_unordered_rolling_batches():
+
+    batches = elita.deployment.deploy.BatchCompute.compute_rolling_batches(divisor, dict(ordered_groups,
+                                                                                         **rolling_groups), None)
+
+    assert len(batches) == 4
+    assert all(["servers" in x and "gitdeploys" in x for x in batches])
+    #TODO: implement real ordering checks
+
 if __name__ == '__main__':
-    #test_rolling_batches()
-    #test_rolling_and_nonrolling_batches()
+    test_rolling_batches()
+    test_rolling_and_nonrolling_batches()
     test_ordered_rolling_batches()
+    test_ordered_and_unordered_rolling_batches()

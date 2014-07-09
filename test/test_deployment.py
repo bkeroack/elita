@@ -52,33 +52,34 @@ def setup_mock_datasvc():
     return mock_datasvc
 
 
-# @mock.patch('elita.deployment.salt_control.SaltController')
-# @mock.patch('elita.deployment.salt_control.RemoteCommands')
-# @mock.patch('elita.deployment.gitservice.GitDeployManager')
-# @mock.patch('elita.deployment.deploy.regen_datasvc')
-# def test_simple_deployment(mockRD, mockGitDeployManager, mockRemoteCommands, mockSaltController):
-#     '''
-#     Test simple deployment to gitdeploys: gd0, gd1; servers: server0, server1
-#     '''
-#
-#     servers = ["server0", "server1"]
-#     gitdeploys = ["gd0", "gd1"]
-#
-#     mock_datasvc = setup_mock_datasvc()
-#     mockRD.return_value = None, mock_datasvc
-#     mockGitDeployManager.last_build = "nobuild"
-#
-#     dc = elita.deployment.deploy.DeployController(mock_datasvc)
-#
-#     ok, results = dc.run("example_app", "example_build", servers, gitdeploys, parallel=False)
-#
-#     #assert False
+@mock.patch('elita.deployment.salt_control.SaltController')
+@mock.patch('elita.deployment.salt_control.RemoteCommands')
+@mock.patch('elita.deployment.gitservice.GitDeployManager')
+@mock.patch('elita.deployment.deploy.regen_datasvc')
+def test_simple_deployment(mockRD, mockGitDeployManager, mockRemoteCommands, mockSaltController):
+    '''
+    Test simple deployment to gitdeploys: gd0, gd1; servers: server0, server1
+    '''
+
+    servers = ["server0", "server1"]
+    gitdeploys = ["gd0", "gd1"]
+
+    mock_datasvc = setup_mock_datasvc()
+    mockRD.return_value = None, mock_datasvc
+    mockGitDeployManager.last_build = "nobuild"
+
+    dc = elita.deployment.deploy.DeployController(mock_datasvc)
+
+    ok, results = dc.run("example_app", "example_build", servers, gitdeploys, parallel=True)
+
+    #TODO: implement real checks that mock objs are called how we expect
 
 
 def return_group(app, name):
     return {
         "rolling_deploy": name == 'gp0',
-        "gitdeploys": ["gd0", "gd1"] if name == 'gp0' else ["gd2", "gd3"]
+        "gitdeploys": ["gd0", "gd1"] if name == 'gp0' else ["gd2", "gd3"],
+        "servers": ["server0", "server1"] if name == 'gp0' else ["server2", "server3"]
     }
 
 
@@ -106,6 +107,10 @@ def test_rolling_deployment(mockRD, mockGitDeployManager, mockRemoteCommands, mo
     dc = elita.deployment.deploy.DeployController(mock_datasvc)
     rdc = elita.deployment.deploy.RollingDeployController(mock_datasvc, dc)
 
-    rdc.run("example_app", "example_build", {"groups": ["gp0", "gp1"], "environments": ["testing"]}, 2, 30, parallel=False)
+    rdc.run("example_app", "example_build", {"groups": ["gp0", "gp1"], "environments": ["testing"]}, 2, 0, parallel=True)
 
     #assert False
+
+if __name__ == '__main__':
+    test_simple_deployment()
+    test_rolling_deployment()

@@ -109,7 +109,7 @@ class BatchCompute:
         the same length.
         '''
         assert len(batches) > 0
-        assert all(map(lambda x: len(x) == len(batches[0]), batches))  # all batches must be the same length
+        #assert all(map(lambda x: len(x) == len(batches[0]), batches))  # all batches must be the same length
 
         return map(
             lambda batch_aggregate: reduce(
@@ -118,7 +118,7 @@ class BatchCompute:
                     'servers': acc['servers'] + upd['servers'],
                     'gitdeploys': acc['gitdeploys'] + upd['gitdeploys']
                 }, batch_aggregate
-            ), zip(*batches))
+            ), itertools.izip_longest(*batches, fillvalue={"servers": [], "gitdeploys": []}))
 
     @staticmethod
     def compute_group_batches(divisor, group):
@@ -139,7 +139,9 @@ class BatchCompute:
         if isinstance(gitdeploys[0], list):
             # duplicate all server batches by the length of the gitdeploy list-of-lists
             server_batches = [x for item in server_batches for x in itertools.repeat(item, len(gitdeploys))]
-        gitdeploy_batches = list(gitdeploys) * gd_multiplier
+            gitdeploy_batches = list(gitdeploys) * gd_multiplier
+        else:
+            gitdeploy_batches = [gitdeploys] * gd_multiplier
         assert len(gitdeploy_batches) == len(server_batches)
         return [{'servers': sb, 'gitdeploys': gd} for sb, gd in zip(server_batches, gitdeploy_batches)]
 
@@ -433,7 +435,7 @@ class DeployController:
                     logging.debug("ERROR: _threadsafe_process_gitdeploy: timeout waiting for child process!")
 
         while not queue.empty():
-            gd = queue.get()
+            gd = queue.get(block=False)
             for g in gd:
                 self.changed_gitdeploys[g] = gd[g]
 
@@ -457,7 +459,7 @@ class DeployController:
 
         results = list()
         while not queue.empty():
-            results.append(queue.get())
+            results.append(queue.get(block=False))
 
         for r in results:
             for gd in r:
