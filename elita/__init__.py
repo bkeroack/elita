@@ -15,7 +15,13 @@ def DataStore(request):
     return db
 
 def RootService(request):
-    tree = request.db['root_tree'].find_one()
+    '''
+    Get root tree.
+
+    The 'root_tree' collection contains exactly one root_tree document (which should not have a '_lock' field)
+    and zero or (hopefully just) one lock document (which is of the form: { '_lock': XXXXX } XXXX = lock number
+    '''
+    tree = request.db['root_tree'].find_one({'_lock': {'$exists': False}})    # find doc that is not a lock
     updater = models.RootTreeUpdater(tree, request.db)
     return models.RootTree(request.db, updater, tree, request.db.dereference(tree['_doc']))
 

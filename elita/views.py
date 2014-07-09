@@ -1501,6 +1501,12 @@ import pkg_resources
 @view_config(name="about", renderer='json')
 def About(request):
     apps = request.datasvc.appsvc.GetApplications()
+    appstats = {
+        a: {
+            'builds': len(request.datasvc.buildsvc.GetBuilds(a)),
+            'gitrepos': len(request.datasvc.gitsvc.GetGitRepos(a)),
+            'gitdeploys': len(request.datasvc.gitsvc.GetGitDeploys(a))
+        } for a in apps}
     return {
         'about': {
             'name': 'elita',
@@ -1509,11 +1515,8 @@ def About(request):
             'hostname': socket.getfqdn()
         },
         'stats': {
-            'applications': len(apps),
+            'applications': appstats,
             'servers': len(request.datasvc.serversvc.GetServers()),
-            'builds': {a: len(request.datasvc.buildsvc.GetBuilds(a)) for a in apps},
-            'gitrepos': {a: len(request.datasvc.gitsvc.GetGitRepos(a)) for a in apps},
-            'gitdeploys': {a: len(request.datasvc.gitsvc.GetGitDeploys(a)) for a in apps},
             'users': len(request.datasvc.usersvc.GetUsers())
         }
     }
