@@ -58,7 +58,7 @@ def setup_mock_datasvc():
 @mock.patch('elita.deployment.deploy.regen_datasvc')
 def test_simple_deployment(mockRD, mockGitDeployManager, mockRemoteCommands, mockSaltController):
     '''
-    Test simple deployment to gitdeploys: gd0, gd1; servers: server0, server1
+    Test simple deployment with two gitdeploys and two servers
     '''
 
     servers = ["server0", "server1"]

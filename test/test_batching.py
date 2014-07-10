@@ -42,6 +42,9 @@ ordered_groups = {
 }
 
 def test_rolling_batches():
+    '''
+    Test that rolling groups are split up into the requested batches
+    '''
 
     batches = elita.deployment.deploy.BatchCompute.compute_rolling_batches(divisor, rolling_groups, None)
 
@@ -54,6 +57,9 @@ def test_rolling_batches():
 
 
 def test_rolling_and_nonrolling_batches():
+    '''
+    Test that simultaneous rolling and non-rolling groups are split into appropriate batches
+    '''
 
     batches = elita.deployment.deploy.BatchCompute.compute_rolling_batches(divisor, rolling_groups, nonrolling_groups)
 
@@ -67,6 +73,9 @@ def test_rolling_and_nonrolling_batches():
     assert sorted(batches[1]['gitdeploys']) == sorted(['gd0', 'gd1', 'gd2'])
 
 def test_ordered_rolling_batches():
+    '''
+    Test that ordered rolling groups are split into batches respecting the ordering
+    '''
 
     batches = elita.deployment.deploy.BatchCompute.compute_rolling_batches(divisor, ordered_groups, None)
 
@@ -80,6 +89,9 @@ def test_ordered_rolling_batches():
 
 
 def test_ordered_and_unordered_rolling_batches():
+    '''
+    Test that simultaneous ordered and unordered rolling groups are split into batches respecting ordering
+    '''
 
     batches = elita.deployment.deploy.BatchCompute.compute_rolling_batches(divisor, dict(ordered_groups,
                                                                                          **rolling_groups), None)

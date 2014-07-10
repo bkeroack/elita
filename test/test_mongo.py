@@ -5,6 +5,7 @@ import bson
 import multiprocessing
 import copy
 import time
+import random
 
 import elita.models
 
@@ -57,7 +58,7 @@ def _threadsafe_try_to_update_roottree(q, doc, path, collection, timeout=30, pau
 
 def test_simple_roottree_lock():
     '''
-    Test that locking code doesn't crash completely.
+    Test that root_tree locking code doesn't fail completely
     '''
     _create_roottree()
 
@@ -68,7 +69,7 @@ def test_simple_roottree_lock():
 
 def test_roottree_update():
     '''
-    Test that a single root tree update does what it should.
+    Test that a single root_tree update does what it should
     '''
     _create_roottree()
 
@@ -108,7 +109,7 @@ def test_roottree_locked_update_fails():
 
 def test_roottree_simultaneous_updates():
     '''
-    Test that multiple simultaneous root_tree updates all succeed with no data loss.
+    Test that multiple simultaneous root_tree updates all succeed with no data loss
     '''
     _create_roottree()
     p_list = list()
@@ -135,7 +136,7 @@ def test_roottree_simultaneous_updates():
         path = ('app', 'foo', 'mocks', n)
         p = multiprocessing.Process(target=_threadsafe_try_to_update_roottree,
                                     args=[q], kwargs={'doc': d, 'path': path, 'collection': 'mock_objs',
-                                                           'timeout': 15, 'pause': 0.1})
+                                                           'timeout': 15, 'pause': random.random()/4})
         p_list.append(p)
 
     for p in p_list:
