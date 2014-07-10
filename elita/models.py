@@ -37,10 +37,10 @@ class Request:
 
 class MongoService:
     __metaclass__ = elita.util.LoggingMetaClass
-    LOCK_MAX_TRIES = 30
 
-    def __init__(self, db):
+    def __init__(self, db, timeout=30):
         self.db = db
+        self.LOCK_MAX_TRIES = timeout
 
     def create_new(self, collection, name, classname, doc):
         '''
@@ -68,7 +68,7 @@ class MongoService:
         tries = 0
         while True and tries <= self.LOCK_MAX_TRIES:
             result = self.db['root_tree'].update({'_lock': False}, {'$set': {'_lock': True}})
-            if result['nMatched'] == 1:
+            if result['n'] == 1 and result['updatedExisting'] and not result['err']:
                 break
             time.sleep(random.random())
             tries += 1
@@ -86,7 +86,8 @@ class MongoService:
 
         Must be locked first to prevent simultaneous updates from clobbering each other
         '''
-        assert self.lock_roottree()
+        if not self.lock_roottree():
+            return False
         root = self.db['root_tree'].find_one({'_lock': True})
         assert root
         elita.util.set_dict_key(root, path, {
@@ -94,6 +95,7 @@ class MongoService:
         })
         self.db['root_tree'].save(root)
         self.release_lock_roottree()
+        return True
 
 class GenericChildDataService:
     __metaclass__ = elita.util.LoggingMetaClass
