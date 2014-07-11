@@ -47,25 +47,20 @@ test_obj2 = {
     }
 }
 
-def _threadsafe_try_to_update_roottree(q, doc, path, collection, timeout=30, pause=0):
+
+def _threadsafe_direct_roottree_update(q, doc, path, collection, pause=0):
     ts_mc = pymongo.MongoClient(host='localhost', port=27017)
     ts_db = ts_mc['elita_testing']
-    id = ts_db['mock_objs'].insert(doc, manipulate=False)
-    ms = elita.models.MongoService(ts_db, timeout=timeout)
+    id = ts_db['mock_objs'].insert(doc)
+    del doc['_id']
+    path_dot_notation = '.'.join(path)
+    root_tree_doc = {
+        '_doc': bson.DBRef(collection, id)
+    }
     time.sleep(pause)
-    result = ms.update_roottree(path, collection, id)
-    q.put(result, block=False)
+    result = ts_db['root_tree'].update({}, {'$set': {path_dot_notation: root_tree_doc}})
+    q.put(result['n'] == 1 and result['updatedExisting'] and not result['err'], block=False)
 
-def test_simple_roottree_lock():
-    '''
-    Test that root_tree locking code doesn't fail completely
-    '''
-    _create_roottree()
-
-    ms = elita.models.MongoService(db)
-
-    ms.lock_roottree()
-    ms.release_lock_roottree()
 
 def test_roottree_update():
     '''
@@ -73,7 +68,8 @@ def test_roottree_update():
     '''
     _create_roottree()
 
-    id = db['mock_objs'].insert(test_obj, manipulate=False)
+    id = db['mock_objs'].insert(test_obj)
+    del test_obj['_id']
 
     ms = elita.models.MongoService(db)
     ms.update_roottree(('app', 'foo', 'mocks', 'foobar'), 'mock_objs', id)
@@ -90,24 +86,28 @@ def test_roottree_update():
     assert rt_list[0]['app']['foo']['mocks']['foobar']['_doc'].collection == 'mock_objs'
     assert rt_list[0]['app']['foo']['mocks']['foobar']['_doc'].id == id
 
-def test_roottree_locked_update_fails():
+
+def test_roottree_direct_update():
     '''
-    Test that with root_tree locked an attempted update fails
+    Test that direct modification of root_tree without locking works
     '''
+
     _create_roottree()
     q = multiprocessing.Queue()
-    ms = elita.models.MongoService(db)
-    ms.lock_roottree()
 
-    _threadsafe_try_to_update_roottree(q, doc=test_obj2, path=('app', 'foo', 'mocks', 'foobar2'),
-                                       collection='mock_objs', timeout=2)    # low timeout so test doesn't take forever
+    _threadsafe_direct_roottree_update(q, test_obj, ('app', 'foo', 'mocks', 'ashley'), 'mock_objs')
 
-    ms.release_lock_roottree()
+    result = q.get()
 
-    assert not q.get()
+    assert result
+    root = [d for d in db['root_tree'].find()]
+    assert len(root) == 1
+    root = root[0]
+    assert 'ashley' in root['app']['foo']['mocks']
+    assert '_doc' in root['app']['foo']['mocks']['ashley']
 
 
-def test_roottree_simultaneous_updates():
+def test_roottree_multiple_simultaneous_direct_updates():
     '''
     Test that multiple simultaneous root_tree updates all succeed with no data loss
     '''
@@ -134,9 +134,9 @@ def test_roottree_simultaneous_updates():
     for n, d in zip(names, doc_list):
         d['name'] = n
         path = ('app', 'foo', 'mocks', n)
-        p = multiprocessing.Process(target=_threadsafe_try_to_update_roottree,
+        p = multiprocessing.Process(target=_threadsafe_direct_roottree_update,
                                     args=[q], kwargs={'doc': d, 'path': path, 'collection': 'mock_objs',
-                                                           'timeout': 15, 'pause': random.random()/4})
+                                                      'pause': random.random()/4})
         p_list.append(p)
 
     for p in p_list:
@@ -145,7 +145,7 @@ def test_roottree_simultaneous_updates():
     for p in p_list:
         p.join(600)
 
-    results = [q.get(block=False) for p in p_list]
+    results = [q.get() for p in p_list]
 
     assert all(results)
     root = [d for d in db['root_tree'].find()]
@@ -154,8 +154,21 @@ def test_roottree_simultaneous_updates():
     assert all([n in root['app']['foo']['mocks'] for n in names])
     assert not root['_lock']
 
+def test_create_new_document():
+    '''
+    Test that creating a new document works
+    '''
+    insert_doc = copy.deepcopy(test_obj)
+    insert_doc['name'] = 'swimming'
+    ms = elita.models.MongoService(db)
+    res = ms.create_new('mock_objs', 'swimming', 'Mock', insert_doc)
+
+    assert res
+    dlist = [d for d in db['mock_objs'].find({'name': 'swimming'})]
+    assert len(dlist) == 1
+
 if __name__ == '__main__':
-    test_simple_roottree_lock()
     test_roottree_update()
-    test_roottree_locked_update_fails()
-    test_roottree_simultaneous_updates()
+    test_roottree_direct_update()
+    test_roottree_multiple_simultaneous_direct_updates()
+    test_create_new_document()

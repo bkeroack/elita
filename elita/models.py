@@ -44,9 +44,15 @@ class MongoService:
 
     def create_new(self, collection, name, classname, doc):
         '''
-        Creates new document in collection. Updates if it already exists.
+        Creates new document in collection. Remove any existing.
         '''
-        pass
+
+        existing = [d for d in self.db[collection].find({'name': name})]
+        doc['_class'] = classname
+        id = self.db[collection].save(doc)
+        if existing:
+            self.db[collection].remove({'name': name, '$not': {'_id': id}})
+        return True
 
     def modify(self, collection, name, doc):
         '''
@@ -61,41 +67,19 @@ class MongoService:
         '''
         pass
 
-    def lock_roottree(self):
-        '''
-        We have to explicitly lock the root_tree to prevent simultaneous updates.
-        '''
-        tries = 0
-        while True and tries <= self.LOCK_MAX_TRIES:
-            result = self.db['root_tree'].update({'_lock': False}, {'$set': {'_lock': True}})
-            if result['n'] == 1 and result['updatedExisting'] and not result['err']:
-                break
-            time.sleep(random.random())
-            tries += 1
-        return tries <= self.LOCK_MAX_TRIES
-
-    def release_lock_roottree(self):
-        '''
-        Release any lock previously created.
-        '''
-        self.db['root_tree'].update({'_lock': True}, {'$set': {'_lock': False}})
-
     def update_roottree(self, path, collection, id):
         '''
         Update the root tree at path [must be a tuple of indices: ('app', 'myapp', 'builds', '123-foo')] with DBRef
-
-        Must be locked first to prevent simultaneous updates from clobbering each other
         '''
-        if not self.lock_roottree():
-            return False
-        root = self.db['root_tree'].find_one({'_lock': True})
-        assert root
-        elita.util.set_dict_key(root, path, {
+        assert hasattr(path, '__iter__')
+        assert isinstance(collection, str)
+        assert id.__class__.__name__ == 'ObjectId'
+        path_dot_notation = '.'.join(path)
+        root_tree_doc = {
             '_doc': bson.DBRef(collection, id)
-        })
-        self.db['root_tree'].save(root)
-        self.release_lock_roottree()
-        return True
+        }
+        result = self.db['root_tree'].update({}, {'$set': {path_dot_notation: root_tree_doc}})
+        return result['n'] == 1 and result['updatedExisting'] and not result['err']
 
 class GenericChildDataService:
     __metaclass__ = elita.util.LoggingMetaClass
@@ -125,16 +109,9 @@ class BuildDataService(GenericChildDataService):
             'packages': buildobj.packages,
             'attributes': buildobj.attributes
         }
-        existing = [doc['_id'] for doc in self.db['builds'].find({'build_name': build_name, 'app_name': app_name})]
-        if len(existing) > 0:
-            if len(existing) > 1:
-                # we should never have more than one, if so keep the 'top' one
-                logging.debug("WARNING: multiple build documents found, dropping all but the first")
-                for id in existing[1:]:
-                    self.db['builds'].remove({'_id': id})
-            new_doc['_id'] = existing[0]
-        id = self.db['builds'].save(new_doc)
-        self.parent.ms.update_roottree(('app', app_name, 'builds', build_name), 'builds', id)
+        res1 = self.parent.ms.create_new('builds', build_name, 'Builds', new_doc)
+        res2 = self.parent.ms.update_roottree(('app', app_name, 'builds', build_name), 'builds', id)
+        return res1 and res2
 
     def AddPackages(self, app, build, packages):
         bobj = self.GetBuild(app, build)
