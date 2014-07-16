@@ -62,6 +62,24 @@ def _threadsafe_direct_roottree_update(q, doc, path, collection, pause=0):
     q.put(result['n'] == 1 and result['updatedExisting'] and not result['err'], block=False)
 
 
+def test_get_document():
+    '''
+    Test that retrieving a document works
+    '''
+    clear_mocks(db)
+    insert_doc = copy.deepcopy(test_obj)
+    insert_doc['name'] = 'tuna'
+    db['mock_objs'].insert(insert_doc)
+    del insert_doc['_id']
+
+    ms = elita.models.MongoService(db)
+    doc = ms.get('mock_objs', {'name': 'tuna'})
+
+    assert doc
+    assert 'name' in doc
+    assert doc['name'] == 'tuna'
+    assert 'attributes' in doc
+
 def test_roottree_update():
     '''
     Test that a single root_tree update does what it should
@@ -89,7 +107,7 @@ def test_roottree_update():
 
 def test_roottree_direct_update():
     '''
-    Test that direct modification of root_tree without locking works
+    Test that direct modification of root_tree works
     '''
 
     _create_roottree()
@@ -154,21 +172,82 @@ def test_roottree_multiple_simultaneous_direct_updates():
     assert all([n in root['app']['foo']['mocks'] for n in names])
     assert not root['_lock']
 
+
+def test_roottree_delete_reference():
+    '''
+    Test that deleting a reference from root_tree works
+    '''
+
+    _create_roottree()
+    insert_doc = copy.deepcopy(test_obj)
+    insert_doc['name'] = 'salamander'
+    ms = elita.models.MongoService(db)
+
+    q = multiprocessing.Queue()
+
+    _threadsafe_direct_roottree_update(q, insert_doc, ('app', 'foo', 'mocks', 'salamander'), 'mock_objs')
+
+    rt = [d for d in db['root_tree'].find()]
+    assert rt
+    assert len(rt) == 1
+    root = rt[0]
+    assert 'app' in root
+    assert 'foo' in root['app']
+    assert 'mocks' in root['app']['foo']
+    assert 'salamander' in root['app']['foo']['mocks']
+
+    ms.rm_roottree(('app', 'foo', 'mocks', 'salamander'))
+
+    rt = [d for d in db['root_tree'].find()]
+    assert rt
+    assert len(rt) == 1
+    root = rt[0]
+    assert 'app' in root
+    assert 'foo' in root['app']
+    assert 'mocks' in root['app']['foo']
+    assert 'salamander' not in root['app']['foo']['mocks']
+
+
 def test_create_new_document():
     '''
     Test that creating a new document works
     '''
     insert_doc = copy.deepcopy(test_obj)
-    insert_doc['name'] = 'swimming'
     ms = elita.models.MongoService(db)
-    res = ms.create_new('mock_objs', 'swimming', 'Mock', insert_doc)
+    res = ms.create_new('mock_objs', {'name': 'swimming'}, 'Mock', insert_doc)
 
     assert res
     dlist = [d for d in db['mock_objs'].find({'name': 'swimming'})]
     assert len(dlist) == 1
 
+
+def test_modify_existing_document():
+    '''
+    Test that modifying an existing document works
+    '''
+    insert_doc = copy.deepcopy(test_obj)
+    ms = elita.models.MongoService(db)
+    res = ms.create_new('mock_objs', {'name': 'soccer'}, 'Mock', insert_doc)
+    assert res
+
+    doc = ms.get('mock_objs', {'name': 'soccer'})
+    assert 'name' in doc
+    assert doc['name'] == 'soccer'
+
+    ms.modify('mock_objs', {'name': 'soccer'}, ('attributes', 'b'), 99)
+
+    doc = ms.get('mock_objs', {'name': 'soccer'})
+    assert 'name' in doc
+    assert doc['name'] == 'soccer'
+    assert 'attributes' in doc
+    assert 'b' in doc['attributes']
+    assert doc['attributes']['b'] == 99
+
 if __name__ == '__main__':
+    test_get_document()
     test_roottree_update()
     test_roottree_direct_update()
     test_roottree_multiple_simultaneous_direct_updates()
+    test_roottree_delete_reference()
     test_create_new_document()
+    test_modify_existing_document()

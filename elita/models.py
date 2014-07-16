@@ -10,6 +10,8 @@ import pprint
 import datetime
 import pytz
 import logging
+import pymongo
+import pyramid.registry
 import random
 import time
 
@@ -40,36 +42,74 @@ class MongoService:
 
     def __init__(self, db, timeout=30):
         self.db = db
-        self.LOCK_MAX_TRIES = timeout
 
-    def create_new(self, collection, name, classname, doc):
+    def create_new(self, collection, keys, classname, doc):
         '''
-        Creates new document in collection. Remove any existing.
-        '''
+        Creates new document in collection. Remove any existing. Keys is a dict specifying primary keys (name, app, etc)
 
-        existing = [d for d in self.db[collection].find({'name': name})]
+        Returns id of new document
+        '''
+        assert isinstance(collection, str)
+        assert isinstance(keys, dict)
+        assert isinstance(classname, str)
+        assert isinstance(doc, dict)
+        assert keys and collection and classname
+        existing = [d for d in self.db[collection].find(keys)]
         doc['_class'] = classname
+        for k in keys:
+            doc[k] = keys[k]
+        if '_id' in doc:
+            del doc['_id']
         id = self.db[collection].save(doc)
         if existing:
-            self.db[collection].remove({'name': name, '$not': {'_id': id}})
-        return True
+            self.db[collection].remove(keys, {'$not': {'_id': id}})
+        return id
 
-    def modify(self, collection, name, doc):
+    def modify(self, collection, keys, path, doc_or_obj):
         '''
         Modifies document with the keys in doc. Does so atomically but remember that any key will overwrite the existing
         key.
-        '''
-        pass
 
-    def delete(self, collection, name):
+        Returns boolean indicating success
+        '''
+        assert hasattr(path, '__iter__')
+        assert path
+        assert isinstance(collection, str)
+        assert isinstance(keys, dict)
+        assert collection and keys
+        assert doc_or_obj
+        dlist = [d for d in self.db[collection].find(keys)]
+        assert dlist
+        canonical_id = dlist[0]['_id']
+        if len(dlist) > 1:
+            logging.warning("Found duplicate entries for query {} in collection {}; using the first and removing others"
+                            .format(keys, collection))
+            self.db[collection].remove({'_id': {'$ne': canonical_id}})
+        path_dot_notation = '.'.join(path)
+        result = self.db[collection].update({'_id': canonical_id}, {'$set': {path_dot_notation: doc_or_obj}})
+        return result['n'] == 1 and result['updatedExisting'] and not result['err']
+
+    def delete(self, collection, keys):
         '''
         Drop a document from the collection
+
+        Return whatever pymongo returns for deletion
         '''
-        pass
+        assert isinstance(collection, str)
+        assert isinstance(keys, dict)
+        assert collection and keys
+        dlist = [d for d in self.db[collection].find(keys)]
+        assert dlist
+        if len(dlist) > 1:
+            logging.warning("Found duplicate entries for query {} in collection {}; removing all".format(keys,
+                                                                                                        collection))
+        return self.db[collection].remove(keys)
 
     def update_roottree(self, path, collection, id):
         '''
         Update the root tree at path [must be a tuple of indices: ('app', 'myapp', 'builds', '123-foo')] with DBRef
+
+        Return boolean indicating success
         '''
         assert hasattr(path, '__iter__')
         assert isinstance(collection, str)
@@ -81,27 +121,83 @@ class MongoService:
         result = self.db['root_tree'].update({}, {'$set': {path_dot_notation: root_tree_doc}})
         return result['n'] == 1 and result['updatedExisting'] and not result['err']
 
+    def rm_roottree(self, path):
+        '''
+        Delete/remove the root_tree reference at path
+        '''
+        assert hasattr(path, '__iter__')
+        assert path
+        path_dot_notation = '.'.join(path)
+        result = self.db['root_tree'].update({}, {'$unset': {path_dot_notation: ''}})
+        return result['n'] == 1 and result['updatedExisting'] and not result['err']
+
+    def get(self, collection, keys, multi=False):
+        '''
+        Retrieve a document from Mongo, keyed by name. If duplicates are found, delete all but the first.
+
+        Returns document
+        '''
+        assert isinstance(collection, str)
+        assert isinstance(keys, dict)
+        assert collection
+        dlist = [d for d in self.db[collection].find(keys)]
+        assert dlist
+        if len(dlist) > 1 and not multi:
+            logging.warning("Found duplicate entries for query {} in collection {}; dropping all but the first"
+                            .format(keys, collection))
+            self.db[collection].remove({'_id': {'$ne': dlist[0]['_id']}})
+        return dlist if multi else dlist[0]
+
 class GenericChildDataService:
     __metaclass__ = elita.util.LoggingMetaClass
 
-    def __init__(self, parent):
-        self.parent = parent
-        self.db = parent.db
-        self.root = parent.root
-        self.settings = parent.settings
+    def __init__(self, mongo_service):
+        '''
+        @type mongo_service: MongoService
+        '''
+        assert isinstance(mongo_service, MongoService)
+        self.mongo_service = mongo_service
+
+    def NewContainer(self, class_name, name, parent):
+        '''
+        Create new container object suitable for a root_tree reference
+        '''
+        assert class_name and name and parent
+        assert isinstance(class_name, str)
+        assert isinstance(name, str)
+        assert isinstance(parent, str)
+        return self.mongo_service.create_new('containers', {'name': name}, class_name, {'name': name, 'parent': parent})
 
 class BuildDataService(GenericChildDataService):
+
     def GetBuilds(self, app_name):
-        return [k for k in self.root['app'][app_name]['builds'].keys() if k[0] != '_']
+        '''
+        Get all builds for application
+        '''
+        assert app_name
+        assert isinstance(app_name, str)
+        return [d['build_name'] for d in self.mongo_service.get('builds', {'app_name': app_name}, multi=True)]
 
     def NewBuild(self, app_name, build_name, attribs):
+        '''
+        Create new build document
+        '''
+        assert isinstance(app_name, str)
+        assert isinstance(build_name, str)
+        assert isinstance(attribs, dict)
+        assert app_name and build_name
+
+        app_doc = self.mongo_service.get('application', {'name': app_name})
+        assert app_doc
+        build_doc = self.mongo_service.get('builds', {'app_name': app_name, 'build_name': build_name})
+        assert not build_doc
+
         buildobj = Build({
             'app_name': app_name,
             'build_name': build_name,
             'attributes': attribs
         })
         new_doc = {
-            '_class': "Build",
             'build_name': buildobj.build_name,
             'files': buildobj.files,
             'stored': buildobj.stored,
@@ -114,21 +210,64 @@ class BuildDataService(GenericChildDataService):
         return res1 and res2
 
     def AddPackages(self, app, build, packages):
-        bobj = self.GetBuild(app, build)
-        packages = dict(bobj.packages.items() + packages.items())
+        '''
+        Add new packages fields to existing build. Regenerate legacy 'files' field (which is a flat array of files
+        associated with build
+        '''
+
+        assert isinstance(app, str)
+        assert isinstance(build, str)
+        assert isinstance(packages, dict)
+
+        app_doc = self.mongo_service.get('application', {'name': app})
+        assert app_doc
+        build_doc = self.mongo_service.get('builds', {'app_name': app, 'build_name': build})
+        assert build_doc
+
+        keys = {'app_name': app, 'build_name': build}
+        for p in packages:
+            path = ('packages', p)
+            self.mongo_service.modify('builds', keys, path, packages[p])
+
+        build_doc = self.mongo_service.get('builds', keys)
+        assert all([p in build_doc['packages'] for p in packages])
+
         #generate files from packages (avoid dupes)
         files = [{"file_type": packages[p]['file_type'], "path": packages[p]['filename']} for p in packages]
-        self.UpdateBuild(app, {
-            "build_name": bobj.build_name,
-            "packages": packages,
-            "files": files
-        })
+        self.mongo_service.modify('builds', keys, ('files',), files)
 
-    def UpdateBuild(self, app, doc):
-        logging.debug("UpdateBuild: app: {}; doc: {}".format(app, doc))
-        self.parent.UpdateGenericObject(doc['build_name'], doc, "builds", "Build", {'build_name': doc['build_name'],
-                                                                                    'app_name': app})
+    def UpdateBuild(self, app, name, doc):
+        '''
+        Legacy method.
+
+        Update build with keys in doc. Overwrite existing contents (ie, the document is not recursed into)
+        '''
+        assert isinstance(app, str)
+        assert isinstance(name, str)
+        assert isinstance(doc, dict)
+        assert app and name
+
+        app_doc = self.mongo_service.get('application', {'name': app})
+        assert app_doc
+        build_doc = self.mongo_service.get('builds', {'app_name': app, 'build_name': name})
+        assert build_doc
+
+        for k in doc:
+            self.mongo_service.modify('builds', {'app_name': app, 'build_name': name}, (k,), doc[k])
+
     def DeleteBuildStorage(self, app_name, build_name):
+        '''
+        Delete all stored files associated with build.
+        '''
+        assert isinstance(app_name, str)
+        assert isinstance(build_name, str)
+        assert app_name and build_name
+
+        app_doc = self.mongo_service.get('application', {'name': app_name})
+        assert app_doc
+        build_doc = self.mongo_service.get('builds', {'app_name': app_name, 'build_name': build_name})
+        assert build_doc
+
         dir = self.settings['elita.builds.dir']
         path = "{root_dir}/{app}/{build}".format(root_dir=dir, app=app_name, build=build_name)
         logging.debug("DeleteBuildStorage: path: {}".format(path))
@@ -137,129 +276,170 @@ class BuildDataService(GenericChildDataService):
             shutil.rmtree(path)
 
     def DeleteBuild(self, app_name, build_name):
-        self.DeleteBuildStorage(app_name, build_name)
-        self.parent.DeleteObject(self.root['app'][app_name]['builds'], build_name, "builds")
+        '''
+        Delete build object, root_tree reference and all stored files.
+        '''
+        assert isinstance(app_name, str)
+        assert isinstance(build_name, str)
+        assert app_name and build_name
 
-    def refresh_root(self):
-        # when running long async actions the root tree passed to constructor may be stale by the time we try to update
-        # so just prior to altering it, we refresh from the DB
-        req = Request()
-        req.db = self.db
-        self.root = elita.RootService(req)
+        root_path = ('app', app_name, 'builds', build_name)
+        self.mongo_service.rm_roottree(root_path)
+        self.mongo_service.delete('builds', {'app_name': app_name, 'build_name': build_name})
+        self.DeleteBuildStorage(app_name, build_name)
+
     def GetBuild(self, app_name, build_name):
+        '''
+        Legacy API. Get build OBJECT (not document). Uses overly-clever method of letting RootTree class
+        dereference the DBRef, rather than pulling from mongo directly.
+        '''
+        assert isinstance(app_name, str)
+        assert isinstance(build_name, str)
+        assert app_name and build_name
         return Build(self.root['app'][app_name]['builds'][build_name].doc)
 
     def GetBuildDoc(self, app_name, build_name):
+        '''
+        Legacy API to get document associated with build.
+        '''
+        assert isinstance(app_name, str)
+        assert isinstance(build_name, str)
+        assert app_name and build_name
         bobj = self.GetBuild(app_name, build_name)
         return bobj.get_doc()
 
 class UserDataService(GenericChildDataService):
+
     def NewUser(self, name, pw, perms, attribs):
+        '''
+        Create a new user object and insert root_tree references for both the user and the computed permissions
+        endpoint. Pipe parameters into User object to get the pw hashed, etc.
+        '''
+        assert isinstance(name, str)
+        assert isinstance(pw, str)
+        assert isinstance(attribs, dict)
+        assert isinstance(perms, dict)
+        assert name and pw and perms
+
         userobj = User({
-                                         'name': name,
+            'name': name,
             'permissions': perms,
             'password': pw,
             'attributes': attribs
         })
-        id = self.db['users'].insert({
-            "_class": "User",
-            "name": userobj.name,
-            "hashed_pw": userobj.hashed_pw,
-            "attributes": userobj.attributes,
-            "salt": userobj.salt,
-            "permissions": userobj.permissions
-        })
-        pid = self.db['userpermissions'].insert({
-            "_class": "UserPermissions",
+        uid = self.mongo_service.create_new('users', {'name': userobj.name}, 'User', userobj.get_doc())
+        pid = self.mongo_service.create_new('userpermissions', {'username': userobj.name}, 'UserPermissions', {
             "username": userobj.name,
             "applications": list(),
             "actions": dict(),
             "servers": list()
         })
-        self.parent.refresh_root()
-        self.root['global']['users'][userobj.name] = {
-            "_doc": bson.DBRef("users", id)
-        }
-        self.parent.refresh_root()
-        self.root['global']['users'][userobj.name]['permissions'] = {
-            '_doc': bson.DBRef("userpermissions", pid)
-        }
-
-    def SaveUser(self, userobj):
-        #find and update user document
-        doc = self.db['users'].find_one({"name": userobj.name})
-        assert doc is not None
-        doc['hashed_pw'] = userobj.hashed_pw
-        doc['attributes'] = userobj.attributes
-        doc['salt'] = userobj.salt
-        doc['permissions'] = userobj.permissions
-        self.db['users'].update({"_id": doc["_id"]}, doc)
+        self.mongo_service.update_roottree(('global', 'users', userobj.name), 'users', uid)
+        self.mongo_service.update_roottree(('global', 'users', userobj.name, 'permissions'), 'userpermissions', pid)
 
     def GetUserTokens(self, username):
-        return [d['token'] for d in self.db['tokens'].find({"username": username})]
+        '''
+        Get all auth tokens associated with user
+        '''
+        assert isinstance(username, str)
+        assert username
+        return [d['token'] for d in self.mongo_service.get('tokens', {'username': username}, multi=True)]
 
     def GetUserFromToken(self, token):
-        pp = pprint.PrettyPrinter(indent=4)
-        logging.debug("GetUserFromToken: token: {}".format(token))
-        tok = self.root['global']['tokens'][token]
-        doc = tok.doc
-        logging.debug("GetUserFromToken: doc: {}".format(pp.pformat(doc)))
-        return doc['username']
+        '''
+        Get username associated with token
+        '''
+        assert isinstance(token, str)
+        assert token
+        return self.mongo_service.get('tokens', {'token': token})['username']
 
     def GetAllTokens(self):
-        return [k for k in self.root['global']['tokens'].keys() if k[0] != '_']
+        '''
+        Get all valid tokens
+        '''
+        return self.mongo_service.get('tokens', {}, multi=True)
 
     def NewToken(self, username):
+        '''
+        Create new auth token associated with username and insert reference into root_tree
+        '''
+        assert isinstance(username, str)
+        assert username
+
         token = Token({
             'username': username
         })
-        id = self.db['tokens'].insert({
-            'username': username,
-            'token': token.token,
-            '_class': "Token"
-        })
-        self.parent.refresh_root()
-        self.root['global']['tokens'][token.token] = {
-            "_doc": bson.DBRef("tokens", id)
-        }
+        tid = self.mongo_service.create_new('tokens', {'username': username, 'token': token.token}, 'Token',
+                                            token.get_doc())
+        self.mongo_service.update_roottree(('global', 'tokens', token.token), 'tokens', tid)
         return token
 
     def GetUsers(self):
-        return [k for k in self.root['global']['users'].keys() if k[0] != '_']
+        '''
+        Get all valid users
+        '''
+        return [d['name'] for d in self.mongo_service.get('users', {}, multi=True)]
 
     def GetUser(self, username):
-        return User(self.root['global']['users'][username].doc)
+        '''
+        Legacy API to get user OBJECT (not document)
+        '''
+        assert isinstance(username, str)
+        assert username
+        doc = self.mongo_service.get('users', {'username': username})
+        return User(doc)
 
     def DeleteUser(self, name):
-        self.parent.DeleteObject(self.root['global']['users'], name, "users")
+        '''
+        Delete a single user and root_tree reference
+        '''
+        assert name
+        assert isinstance(name, str)
+        self.mongo_service.rm_roottree(('global', 'users', name))
+        self.mongo_service.delete('users', {'username': name})
 
     def DeleteToken(self, token):
-        self.parent.DeleteObject(self.root['global']['tokens'], token, "tokens")
+        '''
+        Delete a token and root_tree reference
+        '''
+        assert token
+        assert isinstance(token, str)
+        self.mongo_service.rm_roottree(('global', 'tokens', token))
+        self.mongo_service.delete('tokens', {'token': token})
 
 
 class ApplicationDataService(GenericChildDataService):
     def GetApplications(self):
-        return [k for k in self.root['app'].keys() if k[0] != '_']
+        '''
+        Get all applications.
+        '''
+        return [d['app_name'] for d in self.mongo_service.get('applications', {}, multi=True)]
 
     def GetApplication(self, app_name):
-        docs = [d for d in self.db['application'].find({'app_name': app_name})]
-        assert len(docs) > 0
-        if len(docs) > 1:
-            elita.logging.debug("GetApplication: WARNING: more than one application named {}".format(app_name))
-        return {k: docs[0][k] for k in docs[0] if k[0] != '_'}
+        '''
+        Get application document
+        '''
+        assert app_name
+        assert isinstance(app_name, str)
+        doc = self.mongo_service.get('applications', {'app_name': app_name})
+        return {k: doc[k] for k in doc if k[0] != '_'}
 
     def NewApplication(self, app_name):
-        id = self.db['applications'].insert({'_class': "Application", "app_name": app_name})
-        self.parent.refresh_root()
-        self.root['app'][app_name] = {
-            "_doc": bson.DBRef("applications", id),
-            "builds": {"_doc": self.parent.NewContainer("BuildContainer", "builds", app_name)},
-            "actions": {"_doc": self.parent.NewContainer("ActionContainer", "action", app_name)},
-            "gitrepos": {"_doc": self.parent.NewContainer("GitRepoContainer", "gitrepos", app_name)},
-            "gitdeploys": {"_doc": self.parent.NewContainer("GitDeployContainer", "gitdeploys", app_name),},
-            "deployments": {"_doc": self.parent.NewContainer("DeploymentContainer", "deployments", app_name)},
-            "groups": {"_doc": self.parent.NewContainer("GroupContainer", "groups", app_name)}
+        '''
+        Create new application and all subcontainers and root_tree sub-references
+        '''
+        assert app_name
+        assert isinstance(app_name, str)
+        aid = self.mongo_service.create_new('applications', {'app_name': app_name}, 'Application', {})
+        root_doc = {
+            "builds": {"_doc": bson.DBRef('containers', self.NewContainer("BuildContainer", "builds", app_name))},
+            "actions": {"_doc": bson.DBRef('containers', self.NewContainer("ActionContainer", "action", app_name))},
+            "gitrepos": {"_doc": bson.DBRef('containers', self.NewContainer("GitRepoContainer", "gitrepos", app_name))},
+            "gitdeploys": {"_doc": bson.DBRef('containers', self.NewContainer("GitDeployContainer", "gitdeploys", app_name))},
+            "deployments": {"_doc": bson.DBRef('containers', self.NewContainer("DeploymentContainer", "deployments", app_name))},
+            "groups": {"_doc": bson.DBRef('containers', self.NewContainer("GroupContainer", "groups", app_name))}
         }
+        self.mongo_service.update_roottree(('app', app_name), )
 
     def ChangeApplication(self, app_name, data):
         self.parent.ModifyObject("applications", app_name, data, name_key="app_name")
@@ -821,24 +1001,34 @@ class KeyDataService(GenericChildDataService):
 
 
 class DataService:
+    '''
+    DataService is an object that holds all the data-layer handling objects. A DataService instance is part of the request
+    object and also passed to async jobs, etc. It is the main internal API for data handling.
+    '''
     __metaclass__ = elita.util.LoggingMetaClass
 
     def __init__(self, settings, db, root, job_id=None):
+        '''
+        @type root: RootTree
+        @type db: pymongo.database.Database
+        @type settings: pyramid.registry.Registry
+        @type job_id: str | None
+        '''
         self.settings = settings
         self.db = db
         self.root = root
-        self.ms = MongoService(db)
+        self.mongo_service = MongoService(db)
         # potential reference cycles
-        self.buildsvc = BuildDataService(self)
-        self.usersvc = UserDataService(self)
-        self.appsvc = ApplicationDataService(self)
-        self.jobsvc = JobDataService(self)
-        self.serversvc = ServerDataService(self)
-        self.gitsvc = GitDataService(self)
-        self.keysvc = KeyDataService(self)
-        self.deploysvc = DeploymentDataService(self)
+        self.buildsvc = BuildDataService(self.mongo_service)
+        self.usersvc = UserDataService(self.mongo_service)
+        self.appsvc = ApplicationDataService(self.mongo_service)
+        self.jobsvc = JobDataService(self.mongo_service)
+        self.serversvc = ServerDataService(self.mongo_service)
+        self.gitsvc = GitDataService(self.mongo_service)
+        self.keysvc = KeyDataService(self.mongo_service)
+        self.deploysvc = DeploymentDataService(self.mongo_service)
         self.actionsvc = ActionService(self)
-        self.groupsvc = GroupDataService(self)
+        self.groupsvc = GroupDataService(self.mongo_service)
         #passed in if this is part of an async job
         self.job_id = job_id
         #super ugly below - only exists for plugin access
@@ -846,58 +1036,6 @@ class DataService:
             self.salt_controller = salt_control.SaltController(self.settings)
             self.remote_controller = salt_control.RemoteCommands(self.salt_controller)
             self.deploy_controller = deploy.DeployController(self)
-
-    def refresh_root(self):
-        # when running long async actions the root tree passed to constructor may be stale by the time we try to update
-        # so just prior to altering it, we refresh from the DB
-        req = Request()
-        req.db = self.db
-        self.root = elita.RootService(req)
-
-    def ModifyObject(self, collection_name, name, modify_keys, name_key="name"):
-        '''Replace only the keys in modify_keys in the referenced document'''
-        docs = [d for d in self.db[collection_name].find({name_key: name})]
-        assert len(docs) > 0
-        if len(docs) > 1:
-            elita.logging.debug("ModifyObject: found multiple docs in collection: {}; name: {}"
-                                .format(collection_name, name))
-            for d in docs[1:]:
-                self.db[collection_name].remove({'_id': d['_id']})
-        doc = docs[0]
-        for k in modify_keys:
-            doc[k] = modify_keys[k]
-        self.db[collection_name].save(doc)
-
-    def UpdateObject(self, name, doc, collection_name, class_name):
-        self.UpdateGenericObject(name, doc, collection_name, class_name, {"name": name})
-
-    def UpdateAppObject(self, name, doc, collection_name, class_name, app):
-        self.UpdateGenericObject(name, doc, collection_name, class_name, {"name": name, "application": app})
-
-    def UpdateGenericObject(self, name, doc, collection_name, class_name, query):
-        old_doc = self.db[collection_name].find_one(query)
-        if old_doc:
-            cobj = globals()[class_name](old_doc)
-            cobj.update_values(doc)
-            new_doc = cobj.get_doc()
-            new_doc['_id'] = old_doc['_id']
-            new_doc['_class'] = class_name
-            self.db[collection_name].save(new_doc)
-
-    def NewContainer(self, class_name, name, parent):
-        cdoc = self.db['containers'].insert({'_class': class_name,
-                                         'name': name,
-                                         'parent': parent})
-        return bson.DBRef('containers', cdoc)
-
-    def DeleteObject(self, container, key, collection):
-        id = container[key].doc['_id']
-        self.db[collection].remove({'_id': id})
-        self.refresh_root()
-        del container[key]
-
-    def Dereference(self, dbref):
-        return self.db.dereference(dbref)
 
     def GetAppKeys(self, app):
         return [k for k in self.root['app'][app] if k[0] != '_']
@@ -1284,7 +1422,6 @@ class DataValidator:
     def run(self):
         logging.debug("running")
         self.check_root()
-        self.check_root_locks()
         self.check_doc_consistency()
         self.check_toplevel()
         self.check_containers()
@@ -1740,15 +1877,5 @@ class DataValidator:
             logging.warning("duplicate root_tree docs found! Removing all but the first")
             for d in rt_list[1:]:
                 self.db['root_tree'].remove({'_id': d['_id']})
-        if '_lock' not in rt_list[0]:
-            logging.warning("_lock field not found in root_tree; fixing")
-            rt_list[0]['_lock'] = False
-            self.db['root_tree'].save(rt_list[0])
-
-    def check_root_lock(self):
-        stale_lock = [d for d in self.db['root_tree'].find({'_lock': True})]
-        if stale_lock:
-            logging.warning("found stale root_tree lock; resetting".format(len(stale_lock)))
-            self.db['root_tree'].update({'_lock': True}, {'$set': {'_lock': False}})
 
 
