@@ -1,9 +1,10 @@
 __author__ = 'bkeroack'
 
-import string
 from types import FunctionType
 import functools
 import logging
+
+import type_check
 
 def log_wrapper(func):
     @functools.wraps(func)
@@ -60,3 +61,40 @@ def set_dict_key(obj, path, value):
     for k in path[:-1]:
         obj = obj.setdefault(k, {})
     obj[path[-1]] = value
+
+def paths_from_nested_dict(dict_obj, path=None):
+    '''
+    Given an arbitrarily-nested dict-like object, generate a list of unique tree path tuples.
+    Ex:
+    dict_obj = {
+        'a': {
+            0: 1,
+            1: 2
+        },
+        'b': {
+            'foo': 'bar'
+        }
+    }
+
+    returns:
+    [
+        ('a', 0, 1),
+        ('a', 1, 2),
+        ('b', 'foo', 'bar')
+    ]
+
+    @type dict_obj: dict
+    @type path: list
+    '''
+    assert not path or hasattr(path, '__getitem__')
+    assert type_check.is_dictlike(dict_obj)
+    assert not path or isinstance(path, list)
+    path = path if path else list()
+    unique_paths = list()
+    for i, item in enumerate(dict_obj.iteritems()):
+        if type_check.is_dictlike(item[1]):
+            for nested_item in paths_from_nested_dict(item[1], path=path+[item[0]]):
+                unique_paths.append(nested_item)
+        else:
+            unique_paths.append(tuple(path + [item[0]] + [item[1]]))
+    return unique_paths

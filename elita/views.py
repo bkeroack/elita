@@ -71,24 +71,6 @@ class GenericView:
         else:
             return True, {}
 
-    def do_patch(self, change_func, change_params, get_func, get_params):
-        try:
-            body = self.req.json_body
-        except:
-            return False, self.Error(400, "problem deserializing JSON body (bad JSON?)")
-        keys = set(body.keys())
-        cur_keys = set([k for k in self.context.doc if k[0] != '_'])
-        if not keys.issubset(cur_keys):
-            return False, self.Error(400, {"unknown modification keys": list(cur_keys - keys)})
-        self.datasvc.appsvc.ChangeApplication(self.context.app_name, body)
-        app_doc = self.datasvc.appsvc.GetApplication(self.context.app_name)
-        return True, self.status_ok({
-            'modified': {
-                'changed': body,
-                'new_object': app_doc
-            }
-        })
-
     #for verifying user-supplied parameters
     def check_against_existing(self, existing, submitted):
         return set(submitted).issubset(set(existing))

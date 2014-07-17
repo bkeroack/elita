@@ -19,6 +19,7 @@ import elita
 from elita.crypto import keypair
 from elita.deployment import deploy, salt_control
 import util
+import util.type_check
 from deployment.gitservice import EMBEDDED_YAML_DOT_REPLACEMENT, GitDeployManager
 import elita_exceptions
 from elita.actions.action import ActionService
@@ -105,19 +106,20 @@ class MongoService:
                                                                                                         collection))
         return self.db[collection].remove(keys)
 
-    def update_roottree(self, path, collection, id):
+    def update_roottree(self, path, collection, id, doc=None):
         '''
         Update the root tree at path [must be a tuple of indices: ('app', 'myapp', 'builds', '123-foo')] with DBRef
+        Optional doc can be passed in which will be inserted into the tree after adding DBRef field
 
         Return boolean indicating success
         '''
         assert hasattr(path, '__iter__')
         assert isinstance(collection, str)
         assert id.__class__.__name__ == 'ObjectId'
+        assert util.type_check.is_optional_dict(doc)
         path_dot_notation = '.'.join(path)
-        root_tree_doc = {
-            '_doc': bson.DBRef(collection, id)
-        }
+        root_tree_doc = doc if doc else {}
+        root_tree_doc['_doc'] = bson.DBRef(collection, id)
         result = self.db['root_tree'].update({}, {'$set': {path_dot_notation: root_tree_doc}})
         return result['n'] == 1 and result['updatedExisting'] and not result['err']
 
@@ -157,6 +159,18 @@ class GenericChildDataService:
         '''
         assert isinstance(mongo_service, MongoService)
         self.mongo_service = mongo_service
+
+    def populate_dependencies(self, dependency_objs):
+        '''
+        Child dataservice classes may need to access methods of siblings. This allows parent dataservice to inject
+        cross dependencies as needed without generating a big reference cycle.
+
+        dependency_objs = { 'FooDataService': FooDataService }
+
+        @type dependency_objs: dict
+        '''
+        assert util.type_check.is_dictlike(dependency_objs)
+        self.deps = dependency_objs
 
     def NewContainer(self, class_name, name, parent):
         '''
@@ -439,13 +453,21 @@ class ApplicationDataService(GenericChildDataService):
             "deployments": {"_doc": bson.DBRef('containers', self.NewContainer("DeploymentContainer", "deployments", app_name))},
             "groups": {"_doc": bson.DBRef('containers', self.NewContainer("GroupContainer", "groups", app_name))}
         }
-        self.mongo_service.update_roottree(('app', app_name), )
-
-    def ChangeApplication(self, app_name, data):
-        self.parent.ModifyObject("applications", app_name, data, name_key="app_name")
+        return self.mongo_service.update_roottree(('app', app_name), 'applications', aid, doc=root_doc)
 
     def DeleteApplication(self, app_name):
-        self.parent.DeleteObject(self.root['app'], app_name, 'applications')
+        '''
+        Delete application and all root_tree references and sub-objects.
+        '''
+        assert app_name
+        assert isinstance(app_name, str)
+        self.mongo_service.rm_roottree(('app', app_name))
+        self.mongo_service.delete('applications', {'app_name': app_name})
+        self.mongo_service.delete('builds', {'app_name': app_name})
+        self.mongo_service.delete('gitrepos', {'application': app_name})
+        self.mongo_service.delete('gitdeploys', {'application': app_name})
+        self.mongo_service.delete('deployments', {'application': app_name})
+        self.mongo_service.delete('groups', {'application': app_name})
 
     def GetApplicationCensus(self, app_name):
         '''
@@ -461,19 +483,22 @@ class ApplicationDataService(GenericChildDataService):
             }
         }
         '''
-        groups = self.parent.groupsvc.GetGroups(app_name)
-        envs = self.parent.serversvc.GetEnvironments()
+        assert app_name
+        assert isinstance(app_name, str)
+        groups = [d['name'] for d in self.mongo_service.get('groups', {'application': app_name}, multi=True)]
+        envs = list({d['environment'] for d in self.mongo_service.get('servers', {}, multi=True)})
+        #envs = self.deps['ServerDataService'].GetEnvironments()
         census = dict()
         for e in envs:
             census[e] = dict()
             for g in groups:
-                g_servers = self.parent.groupsvc.GetGroupServers(app_name, g, environments=[e])
+                g_servers = self.deps['GroupDataService'].GetGroupServers(app_name, g, environments=[e])
                 census[e][g] = dict()
                 for s in g_servers:
                     census[e][g][s] = dict()
-                    group_doc = self.parent.groupsvc.GetGroup(app_name, g)
+                    group_doc = self.deps['GroupDataService'].GetGroup(app_name, g)
                     for gd in group_doc['gitdeploys']:
-                        gd_doc = self.parent.gitsvc.GetGitDeploy(app_name, gd)
+                        gd_doc = self.deps['GitDataService'].GetGitDeploy(app_name, gd)
                         census[e][g][s][gd] = {
                             "committed": gd_doc['location']['gitrepo']['last_build'],
                             "deployed": gd_doc['deployed_build']
@@ -488,15 +513,21 @@ class ApplicationDataService(GenericChildDataService):
 
 class GroupDataService(GenericChildDataService):
     def GetGroups(self, app):
-        return [k for k in self.root['app'][app]['groups'] if k[0] != '_']
+        '''
+        Get all groups for application.
+        '''
+        assert app
+        assert isinstance(app, str)
+        return [d['name'] for d in self.mongo_service.get('groups', {'application': app}, multi=True)]
 
     def GetGroup(self, app, name):
-        docs = [d for d in self.db['groups'].find({'application': app, 'name': name})]
-        assert len(docs) > 0
-        if len(docs) > 1:
-            elita.logging.debug("GetGroup: WARNING: more than one group {} in application {}".format(name, app))
-        doc = docs[0]
-        return {k: doc[k] for k in doc if k[0] != '_'}
+        '''
+        Get document for application group
+        '''
+        assert app and name
+        assert isinstance(app, str)
+        assert isinstance(name, str)
+        return self.mongo_service.get('groups', {'application': app, 'name': name})
 
     def NewGroup(self, app, name, gitdeploys, rolling_deploy=False, description="", attributes={}):
         gp = Group({
@@ -1018,7 +1049,7 @@ class DataService:
         self.db = db
         self.root = root
         self.mongo_service = MongoService(db)
-        # potential reference cycles
+
         self.buildsvc = BuildDataService(self.mongo_service)
         self.usersvc = UserDataService(self.mongo_service)
         self.appsvc = ApplicationDataService(self.mongo_service)
@@ -1029,6 +1060,10 @@ class DataService:
         self.deploysvc = DeploymentDataService(self.mongo_service)
         self.actionsvc = ActionService(self)
         self.groupsvc = GroupDataService(self.mongo_service)
+
+        #cross-dependencies
+        self.appsvc.populate_dependencies({'serversvc': self.serversvc})
+
         #passed in if this is part of an async job
         self.job_id = job_id
         #super ugly below - only exists for plugin access
