@@ -44,9 +44,10 @@ class MongoService:
     def __init__(self, db, timeout=30):
         self.db = db
 
-    def create_new(self, collection, keys, classname, doc):
+    def create_new(self, collection, keys, classname, doc, remove_existing=True):
         '''
-        Creates new document in collection. Remove any existing. Keys is a dict specifying primary keys (name, app, etc)
+        Creates new document in collection. Optionally, remove any existing according to keys (which specify how the
+        new document is unique)
 
         Returns id of new document
         '''
@@ -54,15 +55,19 @@ class MongoService:
         assert isinstance(keys, dict)
         assert isinstance(classname, str)
         assert isinstance(doc, dict)
-        assert keys and collection and classname
-        existing = [d for d in self.db[collection].find(keys)]
-        doc['_class'] = classname
-        for k in keys:
-            doc[k] = keys[k]
-        if '_id' in doc:
-            del doc['_id']
+        assert collection
+        # keys/classname are only mandatory if remove_existing=True
+        assert (keys and classname and remove_existing) or not remove_existing
+        existing = None
+        if remove_existing:
+            existing = [d for d in self.db[collection].find(keys)]
+            doc['_class'] = classname
+            for k in keys:
+                doc[k] = keys[k]
+            if '_id' in doc:
+                del doc['_id']
         id = self.db[collection].save(doc)
-        if existing:
+        if existing and remove_existing:
             self.db[collection].remove(keys, {'$not': {'_id': id}})
         return id
 
@@ -153,12 +158,18 @@ class MongoService:
 class GenericChildDataService:
     __metaclass__ = elita.util.LoggingMetaClass
 
-    def __init__(self, mongo_service):
+    def __init__(self, mongo_service, root, job_id=None):
         '''
         @type mongo_service: MongoService
+        @type root: RootTree
+        @type job_id: None | str
         '''
         assert isinstance(mongo_service, MongoService)
+        assert isinstance(root, RootTree)
+        assert elita.util.type_check.is_optional_str(job_id)
         self.mongo_service = mongo_service
+        self.root = root
+        self.job_id = job_id
 
     def populate_dependencies(self, dependency_objs):
         '''
@@ -529,7 +540,24 @@ class GroupDataService(GenericChildDataService):
         assert isinstance(name, str)
         return self.mongo_service.get('groups', {'application': app, 'name': name})
 
-    def NewGroup(self, app, name, gitdeploys, rolling_deploy=False, description="", attributes={}):
+    def NewGroup(self, app, name, gitdeploys, rolling_deploy=False, description="", attributes=None):
+        '''
+        Create new application group.
+
+        @type app: str
+        @type name: str
+        @type gitdeploys: list[str]
+        @type rolling_deploys: True | False
+        @type description: str
+        @type attributes: dict | None
+        '''
+        assert app and name and gitdeploys
+        assert isinstance(app, str)
+        assert isinstance(name, str)
+        assert elita.util.type_check.is_seq(gitdeploys)
+        assert isinstance(description, str)
+        assert elita.util.type_check.is_optional_dict(attributes)
+        attributes = attributes if attributes else {}
         gp = Group({
             "application": app,
             "name": name,
@@ -539,33 +567,32 @@ class GroupDataService(GenericChildDataService):
             "rolling_deploy": rolling_deploy
         })
 
-        gid = self.db['groups'].insert({
-            '_class': 'Group',
-            'application': gp.application,
-            'name': gp.name,
-            'description': gp.description,
-            'attributes': gp.attributes,
-            'gitdeploys': gp.gitdeploys,
-            'rolling_deploy': gp.rolling_deploy
-        })
-
-        self.parent.refresh_root()
-        self.root['app'][app]['groups'][gp.name] = {
-            '_doc': bson.DBRef("groups", gid)
-        }
+        gid = self.mongo_service.create_new('groups', {'application': app, 'name': name}, 'Group', gp.get_doc())
+        self.mongo_service.update_roottree(('app', app, 'groups', name), 'groups', gid)
 
     def DeleteGroup(self, app, name):
-        self.parent.DeleteObject(self.root['app'][app]['groups'], name, 'groups')
+        '''
+        Delete a group object and root_tree reference
+        '''
+        assert app and name
+        assert isinstance(app, str)
+        assert isinstance(name, str)
+        self.mongo_service.rm_roottree(('app', app, 'groups', name))
+        self.mongo_service.delete('groups', {'application': app, 'name': name})
 
     def GetGroupServers(self, app, name, environments=None):
-        # build sets from initialized servers in each gitdeploy in the group
-        # then take intersection of all the sets
-        # if environments specified, take intersection with that set as well
+        '''
+        Build sets from initialized servers in each gitdeploy in the group, then take intersection of all the sets
+        If environments specified, take intersection with that set as well
+        '''
+        assert app and name
+        assert isinstance(app, str)
+        assert isinstance(name, str)
         group = self.GetGroup(app, name)
-        assert group is not None
-        server_sets = [set(self.parent.gitsvc.GetGitDeploy(app, gd)['servers']) for gd in group['gitdeploys']]
+        assert group
+        server_sets = [set(self.deps['GitDataService'].GetGitDeploy(app, gd)['servers']) for gd in group['gitdeploys']]
         if environments:
-            envs = self.parent.serversvc.GetEnvironments()
+            envs = self.deps['ServerDataService'].GetEnvironments()
             for e in environments:
                 assert e in envs
                 server_sets.append(set(envs[e]))
@@ -573,14 +600,33 @@ class GroupDataService(GenericChildDataService):
 
 class JobDataService(GenericChildDataService):
     def GetAllActions(self, app_name):
+        '''
+        Get all actions associated with application. Get it from root_tree because the actions are dynamically populated
+        at the start of each request.
+        '''
+        assert app_name
+        assert isinstance(app_name, str)
         if 'actions' in self.root['app'][app_name]:
             return [action for action in self.root['app'][app_name]['actions'] if action[0] != '_']
 
     def GetAction(self, app_name, action_name):
-        actions = self.parent.actionsvc.get_action_details(app_name, action_name)
+        '''
+        Get details (name, description, parameters) about all actions associated with application
+        '''
+        assert app_name and action_name
+        assert isinstance(app_name, str)
+        assert isinstance(action_name, str)
+        actions = self.deps['ActionService'].get_action_details(app_name, action_name)
         return {k: actions[k] for k in actions if k is not "callable"}
 
     def NewJob(self, name, job_type, data):
+        '''
+        Create new job object.
+
+        data parameter can be anything serializable (including None) so that's all we will check for
+        '''
+        assert name and job_type
+        assert elita.util.type_check.is_serializable(data)
         job = Job({
             'status': "running",
             'name': name,
@@ -590,27 +636,24 @@ class JobDataService(GenericChildDataService):
                 'name': name
             }
         })
-        jid = self.db['jobs'].insert({
-            '_class': 'Job',
-            'name': job.name,
-            'job_id': str(job.job_id),
-            'job_type': job.job_type,
-            'data': job.data,
-            'status': job.status,
-            'attributes': job.attributes
-        })
-        self.parent.refresh_root()
-        self.root['job'][str(job.job_id)] = {
-            "_doc": bson.DBRef("jobs", jid)
-        }
+        jid = self.mongo_service.create_new('jobs', {'job_id': str(job.job_id)}, 'Job', job.get_doc())
+        self.mongo_service.update_roottree(('job', str(job.job_id)), 'jobs', jid)
         return job
 
     def NewJobData(self, data):
-        assert self.parent.job_id
-        self.db['job_data'].insert({
-            'job_id': self.parent.job_id,
+        '''
+        Insert new job_data record. Called by async jobs to log progress. Data inserted here can be viewed by user
+        by polling the respective job object endpoint.
+
+        Only valid to be called in an asynch context, so assert we have a valid job_id
+        '''
+        assert data
+        assert elita.util.type_check.is_serializable(data)
+        assert self.job_id
+        self.mongo_service.create_new('job_data', None, None, {
+            'job_id': self.job_id,
             'data': data
-        })
+        }, remove_existing=False)
 
     def GetJobs(self, active):
         return [d['job_id'] for d in self.db['jobs'].find({'status': 'running'} if active else {})]
@@ -1050,19 +1093,30 @@ class DataService:
         self.root = root
         self.mongo_service = MongoService(db)
 
-        self.buildsvc = BuildDataService(self.mongo_service)
-        self.usersvc = UserDataService(self.mongo_service)
-        self.appsvc = ApplicationDataService(self.mongo_service)
-        self.jobsvc = JobDataService(self.mongo_service)
-        self.serversvc = ServerDataService(self.mongo_service)
-        self.gitsvc = GitDataService(self.mongo_service)
-        self.keysvc = KeyDataService(self.mongo_service)
-        self.deploysvc = DeploymentDataService(self.mongo_service)
+        self.buildsvc = BuildDataService(self.mongo_service, root)
+        self.usersvc = UserDataService(self.mongo_service, root)
+        self.appsvc = ApplicationDataService(self.mongo_service, root)
+        self.jobsvc = JobDataService(self.mongo_service, root)
+        self.serversvc = ServerDataService(self.mongo_service, root)
+        self.gitsvc = GitDataService(self.mongo_service, root)
+        self.keysvc = KeyDataService(self.mongo_service, root)
+        self.deploysvc = DeploymentDataService(self.mongo_service, root)
         self.actionsvc = ActionService(self)
-        self.groupsvc = GroupDataService(self.mongo_service)
+        self.groupsvc = GroupDataService(self.mongo_service, root)
 
-        #cross-dependencies
-        self.appsvc.populate_dependencies({'serversvc': self.serversvc})
+        #cross-dependencies between child dataservice objects above
+        self.appsvc.populate_dependencies({
+            'ServerDataService': self.serversvc,
+            'GroupDataService': self.groupsvc,
+            'GitDataService': self.gitsvc
+        })
+        self.groupsvc.populate_dependencies({
+            'ServerDataService': self.serversvc,
+            'GitDataService': self.gitsvc
+        })
+        self.jobsvc.populate_dependencies({
+            'ActionService': self.actionsvc
+        })
 
         #passed in if this is part of an async job
         self.job_id = job_id
