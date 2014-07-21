@@ -140,9 +140,11 @@ class MongoService:
 
     def get(self, collection, keys, multi=False):
         '''
-        Retrieve a document from Mongo, keyed by name. If duplicates are found, delete all but the first.
+        Thin wrapper around find()
+        Retrieve a document from Mongo, keyed by name. Optionally, if duplicates are found, delete all but the first.
 
         Returns document
+        @rtype: dict | list(dict)
         '''
         assert isinstance(collection, str)
         assert isinstance(keys, dict)
@@ -197,11 +199,15 @@ class BuildDataService(GenericChildDataService):
 
     def GetBuilds(self, app_name):
         '''
-        Get all builds for application
+        Get all builds for application.
+
+        When getting a list of all objects of a given type, the convention is to pull from in-memory root_tree instead
+        of directly from mongo. This keeps it fast so we can do it frequently for things like parameter validation, etc
         '''
         assert app_name
         assert isinstance(app_name, str)
-        return [d['build_name'] for d in self.mongo_service.get('builds', {'app_name': app_name}, multi=True)]
+        assert app_name in self.root['app']
+        return [build for build in self.root['app'][app_name]['builds'] if build[0] != '_']
 
     def NewBuild(self, app_name, build_name, attribs):
         '''
@@ -382,7 +388,7 @@ class UserDataService(GenericChildDataService):
         '''
         Get all valid tokens
         '''
-        return self.mongo_service.get('tokens', {}, multi=True)
+        return [token for token in self.root['global']['tokens'] if token[0] != '_']
 
     def NewToken(self, username):
         '''
@@ -403,7 +409,7 @@ class UserDataService(GenericChildDataService):
         '''
         Get all valid users
         '''
-        return [d['name'] for d in self.mongo_service.get('users', {}, multi=True)]
+        return [user for user in self.root['global']['users'] if user[0] != '_']
 
     def GetUser(self, username):
         '''
@@ -436,9 +442,9 @@ class UserDataService(GenericChildDataService):
 class ApplicationDataService(GenericChildDataService):
     def GetApplications(self):
         '''
-        Get all applications.
+        Get all applications. Pull from in-memory root_tree rather than mongo for speed.
         '''
-        return [d['app_name'] for d in self.mongo_service.get('applications', {}, multi=True)]
+        return [app for app in self.root['app'] if app[0] != '_']
 
     def GetApplication(self, app_name):
         '''
@@ -529,7 +535,8 @@ class GroupDataService(GenericChildDataService):
         '''
         assert app
         assert isinstance(app, str)
-        return [d['name'] for d in self.mongo_service.get('groups', {'application': app}, multi=True)]
+        assert app in self.root['app']
+        return [group for group in self.root['app'][app]['groups'] if group[0] != '_']
 
     def GetGroup(self, app, name):
         '''
@@ -656,125 +663,146 @@ class JobDataService(GenericChildDataService):
         }, remove_existing=False)
 
     def GetJobs(self, active):
-        return [d['job_id'] for d in self.db['jobs'].find({'status': 'running'} if active else {})]
+        '''
+        Get all actively running jobs. Pulling from mongo could possibly be more efficient (maybe) than using
+        in-memory root_tree because we're querying on the status field
+        '''
+        return [d['job_id'] for d in self.mongo_service.get('jobs', {'status': 'running'}, multi=True)]
 
     def GetJobData(self, job_id):
+        '''
+        Get job data for a specific job sorted by created_datetime (ascending)
+        '''
+        assert job_id
+        assert isinstance(job_id, str)
         return sorted([{'created_datetime': d['_id'].generation_time.isoformat(' '), 'data': d['data']} for
-                       d in self.db['job_data'].find({'job_id': job_id})], key=lambda k: k['created_datetime'])
+                       d in self.mongo_service.get('job_data', {'job_id': job_id}, multi=True)],
+                      key=lambda k: k['created_datetime'])
 
     def SaveJobResults(self, results):
-        assert self.parent.job_id
+        '''
+        Called at the end of async jobs. Changes state of job object to reflect job completion.
+        '''
+        assert self.job_id
+        assert elita.util.type_check.is_serializable(results)
         now = datetime.datetime.now(tz=pytz.utc)
-        doc = self.db['jobs'].find_one({'job_id': self.parent.job_id})
+        doc = self.mongo_service.get('jobs', {'job_id': self.job_id})
+        assert doc and elita.util.type_check.is_dictlike(doc) and '_id' in doc
         diff = (now - doc['_id'].generation_time).total_seconds()
-        res = self.db['jobs'].update({'job_id': self.parent.job_id}, {'$set': {'status': "completed",
-                                                                   'completed_datetime': now,
-                                                                   'duration_in_seconds': diff}})
-        logging.debug("SaveJobResults: update job doc: {}".format(res))
+        self.mongo_service.modify('jobs', {'job_id': self.job_id}, ('status',), "completed")
+        self.mongo_service.modify('jobs', {'job_id': self.job_id}, ('completed_datetime',), now)
+        self.mongo_service.modify('jobs', {'job_id': self.job_id}, ('duration_in_seconds',), diff)
         self.NewJobData({"completed_results": results})
 
     def NewAction(self, app_name, action_name, params):
+        '''
+        Register new dynamically-loaded action in root_tree. These are loaded from plugins at the start of each request
+        Note that action is added to in-memory root_tree object (not the root_tree record in mongo) because it is not
+        persistent. Note further that this is *our* (meaning this thread's) root_tree and will only be in effect for the
+        duration of this request, so we don't care about any root_tree updates by other threads running concurrently
+        '''
+        assert app_name and action_name and params
+        assert isinstance(app_name, str)
+        assert isinstance(action_name, str)
+        assert elita.util.type_check.is_dictlike(params)
         logging.debug("NewAction: app_name: {}".format(app_name))
         logging.debug("NewAction: action_name: {}".format(action_name))
-        self.parent.refresh_root()
-        self.root['app'][app_name]['actions'][action_name] = Action(app_name, action_name, params, self)
-        if app_name in self.parent.appsvc.GetApplications():
-            self.parent.refresh_root()
+        if app_name in self.deps['ApplicationDataService'].GetApplications():
             self.root['app'][app_name]['actions'][action_name] = Action(app_name, action_name, params, self)
         else:
             logging.debug("NewAction: application '{}' not found".format(app_name))
 
     def ExecuteAction(self, app_name, action_name, params):
-        return self.parent.actionsvc.async(app_name, action_name, params)
+        '''
+        Spawn async job for an action
+        '''
+        assert app_name and action_name and params
+        assert isinstance(app_name, str)
+        assert isinstance(action_name, str)
+        assert elita.util.type_check.is_dictlike(params)
+        return self.deps['ActionService'].async(app_name, action_name, params)
 
 class ServerDataService(GenericChildDataService):
     def GetServers(self):
+        '''
+        Return a list of all extant server objects
+        '''
         return [k for k in self.root['server'].keys() if k[0] != '_' and k != 'environments']
 
     def NewServer(self, name, attribs, environment, existing=False):
-        try:
-            server = Server({
-                'name': name,
-                'status': 'new',
-                'server_type': 'unknown',
-                'environment': environment,
-                'attributes': attribs
-            })
-        except elita_exceptions.SaltServerNotAccessible:
-            return {
-                'NewServer': {
-                    'status': 'error',
-                    'message': "server not accessible via salt"
-                }
-            }
-        so = self.db['servers'].find_and_modify(query={
-            'name': server.name,
-        }, update={
-            '_class': "Server",
-            'name': server.name,
-            'status': server.status,
-            'server_type': server.server_type,
-            'environment': server.environment,
-            'gitdeploys': [],
-            'attributes': server.attributes
-        }, upsert=True, new=True)
-        sid = so['_id']
-        self.parent.refresh_root()
-        self.root['server'][name] = {
-            '_doc': bson.DBRef('servers', sid),
-            'gitdeploys': {"_doc": self.parent.NewContainer("GitDeployContainer", "gitdeploys", name)}
-        }
+        '''
+        Create a new server object
+        '''
+        server = Server({
+            'name': name,
+            'status': 'new',
+            'server_type': 'unknown',
+            'environment': environment,
+            'attributes': attribs
+        })
+        sid = self.mongo_service.create_new('servers', {'name': name}, 'Server', server.get_doc())
+        self.mongo_service.update_roottree(('server', name), 'servers', sid, doc={
+            "gitdeploys": self.NewContainer('GitDeployContainer', name, "gitdeploys")
+        })
         return {
             'NewServer': {
+                'name': name,
+                'environment': environment,
+                'attributes': attribs,
                 'status': 'ok'
             }
-      }
+        }
 
-    def ChangeServer(self, name, changed_keys):
+    def ChangeServer(self, name, doc):
         '''
-        Modify data in existing server. changed_keys is a dict of top-level keys to replace. Each one will *replace*
-        the entire top-level key!
+        Change existing server object with data in doc
         '''
-        prototype = Server({})
-        assert isinstance(changed_keys, dict)
-        # do each key separately to keep atomic
-        for k in changed_keys:
-            if hasattr(prototype, k):
-                self.db['servers'].find_and_modify(query={
-                    'name': name
-                }, update={
-                    '$set': {k: changed_keys[k]}
-                })
+        assert name and doc
+        assert isinstance(name, str)
+        assert elita.util.type_check.is_dictlike(doc)
+        assert name in self.root['server']
+        prototype = Server({})  # get all valid default top-level properties
+        assert all([key in prototype.get_doc() for key in doc])
+        for p in elita.util.paths_from_nested_dict(doc):
+            self.mongo_service.modify('servers', {'name': name}, p[:-1], p[-1])
 
     def DeleteServer(self, name):
-        self.parent.DeleteObject(self.root['server'], name, 'servers')
+        '''
+        Delete a server object
+        '''
+        assert name
+        assert isinstance(name, str)
+        assert name in self.root['server']
+        self.mongo_service.rm_roottree(('server', name))
+        self.mongo_service.delete('servers', {'name': name})
 
     def GetGitDeploys(self, name):
-        servers = [s for s in self.db['servers'].find({'name': name})]
-        assert servers
-        s = servers[0]
-        if len(servers) > 1:
-            logging.debug("(Server->)GetGitDeploys: WARNING: {} server docs found for {}; removing all but the first".format(len(servers), name))
-            for s in servers[1:]:
-                self.db['servers'].remove({'_id': s['_id']})
-        s['gitdeploys'] = [self.db.dereference(d) for d in s['gitdeploys']]
-        return [{'application': gd['application'], 'gitdeploy_name': gd['name']} for gd in s['gitdeploys']]
+        '''
+        Get all gitdeploys initialized on a server. The canonical data source is the gitdeploy object (which contains
+        a list of servers it's been initialized on)
+        '''
+        assert name
+        assert isinstance(name, str)
+        assert name in self.root['server']
+        gitdeploys = self.mongo_service.get('gitdeploys', {'servers': {'$in': [name]}})
+        if gitdeploys:
+            return [{'application': gd['application'], 'gitdeploy_name': gd['name']} for gd in gitdeploys]
+        else:
+            return []
 
     def GetEnvironments(self):
+        '''
+        Get a census of all environments. "environment" is just a tag associated with a server upon creation, so get all
+        tags and dedupe.
+        '''
         environments = dict()
-        srvs = self.GetServers()
-        for s in srvs:
-            server = [d for d in self.db['servers'].find({'name': s})]
-            if len(server) > 1:
-                logging.debug("(Server->)GetEnvironments: more than one doc found for server {}".format(s))
-            doc = server[0]
-            env = doc['environment']
-            if env in environments:
-                environments[env].update([s])
-            else:
-                environments[env] = {s}
-        return {k: list(environments[k]) for k in environments}
-
+        for sd in self.mongo_service.get('servers', {}, multi=True):
+            assert elita.util.type_check.is_dictlike(sd)
+            assert 'environment' in sd
+            if sd['environment'] not in environments:
+                environments[sd['environment']] = list()
+            environments[sd['environment']].append(sd['name'])
+        return environments
 
 class GitDataService(GenericChildDataService):
     def NewGitDeploy(self, name, app_name, package, options, actions, location, attributes):
@@ -1115,7 +1143,8 @@ class DataService:
             'GitDataService': self.gitsvc
         })
         self.jobsvc.populate_dependencies({
-            'ActionService': self.actionsvc
+            'ActionService': self.actionsvc,
+            'ApplicationDataService': self.appsvc
         })
 
         #passed in if this is part of an async job

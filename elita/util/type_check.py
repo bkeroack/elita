@@ -22,3 +22,5 @@ def is_serializable(obj):
 
 def is_optional_str(obj):
     return not obj or isinstance(obj, str)
+
+

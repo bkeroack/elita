@@ -65,6 +65,7 @@ def set_dict_key(obj, path, value):
 def paths_from_nested_dict(dict_obj, path=None):
     '''
     Given an arbitrarily-nested dict-like object, generate a list of unique tree path tuples.
+    The last object in any path will be the deepest leaf value in that path.
     Ex:
     dict_obj = {
         'a': {
