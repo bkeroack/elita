@@ -6,6 +6,9 @@ import json
 def is_seq(obj):
     return isinstance(obj, collections.Sequence)
 
+def is_optional_seq(obj):
+    return not obj or is_seq(obj)
+
 def is_dictlike(obj):
     return isinstance(obj, collections.Mapping)
 

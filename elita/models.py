@@ -144,7 +144,7 @@ class MongoService:
         Retrieve a document from Mongo, keyed by name. Optionally, if duplicates are found, delete all but the first.
 
         Returns document
-        @rtype: dict | list(dict)
+        @rtype: dict | list(dict) | None
         '''
         assert isinstance(collection, str)
         assert isinstance(keys, dict)
@@ -194,6 +194,20 @@ class GenericChildDataService:
         assert isinstance(name, str)
         assert isinstance(parent, str)
         return self.mongo_service.create_new('containers', {'name': name}, class_name, {'name': name, 'parent': parent})
+
+    def UpdateObject(self, collection, keys, doc):
+        '''
+        Generic method to update a particular object (document) with the data in doc
+        '''
+        assert collection and keys and doc
+        assert isinstance(collection, str)
+        assert elita.util.type_check.is_dictlike(keys)
+        assert elita.util.type_check.is_dictlike(doc)
+
+        paths = elita.util.paths_from_nested_dict(doc)
+        assert paths
+        for path in paths:
+            self.mongo_service.modify(collection, keys, path[:-1], path[-1])
 
 class BuildDataService(GenericChildDataService):
 
@@ -249,11 +263,8 @@ class BuildDataService(GenericChildDataService):
         assert isinstance(app, str)
         assert isinstance(build, str)
         assert isinstance(packages, dict)
-
-        app_doc = self.mongo_service.get('application', {'name': app})
-        assert app_doc
-        build_doc = self.mongo_service.get('builds', {'app_name': app, 'build_name': build})
-        assert build_doc
+        assert app in self.root['app']
+        assert build in self.root['app']['builds']
 
         keys = {'app_name': app, 'build_name': build}
         for p in packages:
@@ -277,14 +288,10 @@ class BuildDataService(GenericChildDataService):
         assert isinstance(name, str)
         assert isinstance(doc, dict)
         assert app and name
+        assert app in self.root['app']
+        assert name in self.root['app']['builds']
 
-        app_doc = self.mongo_service.get('application', {'name': app})
-        assert app_doc
-        build_doc = self.mongo_service.get('builds', {'app_name': app, 'build_name': name})
-        assert build_doc
-
-        for k in doc:
-            self.mongo_service.modify('builds', {'app_name': app, 'build_name': name}, (k,), doc[k])
+        self.UpdateObject('builds', {'app_name': app, 'build_name': name}, doc)
 
     def DeleteBuildStorage(self, app_name, build_name):
         '''
@@ -763,8 +770,8 @@ class ServerDataService(GenericChildDataService):
         assert name in self.root['server']
         prototype = Server({})  # get all valid default top-level properties
         assert all([key in prototype.get_doc() for key in doc])
-        for p in elita.util.paths_from_nested_dict(doc):
-            self.mongo_service.modify('servers', {'name': name}, p[:-1], p[-1])
+
+        self.UpdateObject('servers', {'name': name}, doc)
 
     def DeleteServer(self, name):
         '''
@@ -806,146 +813,258 @@ class ServerDataService(GenericChildDataService):
 
 class GitDataService(GenericChildDataService):
     def NewGitDeploy(self, name, app_name, package, options, actions, location, attributes):
-        gitrepo_doc = self.db['gitrepos'].find_one({'name': location['gitrepo']})
+        '''
+        Create new gitdeploy object. One of a few New* methods that returns status of success/failure to the view layer
+        @rtype dict
+        '''
+        assert name and app_name and location
+        assert isinstance(name, str)
+        assert isinstance(app_name, str)
+        assert elita.util.type_check.is_dictlike(location)
+        assert all([k in location for k in ('gitrepo', 'path', 'default_branch')])
+        assert app_name in self.root['app']
+        assert elita.util.type_check.is_optional_str(package)
+        assert elita.util.type_check.is_optional_dict(options)
+        assert elita.util.type_check.is_optional_dict(actions)
+        assert elita.util.type_check.is_optional_dict(attributes)
+
+        #get associated gitrepo
+        gitrepo_doc = self.mongo_service.get('gitrepos', {'name': location['gitrepo']})
         logging.debug("NewGitDeploy: gitrepo_doc: {}".format(gitrepo_doc))
-        if gitrepo_doc is None:
+        if not gitrepo_doc:
             return {'error': "invalid gitrepo (not found)"}
+
+        #replace gitrepo name with DBRef
         location['gitrepo'] = bson.DBRef("gitrepos", gitrepo_doc['_id'])
-        new_gd = {
-            'name': name,
-            'application': app_name,
-            'servers': list(),
-            'deployed_build': None,
-            'options': {
-                'favor': 'ours',
-                'ignore-whitespace': 'true',
-                'gitignore': []
-            },
-            'actions': {
-                'prepull': [],
-                'postpull': []
-            },
-            'location': location,
-            'attributes': attributes,
-        }
+
+        #construct gitdeploy document
+        gd_obj = GitDeploy({})
+        gd_doc = gd_obj.get_doc()
+        gd_doc['name'] = name
+        gd_doc['application'] = app_name
+        gd_doc['location'] = location
+        gd_doc['attributes'] = attributes if attributes else {}
+        gd_doc['package'] = package
+
         #override defaults if specified
-        if package:
-            new_gd['package'] = package
         if options:
             for k in options:
-                if k in new_gd['options']:
-                    new_gd['options'][k] = options[k]
+                if k in gd_doc['options']:
+                    gd_doc['options'][k] = options[k]
         if actions:
             util.change_dict_keys(actions, '.', EMBEDDED_YAML_DOT_REPLACEMENT)
             for k in actions:
-                if k in new_gd['actions']:
-                    new_gd['actions'][k] = actions[k]
-        gd = GitDeploy(new_gd)
-        gdo = self.db['gitdeploys'].find_and_modify(query={
-            'name': gd.name,
-            'application': gd.application
-        }, update={
-            '_class': "GitDeploy",
-            'name': gd.name,
-            'application': gd.application,
-            'servers': gd.servers,
-            'package': gd.package,
-            'attributes': gd.attributes,
-            'deployed_build': gd.deployed_build,
-            'options': gd.options,
-            'actions': gd.actions,
-            'location': gd.location
-        }, upsert=True, new=True)
-        gdid = gdo['_id']
-        self.parent.refresh_root()
-        self.root['app'][app_name]['gitdeploys'][name] = {'_doc': bson.DBRef('gitdeploys', gdid)}
+                if k in gd_doc['actions']:
+                    gd_doc['actions'][k] = actions[k]
+        gdid = self.mongo_service.create_new('gitdeploys', {'name': name, 'application': app_name}, 'GitDeploy', gd_doc)
+        self.mongo_service.update_roottree(('app', app_name, 'gitdeploys', name), 'gitdeploys', gdid)
         return {"ok": "done"}
 
     def GetGitDeploys(self, app):
-        return [k for k in self.root['app'][app]['gitdeploys'].keys() if k[0] != '_']
+        '''
+        Get all gitdeploys associated with application
+
+        @rtype: list
+        '''
+        assert app
+        assert isinstance(app, str)
+        assert app in self.root['app']
+        return [k for k in self.root['app'][app]['gitdeploys'] if k[0] != '_']
 
 
     def GetGitDeploy(self, app, name):
-        doc = self.db['gitdeploys'].find_one({'name': name, 'application': app})
+        '''
+        Get gitdeploy document. Dereference embedded DBrefs for convenience.
+
+        @rtype: dict
+        '''
+        assert app and name
+        assert isinstance(app, str)
+        assert isinstance(name, str)
+        assert app in self.root['app']
+        assert name in self.root['app']['gitdeploys']
+
+        doc = self.mongo_service.get('gitdeploys', {'name': name, 'application': app})
+        assert 'location' in doc
+        assert 'gitrepo' in doc['location']
         #dereference embedded dbrefs
         doc['location']['gitrepo'] = self.db.dereference(doc['location']['gitrepo'])
-        assert doc['location']['gitrepo'] is not None
+        assert doc['location']['gitrepo']
+        assert all([k in doc['location']['gitrepo'] for k in ('keypair', 'gitprovider')])
         doc['location']['gitrepo']['keypair'] = self.db.dereference(doc['location']['gitrepo']['keypair'])
-        assert doc['location']['gitrepo']['keypair'] is not None
+        assert doc['location']['gitrepo']['keypair']
         doc['location']['gitrepo']['gitprovider'] = self.db.dereference(doc['location']['gitrepo']['gitprovider'])
-        assert doc['location']['gitrepo']['gitprovider'] is not None
+        assert doc['location']['gitrepo']['gitprovider']
         return {k: doc[k] for k in doc if k[0] != '_'}
 
-    def GetGitDeployLocalPath(self, app, name):
-        gd_doc = self.GetGitDeploy(app, name)
-        gdm = GitDeployManager(gd_doc, self.parent)
-        return gdm.get_path()
+    # DEAD CODE
+
+    # def GetGitDeployLocalPath(self, app, name):
+    #     '''
+    #     Return the local path (on elita) to the working copy of the gitrepo associated with the gitdeploy. IE: the place
+    #      where we decompress the package and commit/push from.
+    #     '''
+    #     assert app and name
+    #     assert isinstance(app, str)
+    #     assert isinstance(name, str)
+    #     assert app in self.root['app']
+    #     assert name in self.root['app']['gitdeploys']
+    #
+    #     gd_doc = self.GetGitDeploy(app, name)
+    #     gdm = GitDeployManager(gd_doc, self.parent)
+    #     return gdm.get_path()
 
     def UpdateGitDeploy(self, app, name, doc):
-        if 'location' in doc:
-            assert 'gitrepo' in doc['location']
-            grd = self.db['gitrepos'].find_one({'name': doc['location']['gitrepo'], 'application': app})
-            assert grd
-            doc['location']['gitrepo'] = bson.DBRef('gitrepos', grd['_id'])
+        '''
+        Update gitdeploy object with the data in doc
+        '''
+        assert app and name and doc
+        assert isinstance(app, str)
+        assert isinstance(name, str)
+        assert elita.util.type_check.is_dictlike(doc)
+        assert app in self.root['app']
+        assert name in self.root['app']['gitdeploys']
+
+        #clean up any actions
         if 'actions' in doc:
             util.change_dict_keys(doc['actions'], '.', EMBEDDED_YAML_DOT_REPLACEMENT)
-        self.parent.UpdateAppObject(name, doc, 'gitdeploys', "GitDeploy", app)
+
+        #replace gitrepo with DBRef if necessary
+        if 'location' in doc and 'gitrepo' in doc['location']:
+            grd = self.mongo_service.get('gitrepos', {'name': doc['location']['gitrepo'], 'application': app})
+            assert grd
+            doc['location']['gitrepo'] = bson.DBRef('gitrepos', grd['_id'])
+
+        self.UpdateObject('gitdeploys', {'name': name, 'application': app}, doc)
 
     def DeleteGitDeploy(self, app, name):
-        self.parent.DeleteObject(self.root['app'][app]['gitdeploys'], name, 'gitdeploys')
+        '''
+        Delete a gitdeploy object and the root_tree reference
+        '''
+        assert app and name
+        assert isinstance(app, str)
+        assert isinstance(name, str)
+        assert app in self.root['app']
+        assert name in self.root['app'][app]['gitdeploys']
 
-    def GetGitProviders(self, objs=False):
-        if objs:
-            return [GitProvider(gp.doc) for gp in self.root['global']['gitproviders']]
-        return [k for k in self.root['global']['gitproviders'].keys() if k[0] != '_']
+        self.mongo_service.rm_roottree(('app', app, 'gitdeploys', name))
+        self.mongo_service.delete('gitdeploys', {'name': name, 'application': app})
+
+    def GetGitProviders(self):
+        '''
+        Get all gitproviders
+
+        @rtype: list(str) | None
+        '''
+        return [k for k in self.root['global']['gitproviders'] if k[0] != '_']
 
     def GetGitProvider(self, name):
-        doc = self.db['gitproviders'].find_one({'name': name})
-        if not doc:
-            return None
+        '''
+        Get gitprovider document
+
+        @rtype: dict | None
+        '''
+        assert name
+        assert isinstance(name, str)
+        assert name in self.root['global']['gitproviders']
+
+        doc = self.mongo_service.get('gitproviders', {'name': name})
+        assert doc
         return {k: doc[k] for k in doc if k[0] != '_'}
 
-    def NewGitProvider(self, name, type, auth):
-        if name in self.root['global']['gitproviders']:
-            self.db['gitproviders'].remove({'name': name})
-        gpobj = GitProvider({
+    def NewGitProvider(self, name, provider_type, auth):
+        '''
+        Create new gitprovider object
+        '''
+        assert name and type and auth
+        assert isinstance(name, str)
+        assert isinstance(type, str)
+        assert provider_type in ('bitbucket', 'github')
+        assert elita.util.type_check.is_dictlike(auth)
+        assert 'username' in auth and 'password' in auth
+        assert isinstance(auth['username'], str)
+        assert isinstance(auth['password'], str)
+
+        gpo = GitProvider({
             'name': name,
-            'type': type,
+            'type': provider_type,
             'auth': auth
         })
-        gpo = self.db['gitproviders'].find_and_modify(query={
-            'name': gpobj.name
-        }, update={
-            '_class': "GitProvider",
-            'name': gpobj.name,
-            'type': gpobj.type,
-            'auth': gpobj.auth
-        }, upsert=True, new=True)
-        gpid = gpo['_id']
-        self.parent.refresh_root()
-        self.root['global']['gitproviders'][gpobj.name] = {'_doc': bson.DBRef('gitproviders', gpid)}
+
+        gpid = self.mongo_service.create_new('gitproviders', {'name': name}, 'GitProvider', gpo.get_doc())
+        self.mongo_service.update_roottree(('global', 'gitproviders', name), 'gitproviders', gpid)
 
     def UpdateGitProvider(self, name, doc):
-        self.parent.UpdateObject(name, doc, 'gitproviders', "GitProvider")
+        '''
+        Modify gitprovider with the data in doc
+        '''
+        assert name and doc
+        assert isinstance(name, str)
+        assert elita.util.type_check.is_dictlike(doc)
+        assert name in self.root['global']['gitproviders']
+
+        self.UpdateObject('gitproviders', {'name': name}, doc)
 
     def DeleteGitProvider(self, name):
-        self.parent.DeleteObject(self.root['global']['gitproviders'], name, 'gitproviders')
+        '''
+        Delete gitprovider object and root_tree reference
+        '''
+        assert name
+        assert isinstance(name, str)
+        assert name in self.root['global']['gitproviders']
+
+        self.mongo_service.rm_roottree(('global', 'gitproviders', name))
+        self.mongo_service.delete('gitproviders', {'name': name})
 
     def GetGitRepos(self, app):
-        return [k for k in self.root['app'][app]['gitrepos'].keys() if k[0] != '_']
+        '''
+        Get a list of all gitrepos associated with application
+
+        @rtype: list(dict)
+        '''
+        assert app
+        assert isinstance(app, str)
+        assert app in self.root['app']
+
+        return [k for k in self.root['app'][app]['gitrepos'] if k[0] != '_']
 
     def GetGitRepo(self, app, name):
-        doc = self.db['gitrepos'].find_one({'name': name, 'application': app})
+        '''
+        Get gitrepo document
+
+        @rtype: dict
+        '''
+        assert app and name
+        assert isinstance(app, str)
+        assert isinstance(name, str)
+        assert app in self.root['app']
+        assert name in self.root['app']['gitrepos']
+
+        doc = self.mongo_service.get('gitrepos', {'name': name, 'application': app})
+        assert doc
         return {k: doc[k] for k in doc if k[0] != '_'}
 
-    def NewGitRepo(self, app, name, keypair, gitprovider, uri=None, existing=False):
-        gp_doc = self.db['gitproviders'].find_one({'name': gitprovider})
-        if gp_doc is None:
+    def NewGitRepo(self, app, name, keypair, gitprovider, uri):
+        '''
+        Create new gitrepo object
+
+        @rtype: dict
+        '''
+        assert app and name and keypair and gitprovider and uri
+        assert all([isinstance(p, str) for p in (app, name, keypair, gitprovider, uri)])
+        assert app in self.root['app']
+        assert keypair in self.root['global']['keypairs']
+        assert gitprovider in self.root['global']['gitproviders']
+
+        #get docs so we can generate DBRefs
+        kp_doc = self.mongo_service.get('keypairs', {'name': keypair})
+        gp_doc = self.mongo_service.get('gitproviders', {'name': gitprovider})
+        if not gp_doc:
             return {'NewGitRepo': "gitprovider '{}' is unknown".format(gitprovider)}
-        kp_doc = self.db['keypairs'].find_one({'name': keypair})
-        if kp_doc is None:
+        if not kp_doc:
             return {'NewGitRepo': "keypair '{}' is unknown".format(keypair)}
-        gr_obj = GitRepo({
+
+        gro = GitRepo({
             'name': name,
             'application': app,
             'keypair': bson.DBRef("keypairs", kp_doc['_id']),
@@ -953,48 +1072,56 @@ class GitDataService(GenericChildDataService):
             'uri': uri,
             'last_build': None
         })
-        gro = self.db['gitrepos'].find_and_modify(query={
-            'name': gr_obj.name,
-            'application': gr_obj.application
-        }, update={
-            '_class': "GitRepo",
-            'name': gr_obj.name,
-            'application': gr_obj.application,
-            'keypair': gr_obj.keypair,
-            'gitprovider': gr_obj.gitprovider,
-            'uri': gr_obj.uri,
-            'last_build': gr_obj.last_build
-        }, upsert=True, new=True)
-        gr_id = gro['_id']
-        self.parent.refresh_root()
-        self.root['app'][app]['gitrepos'][name] = {
-            '_doc': bson.DBRef('gitrepos', gr_id)
-        }
+
+        grid = self.mongo_service.create_new('gitrepos', {'name': name, 'application': app}, 'GitRepo', gro.get_doc())
+        self.mongo_service.update_roottree(('app', app, 'gitrepos', name), 'gitrepos', grid)
         return {'NewGitRepo': 'ok'}
 
     def UpdateGitRepo(self, app, name, doc):
-        gro = GitRepo(self.GetGitRepo(app, name))
-        gro.update_values(doc)
-        grd = gro.get_doc()
-        existing = [doc['_id'] for doc in self.db['gitrepos'].find({'name': name, 'application': app})]
-        if len(existing) > 0:
-            if len(existing) > 1:
-                # we should never have more than one, if so keep the 'top' one
-                logging.debug("WARNING: multiple gitrepo documents found, dropping all but the first")
-                for id in existing[1:]:
-                    self.db['gitrepos'].remove({'_id': id})
-            grd['_id'] = existing[0]
-        else:
-            logging.debug("UpdateGitRepo: WARNING: existing doc not found!")
-            return
-        grd['_class'] = "GitRepo"
-        self.db['gitrepos'].save(grd)
+        '''
+        Update gitrepo with the data in doc
+        '''
+        assert app and name and doc
+        assert isinstance(app, str)
+        assert isinstance(name, str)
+        assert elita.util.type_check.is_dictlike(doc)
+        assert app in self.root['app']
+        assert name in self.root['app']['gitrepos']
+
+        self.UpdateObject('gitrepos', {'name': name, 'application': app}, doc)
 
     def DeleteGitRepo(self, app, name):
-        self.parent.DeleteObject(self.root['app'][app]['gitrepos'], name, 'gitrepos')
+        '''
+        Delete gitrepo object and root_tree reference
+        '''
+        assert app and name
+        assert isinstance(app, str)
+        assert isinstance(name, str)
+        assert app in self.root['app']
+        assert name in self.root['app']['gitrepos']
+
+        self.mongo_service.rm_roottree(('app', app, 'gitrepos', name))
+        self.mongo_service.delete('gitrepos', {'name': name, 'application': app})
 
 class DeploymentDataService(GenericChildDataService):
     def NewDeployment(self, app, build_name, environments, groups, servers, gitdeploys):
+        '''
+        Create new deployment object
+
+        @rtype: dict
+        '''
+        assert app and build_name and ((environments and groups) or (servers and gitdeploys))
+        assert isinstance(app, str)
+        assert isinstance(build_name, str)
+        assert app in self.root['app']
+        assert build_name in self.root['app']['builds']
+        assert all([elita.util.type_check.is_seq(p) for p in (environments, groups, servers, gitdeploys)])
+        assert set(environments).issubset(set(self.deps['ServerDataService'].GetEnvironments()))
+        assert all([g in self.root['app'][app]['groups'] for g in groups])
+        assert all([s in self.root['server'] for s in servers])
+        assert all([gd in self.root['app'][app]['gitdeploys'] for gd in gitdeploys])
+
+
         dpo = Deployment({
             'name': "",
             'application': app,
@@ -1006,26 +1133,12 @@ class DeploymentDataService(GenericChildDataService):
             'status': 'created',
             'job_id': ''
         })
-        did = self.db['deployments'].insert({
-            '_class': 'Deployment',
-            'name': dpo.name,
-            'application': dpo.application,
-            'build_name': dpo.build_name,
-            'environments': dpo.environments,
-            'groups': dpo.groups,
-            'servers': dpo.servers,
-            'gitdeploys': dpo.gitdeploys,
-            'status': dpo.status,
-            'job_id': dpo.job_id
-        })
+
+        did = self.mongo_service.create_new('deployments', {}, 'Deployment', dpo.get_doc(), remove_existing=False)
         # we don't know the deployment 'name' until it's inserted
-        doc = self.db['deployments'].find_one({'_id': did})
-        doc['name'] = str(did)
-        self.db['deployments'].save(doc)
-        self.parent.refresh_root()
-        self.root['app'][app]['deployments'][str(did)] = {
-            '_doc': bson.DBRef('deployments', did)
-        }
+        self.mongo_service.modify('deployments', {'_id': did}, ('name',), str(did))
+        self.mongo_service.update_roottree(('app', app, 'deployments', str(did)), 'deployments', did)
+
         return {
             'NewDeployment': {
                 'application': app,
@@ -1033,10 +1146,29 @@ class DeploymentDataService(GenericChildDataService):
         }}
 
     def GetDeployments(self, app):
-        return [k for k in self.root['app'][app]['deployments'].keys() if k[0] != '_']
+        '''
+        Get a list of all deployments for application
+
+        @rtype: list(str)
+        '''
+        assert app
+        assert isinstance(app, str)
+        assert app in self.root['app']
+
+        return [k for k in self.root['app'][app]['deployments'] if k[0] != '_']
 
     def UpdateDeployment(self, app, name, doc):
-        self.parent.UpdateAppObject(name, doc, 'deployments', "Deployment", app)
+        '''
+        Modify deployment object with the data in doc
+        '''
+        assert app and name and doc
+        assert isinstance(app, str)
+        assert isinstance(name, str)
+        assert elita.util.type_check.is_dictlike(doc)
+        assert app in self.root['app']
+        assert name in self.root['app'][app]['deployments']
+        
+        self.UpdateObject('deployments', {'application': app, 'name': name}, doc)
 
 class KeyDataService(GenericChildDataService):
     def GetKeyPairs(self):
