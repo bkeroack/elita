@@ -10,12 +10,13 @@ import pprint
 pp = pprint.PrettyPrinter(indent=4)
 
 import elita.util
+import elita.util.type_check
 import gitservice
 import salt_control
 from elita.actions.action import regen_datasvc
 
 #async callable
-def run_deploy(datasvc, application, build_name, target, rolling_divisor, rolling_pause, deployment):
+def run_deploy(datasvc, application, build_name, target, rolling_divisor, rolling_pause, deployment_id):
     '''
     Asynchronous entry point for deployments
     '''
@@ -26,11 +27,12 @@ def run_deploy(datasvc, application, build_name, target, rolling_divisor, rollin
     try:
         if target['groups']:
             logging.debug("run_deploy: Doing rolling deployment")
-            rdc = RollingDeployController(datasvc)
+            dc = DeployController(datasvc, deployment_id)
+            rdc = RollingDeployController(datasvc, dc, deployment_id)
             ret = rdc.run(application, build_name, target, rolling_divisor, rolling_pause)
         else:
             logging.debug("run_deploy: Doing manual deployment")
-            dc = DeployController(datasvc)
+            dc = DeployController(datasvc, deployment_id)
             ret, data = dc.run(application, build_name, target['servers'], target['gitdeploys'])
     except:
         exc_type, exc_obj, tb = sys.exc_info()
@@ -40,9 +42,9 @@ def run_deploy(datasvc, application, build_name, target, rolling_divisor, rollin
             "exception": f_exc
         }
         logging.debug("run_deploy: EXCEPTION: {}".format(f_exc))
-        datasvc.deploysvc.UpdateDeployment(application, deployment, {"status": "error"})
+        datasvc.deploysvc.UpdateDeployment(application, deployment_id, {"status": "error"})
         return {"deploy_status": "error", "details": results}
-    datasvc.deploysvc.UpdateDeployment(application, deployment, {"status": "complete" if ret else "error"})
+    datasvc.deploysvc.UpdateDeployment(application, deployment_id, {"status": "complete" if ret else "error"})
     return {"deploy_status": "done" if ret else "error"}
 
 
@@ -166,15 +168,85 @@ class RollingDeployController:
     '''
     __metaclass__ = elita.util.LoggingMetaClass
 
-    def __init__(self, datasvc, deploy_controller):
+    def __init__(self, datasvc, deploy_controller, deployment_id):
+        '''
+        @type datasvc: models.DataService
+        '''
         self.datasvc = datasvc
         self.dc = deploy_controller
+        self.deployment_id = deployment_id
 
     def get_nonrolling_groups(self, rolling_groups, all_groups):
         return list(set(all_groups) - set(rolling_groups))
 
     def compute_batches(self, rolling_group_docs, nonrolling_group_docs, rolling_divisor):
         return BatchCompute.compute_rolling_batches(rolling_divisor, rolling_group_docs, nonrolling_group_docs)
+
+    def update_deployment_plan(self, app, batches, gitdeploys):
+        '''
+        Update deployment object with deployment plan (batches, etc) which can then be filled in with progress
+        information as the deployment progresses
+        '''
+        assert app and batches and gitdeploys
+        assert isinstance(app, str)
+        assert elita.util.type_check.is_dictlike(batches)
+        assert elita.util.type_check.is_seq(gitdeploys)
+
+        for gd in gitdeploys:
+            doc = {
+                'progress': {
+                    'phase1': {
+                        'gitdeploys': {
+                            gd: {
+                                'progress': 0,
+                                'step': 'not started',
+                                'changed_files': []
+                            }
+                        }
+                    }
+                }
+            }
+            self.datasvc.deploysvc.UpdateDeployment(app, self.deployment_id, doc)
+
+        gitdeploy_docs = {gd: self.datasvc.groupsvc.GetGroup(app, gd) for gd in gitdeploys}
+
+        # at a low level, deployment operates in a gitdeploy-centric way
+        # but on a human level, a server-centric view is more intuitive, so we generate a list of servers per batch,
+        # then the gitdeploys to be deployed on each server:
+        # batch 0:
+        #   server0:
+        #       - gitdeployA
+        #           * path: C:\foo\bar
+        #           * package: webapplication
+        #           * progress: 0%
+        #           * state: not started
+        #       - gitdeployB
+        #           * progress: 10%
+        #           * package: webapplication
+        #           * progress: 0%
+        #           * state: checking out default branch
+
+
+        doc = {
+            'progress': {
+                'phase2': {}
+            }
+        }
+        for i, batch in enumerate(batches):
+            doc['progress']['phase2'][i] = {}
+            for server in batch['servers']:
+                doc['progress']['phase2'][i][server] = {}
+                for gitdeploy in batch['gitdeploys']:
+                    if server in determine_deployabe_servers(gitdeploy_docs[gitdeploy], [server]):
+                        doc['progress']['phase2'][i][server][gitdeploy] = {
+                            'path': gitdeploy_docs[gitdeploy]['location']['path'],
+                            'package': gitdeploy_docs[gitdeploy]['location']['package'],
+                            'progress': 0,
+                            'state': 'not started'
+                        }
+
+        self.datasvc.deploysvc.UpdateDeployment(app, self.deployment_id, doc)
+
 
     def run(self, application, build_name, target, rolling_divisor, rolling_pause, parallel=True):
         '''
@@ -388,23 +460,35 @@ class DeployController:
 
     __metaclass__ = elita.util.LoggingMetaClass
 
-    def __init__(self, datasvc):
+    def __init__(self, datasvc, deployment_id):
+        self.deployment_id = deployment_id
         self.datasvc = datasvc
         self.changed_gitdeploys = dict()
 
-    def run(self, app_name, build_name, servers, gitdeploys, force=False, parallel=True):
+    def run(self, app_name, build_name, servers, gitdeploys, force=False, parallel=True, batch_number=0):
         '''
         1. Decompress build to gitdeploy dir and push
             a. Attempts to optimize by determining if build has already been decompressed to gitdeploy and skips if so
         2. Determine which gitdeploys have changes (if any)
             a. Build a mapping of gitdeploys_with_changes -> [ servers_to_deploy_it_to ]
             b. Perform the state calls only to the server/gitdeploy pairs that have changes
+
+        @type app_name: str
+        @type build_name: str
+        @type servers: list(str)
+        @type gitdeploys: list(str)
         '''
+        assert app_name and build_name and servers and gitdeploys
+        assert isinstance(app_name, str)
+        assert isinstance(build_name, str)
+        assert elita.util.type_check.is_seq(servers)
+        assert elita.util.type_check.is_seq(gitdeploys)
+        assert isinstance(batch_number, int) and batch_number >= 0
+
         build_doc = self.datasvc.buildsvc.GetBuildDoc(app_name, build_name)
         gitdeploy_docs = dict()
         #reset changed gitdeploys
         self.changed_gitdeploys = dict()
-
 
         queue = multiprocessing.Queue()
         procs = list()

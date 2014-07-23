@@ -1443,6 +1443,13 @@ class GitDeploy(GenericDataModel):
     }
 
 class Deployment(GenericDataModel):
+    '''
+    There are two "phases" to a deployment:
+        - Phase 1: processing of gitdeploys (applying packages, adding/committing/pushing to gitprovider, determining
+            changes)
+        - Phase 2: Performing salt states/git pull on target machines. Can be broken up into an arbitrary number of
+            batches
+    '''
     default_values = {
         'name': None,  # "name" for consistency w/ other models, even though it's really id
         'application': None,
@@ -1452,7 +1459,13 @@ class Deployment(GenericDataModel):
         'servers': None,
         'gitdeploys': None,
         'status': None,
-        'progress': dict(),
+        'progress': {
+            'currently_on': None,
+            'phase1': {
+                'gitdeploys': dict()
+            },
+            'phase2': dict()
+        },
         'job_id': None
     }
 
