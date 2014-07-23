@@ -1172,16 +1172,30 @@ class DeploymentDataService(GenericChildDataService):
 
 class KeyDataService(GenericChildDataService):
     def GetKeyPairs(self):
-        return [k for k in self.root['global']['keypairs'].keys() if k[0] != '_']
+        '''
+        Get all extant keypair names
+        '''
+        return [k for k in self.root['global']['keypairs'] if k[0] != '_']
 
     def GetKeyPair(self, name):
-        doc = self.db['keypairs'].find_one({'name': name})
-        if not doc:
-            return None
-        kobj = KeyPair(doc)
-        return kobj.get_doc()
+        '''
+        Get keypair doc
+        '''
+        assert name
+        assert isinstance(name, str)
+        assert name in self.root['global']['keypairs']
+
+        doc = self.mongo_service.get('keypairs', {'name': name})
+        return doc if doc else None
 
     def NewKeyPair(self, name, attribs, key_type, private_key, public_key):
+        '''
+        Create new keypair object and root_tree reference
+        '''
+        assert name and key_type and private_key and public_key
+        assert all([isinstance(p, str) for p in (name, key_type, private_key, public_key)])
+        assert elita.util.type_check.is_optional_dict(attribs)
+
         try:
             kp_obj = KeyPair({
                 "name": name,
@@ -1207,20 +1221,9 @@ class KeyDataService(GenericChildDataService):
                     'message': err
                 }
             }
-        kpo = self.db['keypairs'].find_and_modify(query={
-            'name': kp_obj.name
-        }, update={
-            '_class': "KeyPair",
-            'name': kp_obj.name,
-            'attributes': kp_obj.attributes,
-            'key_type': kp_obj.key_type,
-            'private_key': kp_obj.private_key,
-            'public_key': kp_obj.public_key
-        }, upsert=True, new=True)
-        kp_id = kpo['_id']
-        self.root['global']['keypairs'][kp_obj.name] = {
-            '_doc': bson.DBRef("keypairs", kp_id)
-        }
+        kpid = self.mongo_service.create_new('keypairs', {'name': name}, 'KeyPair', kp_obj.get_doc())
+        self.mongo_service.update_roottree(('global', 'keypairs', name), 'keypairs', kpid)
+
         return {
             'NewKeyPair': {
                 'status': 'ok'
@@ -1228,10 +1231,26 @@ class KeyDataService(GenericChildDataService):
         }
 
     def UpdateKeyPair(self, name, doc):
-        self.parent.UpdateObject(name, doc, "keypairs", "KeyPair")
+        '''
+        Update key pair object with data in doc
+        '''
+        assert name and doc
+        assert isinstance(name, str)
+        assert elita.util.type_check.is_dictlike(doc)
+        assert name in self.root['global']['keypairs']
+
+        self.UpdateObject('keypairs', {'name': name}, doc)
 
     def DeleteKeyPair(self, name):
-        self.parent.DeleteObject(self.root['global']['keypairs'], name, "keypairs")
+        '''
+        Delete keypair object and root_tree reference
+        '''
+        assert name
+        assert isinstance(name, str)
+        assert name in self.root['global']['keypairs']
+
+        self.mongo_service.rm_roottree(('global', 'keypairs', name))
+        self.mongo_service.delete('keypairs', {'name': name})
 
 
 class DataService:
