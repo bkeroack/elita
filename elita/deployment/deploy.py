@@ -264,6 +264,8 @@ class RollingDeployController:
 
             logging.debug("computed batches: {}".format(batches))
 
+            self.update_deployment_plan(application, batches, target['gitdeploys'])
+
             self.datasvc.jobsvc.NewJobData({
                 "RollingDeployment": {
                     "batches": len(batches),
@@ -292,6 +294,10 @@ class RollingDeployController:
 
         else:
 
+            self.update_deployment_plan(application,
+                                        [{'gitdeploys': target['gitdeploys'], 'servers': target['servers']}],
+                                        target['gitdeploys'])
+
             self.datasvc.jobsvc.NewJobData({
                 "RollingDeployment": {
                     "batches": 1,
@@ -309,7 +315,7 @@ class RollingDeployController:
 def determine_deployabe_servers(all_gd_servers, specified_servers):
     return list(set(all_gd_servers).intersection(set(specified_servers)))
 
-def _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, settings, job_id):
+def _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, settings, job_id, deployment_id):
     '''
     Threadsafe function for processing a single gitdeploy during a deployment.
     Creates own instance of datasvc, etc.
@@ -384,9 +390,10 @@ def _threadsafe_pull_callback(results, tag, **kwargs):
     Passed to run_slses_async and is used to provide realtime updates to users polling the deploy job object
     '''
     datasvc = kwargs['datasvc']
+    deployment_id = kwargs['deployment_id']
     datasvc.jobsvc.NewJobData({"DeployServers": {"results": results, "tag": tag}})
 
-def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, job_id):
+def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, job_id, deployment_id):
     '''
     Thread-safe way of performing a deployment SLS call for one specific gitdeploy on a group of servers
     gitdeploy_struct: { "gitdeploy_name": [ list_of_servers_to_deploy_to ] }
@@ -408,7 +415,7 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
 
     datasvc.jobsvc.NewJobData({"DeployServers": {gd_name: "deploying", "servers": servers}})
     logging.debug("_threadsafe_pull_gitdeploy: sls_map: {}".format(sls_map))
-    res = rc.run_slses_async(_threadsafe_pull_callback, sls_map, args={'datasvc': datasvc})
+    res = rc.run_slses_async(_threadsafe_pull_callback, sls_map, args={'datasvc': datasvc, 'deployment_id': deployment_id})
     logging.debug("_threadsafe_pull_gitdeploy: results: {}".format(res))
     errors = dict()
     successes = dict()
@@ -498,13 +505,13 @@ class DeployController:
             if parallel:
                 p = multiprocessing.Process(target=_threadsafe_process_gitdeploy,
                                             args=(gddoc, build_doc, servers, queue, self.datasvc.settings,
-                                                  self.datasvc.job_id))
+                                                  self.datasvc.job_id, self.deployment_id))
                 p.start()
                 procs.append(p)
 
             else:
                 _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, self.datasvc.settings,
-                                              self.datasvc.job_id)
+                                              self.datasvc.job_id, self.deployment_id)
 
             # if this is part of a rolling deployment and is anything other than the first batch,
             # no gitdeploys will actually be "changed". Force says to do a pull on the servers anyway.
@@ -529,12 +536,12 @@ class DeployController:
             if parallel:
                 p = multiprocessing.Process(target=_threadsafe_pull_gitdeploy,
                                             args=(app_name, {gd: self.changed_gitdeploys[gd]}, queue, self.datasvc.settings,
-                                                  self.datasvc.job_id))
+                                                  self.datasvc.job_id, self.deployment_id))
                 p.start()
                 procs.append(p)
             else:
                 _threadsafe_pull_gitdeploy(app_name, {gd: self.changed_gitdeploys[gd]}, queue, self.datasvc.settings,
-                                           self.datasvc.job_id)
+                                           self.datasvc.job_id, self.deployment_id)
         if parallel:
             for p in procs:
                 p.join(600)
