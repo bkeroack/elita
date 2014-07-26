@@ -182,72 +182,6 @@ class RollingDeployController:
     def compute_batches(self, rolling_group_docs, nonrolling_group_docs, rolling_divisor):
         return BatchCompute.compute_rolling_batches(rolling_divisor, rolling_group_docs, nonrolling_group_docs)
 
-    def update_deployment_plan(self, app, batches, gitdeploys):
-        '''
-        Update deployment object with deployment plan (batches, etc) which can then be filled in with progress
-        information as the deployment progresses
-        '''
-        assert app and batches and gitdeploys
-        assert isinstance(app, str)
-        assert elita.util.type_check.is_dictlike(batches)
-        assert elita.util.type_check.is_seq(gitdeploys)
-
-        for gd in gitdeploys:
-            doc = {
-                'progress': {
-                    'phase1': {
-                        'gitdeploys': {
-                            gd: {
-                                'progress': 0,
-                                'step': 'not started',
-                                'changed_files': []
-                            }
-                        }
-                    }
-                }
-            }
-            self.datasvc.deploysvc.UpdateDeployment(app, self.deployment_id, doc)
-
-        gitdeploy_docs = {gd: self.datasvc.groupsvc.GetGroup(app, gd) for gd in gitdeploys}
-
-        # at a low level, deployment operates in a gitdeploy-centric way
-        # but on a human level, a server-centric view is more intuitive, so we generate a list of servers per batch,
-        # then the gitdeploys to be deployed on each server:
-        # batch 0:
-        #   server0:
-        #       - gitdeployA
-        #           * path: C:\foo\bar
-        #           * package: webapplication
-        #           * progress: 0%
-        #           * state: not started
-        #       - gitdeployB
-        #           * progress: 10%
-        #           * package: webapplication
-        #           * progress: 0%
-        #           * state: checking out default branch
-
-
-        doc = {
-            'progress': {
-                'phase2': {}
-            }
-        }
-        for i, batch in enumerate(batches):
-            doc['progress']['phase2'][i] = {}
-            for server in batch['servers']:
-                doc['progress']['phase2'][i][server] = {}
-                for gitdeploy in batch['gitdeploys']:
-                    if server in determine_deployabe_servers(gitdeploy_docs[gitdeploy], [server]):
-                        doc['progress']['phase2'][i][server][gitdeploy] = {
-                            'path': gitdeploy_docs[gitdeploy]['location']['path'],
-                            'package': gitdeploy_docs[gitdeploy]['location']['package'],
-                            'progress': 0,
-                            'state': 'not started'
-                        }
-
-        self.datasvc.deploysvc.UpdateDeployment(app, self.deployment_id, doc)
-
-
     def run(self, application, build_name, target, rolling_divisor, rolling_pause, parallel=True):
         '''
         Run rolling deployment. This should be called iff the deployment is called via groups/environments
@@ -264,7 +198,7 @@ class RollingDeployController:
 
             logging.debug("computed batches: {}".format(batches))
 
-            self.update_deployment_plan(application, batches, target['gitdeploys'])
+            self.datasvc.deploysvc.update_deployment_plan(application, self.deployment_id, batches, target['gitdeploys'])
 
             self.datasvc.jobsvc.NewJobData({
                 "RollingDeployment": {
@@ -294,7 +228,7 @@ class RollingDeployController:
 
         else:
 
-            self.update_deployment_plan(application,
+            self.datasvc.deploysvc.update_deployment_plan(application, self.deployment_id,
                                         [{'gitdeploys': target['gitdeploys'], 'servers': target['servers']}],
                                         target['gitdeploys'])
 
@@ -329,28 +263,50 @@ def _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, settings, jo
     client, datasvc = regen_datasvc(settings, job_id)
     gdm = gitservice.GitDeployManager(gddoc, datasvc)
 
+    datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
+                                              progress=10,
+                                              step='Checking out default branch')
+
     res = gdm.checkout_default_branch()
     logging.debug("_threadsafe_process_gitdeploy: git checkout output: {}".format(str(res)))
 
     if gdm.last_build == build_doc['build_name']:
         datasvc.jobsvc.NewJobData({"ProcessGitdeploys": {gddoc['name']: "already processed"}})
+        datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
+                                              progress=100,
+                                              step='Complete (already processed, last_build == deployment_build)')
     else:
+        datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
+                                              progress=25,
+                                              step='Decompressing package to repository')
 
         datasvc.jobsvc.NewJobData({"ProcessGitdeploys": {gddoc['name']: "processing"}})
         gdm.decompress_to_repo(package_doc)
+
+        datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
+                                              progress=50,
+                                              step='Checking for changes')
 
         logging.debug("_threadsafe_process_gitdeploy: Checking for changes")
         res = gdm.check_repo_status()
         logging.debug("_threadsafe_process_gitdeploy: git status results: {}".format(str(res)))
 
         if "nothing to commit" in res:
+            datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
+                                              progress=100,
+                                              step='Complete (no changes found)')
             datasvc.jobsvc.NewJobData({"ProcessGitdeploys": {gddoc['name']: "no changes"}})
         else:
-
+            datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
+                                              progress=60,
+                                              step='Adding changes to repository')
             datasvc.jobsvc.NewJobData({"ProcessGitdeploys": {gddoc['name']: "adding to repository"}})
             res = gdm.add_files_to_repo()
             logging.debug("_threadsafe_process_gitdeploy: git add result: {}".format(str(res)))
 
+            datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
+                                              progress=70,
+                                              step='Committing changes to repository')
             datasvc.jobsvc.NewJobData({"ProcessGitdeploys": {gddoc['name']: "committing"}})
             res = gdm.commit_to_repo(build_doc['build_name'])
             logging.debug("_threadsafe_process_gitdeploy: git commit result: {}".format(str(res)))
@@ -359,9 +315,21 @@ def _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, settings, jo
             res = gdm.inspect_latest_diff()
             logging.debug("_threadsafe_process_gitdeploy: inspect diff result: {}".format(str(res)))
 
+            # change to a list of dicts without filenames as keys to keep mongo happy
+            changed_files = [res[k].update({'filename': k}) for k in res]
+
+            datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
+                                              changed_files=changed_files)
+
+            datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
+                                              progress=90,
+                                              step='Pushing changes to gitprovider')
             datasvc.jobsvc.NewJobData({"ProcessGitdeploys": {gddoc['name']: "pushing"}})
             res = gdm.push_repo()
             logging.debug("_threadsafe_process_gitdeploy: git push result: {}".format(str(res)))
+            datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
+                                              progress=100,
+                                              step='Complete')
             # Changes detected, so add gitdeploy and the relevant servers that must be deployed to
             changed = True
         gdm.update_repo_last_build(build_doc['build_name'])
@@ -372,28 +340,23 @@ def _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, settings, jo
         changed = True
 
     if changed:
-
         queue.put({gddoc['name']: determine_deployabe_servers(gddoc['servers'], servers)})
-
-        #for all that have changed, do a remote forced checkout to clear uncommitted changes
-        sc = salt_control.SaltController(settings)
-        rc = salt_control.RemoteCommands(sc)
-        branch = gddoc['location']['default_branch']
-        path = gddoc['location']['path']
-        res = rc.discard_git_changes(servers, path)
-        logging.debug("_threadsafe_process_gitdeploy: discard git changes result: {}".format(str(res)))
-        res = rc.checkout_branch(servers, path, branch)
-        logging.debug("_threadsafe_process_gitdeploy: git checkout result: {}".format(str(res)))
 
 def _threadsafe_pull_callback(results, tag, **kwargs):
     '''
     Passed to run_slses_async and is used to provide realtime updates to users polling the deploy job object
     '''
     datasvc = kwargs['datasvc']
+    app = kwargs['application']
     deployment_id = kwargs['deployment_id']
+    batch_number = kwargs['batch_number']
+    gitdeploy = kwargs['gitdeploy']
     datasvc.jobsvc.NewJobData({"DeployServers": {"results": results, "tag": tag}})
+    for r in results:
+        datasvc.deploysvc.UpdateDeployment_Phase2(app, deployment_id, gitdeploy, [r], batch_number,
+                                                  state=results[r])
 
-def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, job_id, deployment_id):
+def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, job_id, deployment_id, batch_number):
     '''
     Thread-safe way of performing a deployment SLS call for one specific gitdeploy on a group of servers
     gitdeploy_struct: { "gitdeploy_name": [ list_of_servers_to_deploy_to ] }
@@ -407,15 +370,38 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
     gd_name = gitdeploy_struct.keys()[0]
     servers = gitdeploy_struct[gd_name]
 
+    datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, servers, batch_number,
+                                              progress=10,
+                                              state="Beginning deployment")
+
     #until salt Helium is released, we can only execute an SLS *file* as opposed to a single module call
     sls_map = {sc.get_gitdeploy_entry_name(application, gd_name): servers}
     if len(servers) == 0:
         datasvc.jobsvc.NewJobData({"DeployServers": {gd_name: "no servers"}})
         return True
 
+    #clear uncommitted changes on targets
+    datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, servers, batch_number,
+                                              progress=33,
+                                              state="Clearing uncommitted changes")
+    gd_doc = datasvc.gitsvc.GetGitDeploy(application, gd_name)
+    branch = gd_doc['location']['default_branch']
+    path = gd_doc['location']['path']
+    res = rc.discard_git_changes(servers, path)
+    logging.debug("_threadsafe_process_gitdeploy: discard git changes result: {}".format(str(res)))
+    res = rc.checkout_branch(servers, path, branch)
+    logging.debug("_threadsafe_process_gitdeploy: git checkout result: {}".format(str(res)))
+
     datasvc.jobsvc.NewJobData({"DeployServers": {gd_name: "deploying", "servers": servers}})
     logging.debug("_threadsafe_pull_gitdeploy: sls_map: {}".format(sls_map))
-    res = rc.run_slses_async(_threadsafe_pull_callback, sls_map, args={'datasvc': datasvc, 'deployment_id': deployment_id})
+
+    datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, servers, batch_number,
+                                              progress=50,
+                                              state="Issuing state commands (git pull, etc)")
+    res = rc.run_slses_async(_threadsafe_pull_callback, sls_map, args={'datasvc': datasvc, 'application': application,
+                                                                       'deployment_id': deployment_id,
+                                                                       'batch_number': batch_number,
+                                                                       'gitdeploy': gd_name})
     logging.debug("_threadsafe_pull_gitdeploy: results: {}".format(res))
     errors = dict()
     successes = dict()
@@ -438,8 +424,19 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
                                 "retcode": r[host][cmd]["changes"]["retcode"],
                             }
     if len(errors) > 0:
+        for e in errors:
+            datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, [e], batch_number,
+                                              state="ERROR: stderr: {}; stdout: {}; retcode: {}".format(
+                                                  errors[e]["changes"]["stderr"],
+                                                  errors[e]["changes"]["stdout"],
+                                                  errors[e]["changes"]["retcode"]
+                                              ))
         logging.debug("_threadsafe_pull_gitdeploy: SLS error servers: {}".format(errors.keys()))
         logging.debug("_threadsafe_pull_gitdeploy: SLS error responses: {}".format(errors))
+
+    if len(successes) > 0:
+        datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, successes.keys(), batch_number,
+                                                  progress=100, state="Complete")
 
     deploy_results = {
         gd_name: {
@@ -536,7 +533,7 @@ class DeployController:
             if parallel:
                 p = multiprocessing.Process(target=_threadsafe_pull_gitdeploy,
                                             args=(app_name, {gd: self.changed_gitdeploys[gd]}, queue, self.datasvc.settings,
-                                                  self.datasvc.job_id, self.deployment_id))
+                                                  self.datasvc.job_id, self.deployment_id, batch_number))
                 p.start()
                 procs.append(p)
             else:

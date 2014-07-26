@@ -434,14 +434,9 @@ class GitDeployManager:
         m = repo.heads.master
         logging.debug(self, "commit hash: {}".format(m.commit.hexsha))
         s = m.commit.stats
-        files = s.files
         #replace all '.' with underscore to make Mongo happy
         #make copy for the hook
-        orig_files = copy.deepcopy(files)
-        return {
-            "files": elita.util.change_dict_keys(files, '.', '_') if isinstance(files, dict) else files,
-            "commit_diff_hook": self.run_commit_diffhook(orig_files)
-        }
+        return s.files    # not appropriate for direct inclusion into mongo due to filenames as keys
 
     def checkout_default_branch(self):
         branch = self.gitdeploy['location']['default_branch']

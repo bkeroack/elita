@@ -10,10 +10,6 @@ import pprint
 import datetime
 import pytz
 import logging
-import pymongo
-import pyramid.registry
-import random
-import time
 
 import elita
 from elita.crypto import keypair
@@ -1169,6 +1165,120 @@ class DeploymentDataService(GenericChildDataService):
         assert name in self.root['app'][app]['deployments']
         
         self.UpdateObject('deployments', {'application': app, 'name': name}, doc)
+
+    def InitializeDeploymentPlan(self, app, name, batches, gitdeploys):
+        '''
+        Create the appropriate structure in the "progress" field of the deployment.
+
+        @type app: str
+        @type name: str
+        @type batches: list(dict)
+        @type gitdeploys: list(str)
+        '''
+        assert app and name and batches and gitdeploys
+        assert isinstance(app, str)
+        assert elita.util.type_check.is_dictlike(batches)
+        assert elita.util.type_check.is_seq(gitdeploys)  # list of all gitdeploys
+
+        for gd in gitdeploys:
+            doc = {
+                'progress': {
+                    'phase1': {
+                        'gitdeploys': {
+                            gd: {
+                                'progress': 0,
+                                'step': 'not started',
+                                'changed_files': []
+                            }
+                        }
+                    }
+                }
+            }
+            self.UpdateDeployment(app, name, doc)
+
+        gitdeploy_docs = {gd: self.deps['GroupDataService'].GetGroup(app, gd) for gd in gitdeploys}
+
+        # at a low level, deployment operates in a gitdeploy-centric way
+        # but on a human level, a server-centric view is more intuitive, so we generate a list of servers per batch,
+        # then the gitdeploys to be deployed on each server:
+        # batch 0:
+        #   server0:
+        #       - gitdeployA
+        #           * path: C:\foo\bar
+        #           * package: webapplication
+        #           * progress: 0%
+        #           * state: not started
+        #       - gitdeployB
+        #           * progress: 10%
+        #           * package: webapplication
+        #           * progress: 0%
+        #           * state: checking out default branch
+
+
+        doc = {
+            'progress': {
+                'phase2': {}
+            }
+        }
+        for i, batch in enumerate(batches):
+            doc['progress']['phase2'][i] = {}
+            for server in batch['servers']:
+                doc['progress']['phase2'][i][server] = {}
+                for gitdeploy in batch['gitdeploys']:
+                    if server in elita.deployment.deploy.determine_deployabe_servers(gitdeploy_docs[gitdeploy], [server]):
+                        doc['progress']['phase2'][i][server][gitdeploy] = {
+                            'path': gitdeploy_docs[gitdeploy]['location']['path'],
+                            'package': gitdeploy_docs[gitdeploy]['location']['package'],
+                            'progress': 0,
+                            'state': 'not started'
+                        }
+
+        self.UpdateDeployment(app, name, doc)
+
+    def UpdateDeployment_Phase1(self, app, name, gitdeploy, progress=None, step=None, changed_files=None):
+        '''
+        Phase 1 is gitdeploy processing: decompressing package to local gitrepo, computing changes, commiting/pushing
+        '''
+        assert app and name and gitdeploy
+        assert all([isinstance(p, str) for p in (app, name, gitdeploy)])
+        assert (isinstance(progress, int) and progress >= 0) or not progress
+        assert isinstance(step, str) or not step
+        assert elita.util.type_check.is_optional_seq(changed_files)
+        assert app in self.root['app']
+        assert name in self.root['app'][app]['deployments']
+
+        progress_dict = dict()
+        if progress:
+            progress_dict['progress'] = progress
+        if step:
+            progress_dict['step'] = step
+        if changed_files:
+            progress_dict['changed_files'] = changed_files
+
+        self.UpdateDeployment(app, name, {'progress': {'phase1': {'gitdeploys': {name: progress_dict}}}})
+
+    def UpdateDeployment_Phase2(self, app, name, gitdeploy, servers, batch, progress=None, state=None):
+        '''
+        Phase 2 is performing git pulls across all remote servers. Progress is presented per server, but the backend
+        deployment is done per gitdeploy (to multiple servers)
+        '''
+        assert app and name and gitdeploy and servers and batch
+        assert all([isinstance(p, str) for p in (app, name, gitdeploy)])
+        assert elita.util.type_check.is_seq(servers)
+        assert isinstance(batch, int) and batch >= 0
+        assert app in self.root['app']
+        assert name in self.root['app'][app]['deployments']
+
+        progress_dict = {'batch{}'.format(batch): {}}
+
+        for s in servers:
+            progress_dict['batch{}'.format(batch)][s] = dict()
+            if progress:
+                progress_dict['batch{}'.format(batch)][s]['progress'] = progress
+            if state:
+                progress_dict['batch{}'.format(batch)][s]['state'] = state
+
+        self.UpdateDeployment(app, name, {'progress': {'phase2': progress_dict}})
 
 class KeyDataService(GenericChildDataService):
     def GetKeyPairs(self):
