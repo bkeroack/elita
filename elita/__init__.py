@@ -14,16 +14,17 @@ def DataStore(request):
     db, root, client = GetMongoClient(request.registry.settings)
     return db
 
+def generate_root_tree(db):
+    tree = db['root_tree'].find_one()
+    updater = models.RootTreeUpdater(tree, db)
+    return models.RootTree(db, updater, tree, db.dereference(tree['_doc']))
+
 def RootService(request):
     '''
     Get root tree.
 
-    The 'root_tree' collection contains exactly one root_tree document (which should not have a '_lock' field)
-    and zero or (hopefully just) one lock document (which is of the form: { '_lock': XXXXX } XXXX = lock number
     '''
-    tree = request.db['root_tree'].find_one({'_lock': {'$exists': False}})    # find doc that is not a lock
-    updater = models.RootTreeUpdater(tree, request.db)
-    return models.RootTree(request.db, updater, tree, request.db.dereference(tree['_doc']))
+    return generate_root_tree(request.db)
 
 def DataService(request):
     return models.DataService(request.registry.settings, request.db, request.root)
@@ -33,14 +34,13 @@ def root_factory(request):
     foo = request.db, request.datasvc
     return request.root
 
-
 def main(global_config, **settings):
     """ This function returns a Pyramid WSGI application.
     """
 
     #data validator / migrations
     db, root, client = GetMongoClient(settings)
-    dv = models.DataValidator(root, db)
+    dv = models.DataValidator(settings, root, db)
     dv.run()
     client.close()
 

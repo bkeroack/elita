@@ -2,6 +2,21 @@ mongodb:
   pkg:
     - installed
 
+mongo_config:
+  file.replace:
+    - name: /etc/mongodb.conf
+    - pattern: 127.0.0.1
+    - repl: 0.0.0.0
+    - require:
+      - pkg: mongodb
+
+start_mongo:
+  service:
+    - name: mongodb
+    - running
+    - watch:
+      - file: mongo_config
+
 rabbitmq-server:
   pkg:
     - installed

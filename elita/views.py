@@ -886,18 +886,11 @@ class GitRepoView(GenericView):
         self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
 
     def GET(self):
-        gp_doc = self.datasvc.Dereference(self.context.gitprovider)
-        gp_doc = {k: gp_doc[k] for k in gp_doc if k[0] != '_'}
-        gp_doc['auth']['password'] = "*****"
+        gitrepo = self.datasvc.gitsvc.GetGitRepo(self.context.application, self.context.name)
+        assert gitrepo and 'gitprovider' in gitrepo and 'auth' in gitrepo['gitprovider']
+        gitrepo['gitprovider']['auth']['password'] = "*****"
         return {
-            'gitrepo': {
-                'created_datetime': self.get_created_datetime_text(),
-                'name': self.context.name,
-                'application': self.context.application,
-                'last_build': self.context.last_build,
-                'uri': self.context.uri if hasattr(self.context, 'uri') else None,
-                'gitprovider': gp_doc
-            }
+            'gitrepo': gitrepo
         }
 
     def DELETE(self):
@@ -1325,7 +1318,7 @@ class UserView(GenericView):
                 return self.Error(403, "incorrect password")
         elif 'auth_token' not in self.req.params:
             return self.Error(403, "password or auth token required")
-        name = self.context.name
+        name = self.context.username
         if len(self.datasvc.usersvc.GetUserTokens(name)) == 0:
             self.datasvc.usersvc.NewToken(name)
         return self.status_ok_with_token(name)

@@ -47,9 +47,9 @@ class MongoService:
 
         Returns id of new document
         '''
-        assert isinstance(collection, str)
+        assert elita.util.type_check.is_string(collection)
         assert isinstance(keys, dict)
-        assert isinstance(classname, str)
+        assert elita.util.type_check.is_string(classname)
         assert isinstance(doc, dict)
         assert collection
         # keys/classname are only mandatory if remove_existing=True
@@ -63,8 +63,10 @@ class MongoService:
             if '_id' in doc:
                 del doc['_id']
         id = self.db[collection].save(doc)
+        logging.debug("new id: {}".format(id))
         if existing and remove_existing:
-            self.db[collection].remove(keys, {'$not': {'_id': id}})
+            keys['_id'] = {'$ne': id}
+            self.db[collection].remove(keys)
         return id
 
     def modify(self, collection, keys, path, doc_or_obj):
@@ -76,7 +78,7 @@ class MongoService:
         '''
         assert hasattr(path, '__iter__')
         assert path
-        assert isinstance(collection, str)
+        assert elita.util.type_check.is_string(collection)
         assert isinstance(keys, dict)
         assert collection and keys
         assert doc_or_obj
@@ -97,7 +99,7 @@ class MongoService:
 
         Return whatever pymongo returns for deletion
         '''
-        assert isinstance(collection, str)
+        assert elita.util.type_check.is_string(collection)
         assert isinstance(keys, dict)
         assert collection and keys
         dlist = [d for d in self.db[collection].find(keys)]
@@ -115,7 +117,7 @@ class MongoService:
         Return boolean indicating success
         '''
         assert hasattr(path, '__iter__')
-        assert isinstance(collection, str)
+        assert elita.util.type_check.is_string(collection)
         assert id.__class__.__name__ == 'ObjectId'
         assert util.type_check.is_optional_dict(doc)
         path_dot_notation = '.'.join(path)
@@ -134,24 +136,37 @@ class MongoService:
         result = self.db['root_tree'].update({}, {'$unset': {path_dot_notation: ''}})
         return result['n'] == 1 and result['updatedExisting'] and not result['err']
 
-    def get(self, collection, keys, multi=False):
+    def get(self, collection, keys, multi=False, empty=False):
         '''
         Thin wrapper around find()
         Retrieve a document from Mongo, keyed by name. Optionally, if duplicates are found, delete all but the first.
+        If empty, it's ok to return None if nothing matches
 
         Returns document
         @rtype: dict | list(dict) | None
         '''
-        assert isinstance(collection, str)
+        assert elita.util.type_check.is_string(collection)
         assert isinstance(keys, dict)
         assert collection
         dlist = [d for d in self.db[collection].find(keys)]
-        assert dlist
+        assert dlist or empty
         if len(dlist) > 1 and not multi:
             logging.warning("Found duplicate entries for query {} in collection {}; dropping all but the first"
                             .format(keys, collection))
             self.db[collection].remove({'_id': {'$ne': dlist[0]['_id']}})
-        return dlist if multi else dlist[0]
+        return dlist if multi else (dlist[0] if dlist else dlist)
+
+    def dereference(self, dbref):
+        '''
+        Simple wrapper around db.dereference()
+        Returns document pointed to by DBRef
+
+        @type id: bson.DBRef
+        '''
+        assert dbref
+        assert dbref.__class__.__name__ == 'DBRef'
+        return self.db.dereference(dbref)
+
 
 class GenericChildDataService:
     __metaclass__ = elita.util.LoggingMetaClass
@@ -186,9 +201,9 @@ class GenericChildDataService:
         Create new container object suitable for a root_tree reference
         '''
         assert class_name and name and parent
-        assert isinstance(class_name, str)
-        assert isinstance(name, str)
-        assert isinstance(parent, str)
+        assert elita.util.type_check.is_string(class_name)
+        assert elita.util.type_check.is_string(name)
+        assert elita.util.type_check.is_string(parent)
         return self.mongo_service.create_new('containers', {'name': name}, class_name, {'name': name, 'parent': parent})
 
     def UpdateObject(self, collection, keys, doc):
@@ -196,7 +211,7 @@ class GenericChildDataService:
         Generic method to update a particular object (document) with the data in doc
         '''
         assert collection and keys and doc
-        assert isinstance(collection, str)
+        assert elita.util.type_check.is_string(collection)
         assert elita.util.type_check.is_dictlike(keys)
         assert elita.util.type_check.is_dictlike(doc)
 
@@ -215,7 +230,7 @@ class BuildDataService(GenericChildDataService):
         of directly from mongo. This keeps it fast so we can do it frequently for things like parameter validation, etc
         '''
         assert app_name
-        assert isinstance(app_name, str)
+        assert elita.util.type_check.is_string(app_name)
         assert app_name in self.root['app']
         return [build for build in self.root['app'][app_name]['builds'] if build[0] != '_']
 
@@ -223,8 +238,8 @@ class BuildDataService(GenericChildDataService):
         '''
         Create new build document
         '''
-        assert isinstance(app_name, str)
-        assert isinstance(build_name, str)
+        assert elita.util.type_check.is_string(app_name)
+        assert elita.util.type_check.is_string(build_name)
         assert isinstance(attribs, dict)
         assert app_name and build_name
 
@@ -256,8 +271,8 @@ class BuildDataService(GenericChildDataService):
         associated with build
         '''
 
-        assert isinstance(app, str)
-        assert isinstance(build, str)
+        assert elita.util.type_check.is_string(app)
+        assert elita.util.type_check.is_string(build)
         assert isinstance(packages, dict)
         assert app in self.root['app']
         assert build in self.root['app']['builds']
@@ -280,8 +295,8 @@ class BuildDataService(GenericChildDataService):
 
         Update build with keys in doc. Overwrite existing contents (ie, the document is not recursed into)
         '''
-        assert isinstance(app, str)
-        assert isinstance(name, str)
+        assert elita.util.type_check.is_string(app)
+        assert elita.util.type_check.is_string(name)
         assert isinstance(doc, dict)
         assert app and name
         assert app in self.root['app']
@@ -293,8 +308,8 @@ class BuildDataService(GenericChildDataService):
         '''
         Delete all stored files associated with build.
         '''
-        assert isinstance(app_name, str)
-        assert isinstance(build_name, str)
+        assert elita.util.type_check.is_string(app_name)
+        assert elita.util.type_check.is_string(build_name)
         assert app_name and build_name
 
         app_doc = self.mongo_service.get('application', {'name': app_name})
@@ -313,8 +328,8 @@ class BuildDataService(GenericChildDataService):
         '''
         Delete build object, root_tree reference and all stored files.
         '''
-        assert isinstance(app_name, str)
-        assert isinstance(build_name, str)
+        assert elita.util.type_check.is_string(app_name)
+        assert elita.util.type_check.is_string(build_name)
         assert app_name and build_name
 
         root_path = ('app', app_name, 'builds', build_name)
@@ -327,8 +342,8 @@ class BuildDataService(GenericChildDataService):
         Legacy API. Get build OBJECT (not document). Uses overly-clever method of letting RootTree class
         dereference the DBRef, rather than pulling from mongo directly.
         '''
-        assert isinstance(app_name, str)
-        assert isinstance(build_name, str)
+        assert elita.util.type_check.is_string(app_name)
+        assert elita.util.type_check.is_string(build_name)
         assert app_name and build_name
         return Build(self.root['app'][app_name]['builds'][build_name].doc)
 
@@ -336,8 +351,8 @@ class BuildDataService(GenericChildDataService):
         '''
         Legacy API to get document associated with build.
         '''
-        assert isinstance(app_name, str)
-        assert isinstance(build_name, str)
+        assert elita.util.type_check.is_string(app_name)
+        assert elita.util.type_check.is_string(build_name)
         assert app_name and build_name
         bobj = self.GetBuild(app_name, build_name)
         return bobj.get_doc()
@@ -349,33 +364,34 @@ class UserDataService(GenericChildDataService):
         Create a new user object and insert root_tree references for both the user and the computed permissions
         endpoint. Pipe parameters into User object to get the pw hashed, etc.
         '''
-        assert isinstance(name, str)
-        assert isinstance(pw, str)
+        assert elita.util.type_check.is_string(name)
+        assert elita.util.type_check.is_string(pw)
         assert isinstance(attribs, dict)
         assert isinstance(perms, dict)
         assert name and pw and perms
 
         userobj = User({
-            'name': name,
+            'username': name,
             'permissions': perms,
             'password': pw,
             'attributes': attribs
         })
-        uid = self.mongo_service.create_new('users', {'name': userobj.name}, 'User', userobj.get_doc())
-        pid = self.mongo_service.create_new('userpermissions', {'username': userobj.name}, 'UserPermissions', {
-            "username": userobj.name,
+        uid = self.mongo_service.create_new('users', {'username': userobj.username}, 'User', userobj.get_doc())
+        pid = self.mongo_service.create_new('userpermissions', {'username': userobj.username}, 'UserPermissions', {
+            "username": userobj.username,
             "applications": list(),
             "actions": dict(),
             "servers": list()
         })
-        self.mongo_service.update_roottree(('global', 'users', userobj.name), 'users', uid)
-        self.mongo_service.update_roottree(('global', 'users', userobj.name, 'permissions'), 'userpermissions', pid)
+        self.mongo_service.update_roottree(('global', 'users', userobj.username), 'users', uid)
+        self.mongo_service.update_roottree(('global', 'users', userobj.username, 'permissions'), 'userpermissions', pid)
+        return uid, pid
 
     def GetUserTokens(self, username):
         '''
         Get all auth tokens associated with user
         '''
-        assert isinstance(username, str)
+        assert elita.util.type_check.is_string(username)
         assert username
         return [d['token'] for d in self.mongo_service.get('tokens', {'username': username}, multi=True)]
 
@@ -383,7 +399,7 @@ class UserDataService(GenericChildDataService):
         '''
         Get username associated with token
         '''
-        assert isinstance(token, str)
+        assert elita.util.type_check.is_string(token)
         assert token
         return self.mongo_service.get('tokens', {'token': token})['username']
 
@@ -397,7 +413,7 @@ class UserDataService(GenericChildDataService):
         '''
         Create new auth token associated with username and insert reference into root_tree
         '''
-        assert isinstance(username, str)
+        assert elita.util.type_check.is_string(username)
         assert username
 
         token = Token({
@@ -418,7 +434,7 @@ class UserDataService(GenericChildDataService):
         '''
         Legacy API to get user OBJECT (not document)
         '''
-        assert isinstance(username, str)
+        assert elita.util.type_check.is_string(username)
         assert username
         doc = self.mongo_service.get('users', {'username': username})
         return User(doc)
@@ -428,7 +444,7 @@ class UserDataService(GenericChildDataService):
         Delete a single user and root_tree reference
         '''
         assert name
-        assert isinstance(name, str)
+        assert elita.util.type_check.is_string(name)
         self.mongo_service.rm_roottree(('global', 'users', name))
         self.mongo_service.delete('users', {'username': name})
 
@@ -437,7 +453,7 @@ class UserDataService(GenericChildDataService):
         Delete a token and root_tree reference
         '''
         assert token
-        assert isinstance(token, str)
+        assert elita.util.type_check.is_string(token)
         self.mongo_service.rm_roottree(('global', 'tokens', token))
         self.mongo_service.delete('tokens', {'token': token})
 
@@ -454,7 +470,7 @@ class ApplicationDataService(GenericChildDataService):
         Get application document
         '''
         assert app_name
-        assert isinstance(app_name, str)
+        assert elita.util.type_check.is_string(app_name)
         doc = self.mongo_service.get('applications', {'app_name': app_name})
         return {k: doc[k] for k in doc if k[0] != '_'}
 
@@ -463,7 +479,7 @@ class ApplicationDataService(GenericChildDataService):
         Create new application and all subcontainers and root_tree sub-references
         '''
         assert app_name
-        assert isinstance(app_name, str)
+        assert elita.util.type_check.is_string(app_name)
         aid = self.mongo_service.create_new('applications', {'app_name': app_name}, 'Application', {})
         root_doc = {
             "builds": {"_doc": bson.DBRef('containers', self.NewContainer("BuildContainer", "builds", app_name))},
@@ -480,7 +496,7 @@ class ApplicationDataService(GenericChildDataService):
         Delete application and all root_tree references and sub-objects.
         '''
         assert app_name
-        assert isinstance(app_name, str)
+        assert elita.util.type_check.is_string(app_name)
         self.mongo_service.rm_roottree(('app', app_name))
         self.mongo_service.delete('applications', {'app_name': app_name})
         self.mongo_service.delete('builds', {'app_name': app_name})
@@ -504,10 +520,9 @@ class ApplicationDataService(GenericChildDataService):
         }
         '''
         assert app_name
-        assert isinstance(app_name, str)
-        groups = [d['name'] for d in self.mongo_service.get('groups', {'application': app_name}, multi=True)]
-        envs = list({d['environment'] for d in self.mongo_service.get('servers', {}, multi=True)})
-        #envs = self.deps['ServerDataService'].GetEnvironments()
+        assert elita.util.type_check.is_string(app_name)
+        groups = [d['name'] for d in self.mongo_service.get('groups', {'application': app_name}, multi=True, empty=True)]
+        envs = list({d['environment'] for d in self.mongo_service.get('servers', {}, multi=True, empty=True)})
         census = dict()
         for e in envs:
             census[e] = dict()
@@ -537,7 +552,7 @@ class GroupDataService(GenericChildDataService):
         Get all groups for application.
         '''
         assert app
-        assert isinstance(app, str)
+        assert elita.util.type_check.is_string(app)
         assert app in self.root['app']
         return [group for group in self.root['app'][app]['groups'] if group[0] != '_']
 
@@ -546,8 +561,8 @@ class GroupDataService(GenericChildDataService):
         Get document for application group
         '''
         assert app and name
-        assert isinstance(app, str)
-        assert isinstance(name, str)
+        assert elita.util.type_check.is_string(app)
+        assert elita.util.type_check.is_string(name)
         return self.mongo_service.get('groups', {'application': app, 'name': name})
 
     def NewGroup(self, app, name, gitdeploys, rolling_deploy=False, description="", attributes=None):
@@ -562,10 +577,10 @@ class GroupDataService(GenericChildDataService):
         @type attributes: dict | None
         '''
         assert app and name and gitdeploys
-        assert isinstance(app, str)
-        assert isinstance(name, str)
+        assert elita.util.type_check.is_string(app)
+        assert elita.util.type_check.is_string(name)
         assert elita.util.type_check.is_seq(gitdeploys)
-        assert isinstance(description, str)
+        assert elita.util.type_check.is_string(description)
         assert elita.util.type_check.is_optional_dict(attributes)
         attributes = attributes if attributes else {}
         gp = Group({
@@ -585,8 +600,8 @@ class GroupDataService(GenericChildDataService):
         Delete a group object and root_tree reference
         '''
         assert app and name
-        assert isinstance(app, str)
-        assert isinstance(name, str)
+        assert elita.util.type_check.is_string(app)
+        assert elita.util.type_check.is_string(name)
         self.mongo_service.rm_roottree(('app', app, 'groups', name))
         self.mongo_service.delete('groups', {'application': app, 'name': name})
 
@@ -596,8 +611,8 @@ class GroupDataService(GenericChildDataService):
         If environments specified, take intersection with that set as well
         '''
         assert app and name
-        assert isinstance(app, str)
-        assert isinstance(name, str)
+        assert elita.util.type_check.is_string(app)
+        assert elita.util.type_check.is_string(name)
         group = self.GetGroup(app, name)
         assert group
         server_sets = [set(self.deps['GitDataService'].GetGitDeploy(app, gd)['servers']) for gd in group['gitdeploys']]
@@ -615,7 +630,7 @@ class JobDataService(GenericChildDataService):
         at the start of each request.
         '''
         assert app_name
-        assert isinstance(app_name, str)
+        assert elita.util.type_check.is_string(app_name)
         if 'actions' in self.root['app'][app_name]:
             return [action for action in self.root['app'][app_name]['actions'] if action[0] != '_']
 
@@ -624,8 +639,8 @@ class JobDataService(GenericChildDataService):
         Get details (name, description, parameters) about all actions associated with application
         '''
         assert app_name and action_name
-        assert isinstance(app_name, str)
-        assert isinstance(action_name, str)
+        assert elita.util.type_check.is_string(app_name)
+        assert elita.util.type_check.is_string(action_name)
         actions = self.deps['ActionService'].get_action_details(app_name, action_name)
         return {k: actions[k] for k in actions if k is not "callable"}
 
@@ -677,7 +692,7 @@ class JobDataService(GenericChildDataService):
         Get job data for a specific job sorted by created_datetime (ascending)
         '''
         assert job_id
-        assert isinstance(job_id, str)
+        assert elita.util.type_check.is_string(job_id)
         return sorted([{'created_datetime': d['_id'].generation_time.isoformat(' '), 'data': d['data']} for
                        d in self.mongo_service.get('job_data', {'job_id': job_id}, multi=True)],
                       key=lambda k: k['created_datetime'])
@@ -705,8 +720,8 @@ class JobDataService(GenericChildDataService):
         duration of this request, so we don't care about any root_tree updates by other threads running concurrently
         '''
         assert app_name and action_name and params
-        assert isinstance(app_name, str)
-        assert isinstance(action_name, str)
+        assert elita.util.type_check.is_string(app_name)
+        assert elita.util.type_check.is_string(action_name)
         assert elita.util.type_check.is_dictlike(params)
         logging.debug("NewAction: app_name: {}".format(app_name))
         logging.debug("NewAction: action_name: {}".format(action_name))
@@ -720,8 +735,8 @@ class JobDataService(GenericChildDataService):
         Spawn async job for an action
         '''
         assert app_name and action_name and params
-        assert isinstance(app_name, str)
-        assert isinstance(action_name, str)
+        assert elita.util.type_check.is_string(app_name)
+        assert elita.util.type_check.is_string(action_name)
         assert elita.util.type_check.is_dictlike(params)
         return self.deps['ActionService'].async(app_name, action_name, params)
 
@@ -761,7 +776,7 @@ class ServerDataService(GenericChildDataService):
         Change existing server object with data in doc
         '''
         assert name and doc
-        assert isinstance(name, str)
+        assert elita.util.type_check.is_string(name)
         assert elita.util.type_check.is_dictlike(doc)
         assert name in self.root['server']
         prototype = Server({})  # get all valid default top-level properties
@@ -774,7 +789,7 @@ class ServerDataService(GenericChildDataService):
         Delete a server object
         '''
         assert name
-        assert isinstance(name, str)
+        assert elita.util.type_check.is_string(name)
         assert name in self.root['server']
         self.mongo_service.rm_roottree(('server', name))
         self.mongo_service.delete('servers', {'name': name})
@@ -785,9 +800,9 @@ class ServerDataService(GenericChildDataService):
         a list of servers it's been initialized on)
         '''
         assert name
-        assert isinstance(name, str)
+        assert elita.util.type_check.is_string(name)
         assert name in self.root['server']
-        gitdeploys = self.mongo_service.get('gitdeploys', {'servers': {'$in': [name]}})
+        gitdeploys = self.mongo_service.get('gitdeploys', {'servers': {'$in': [name]}}, multi=True, empty=True)
         if gitdeploys:
             return [{'application': gd['application'], 'gitdeploy_name': gd['name']} for gd in gitdeploys]
         else:
@@ -814,8 +829,8 @@ class GitDataService(GenericChildDataService):
         @rtype dict
         '''
         assert name and app_name and location
-        assert isinstance(name, str)
-        assert isinstance(app_name, str)
+        assert elita.util.type_check.is_string(name)
+        assert elita.util.type_check.is_string(app_name)
         assert elita.util.type_check.is_dictlike(location)
         assert all([k in location for k in ('gitrepo', 'path', 'default_branch')])
         assert app_name in self.root['app']
@@ -863,7 +878,7 @@ class GitDataService(GenericChildDataService):
         @rtype: list
         '''
         assert app
-        assert isinstance(app, str)
+        assert elita.util.type_check.is_string(app)
         assert app in self.root['app']
         return [k for k in self.root['app'][app]['gitdeploys'] if k[0] != '_']
 
@@ -875,48 +890,31 @@ class GitDataService(GenericChildDataService):
         @rtype: dict
         '''
         assert app and name
-        assert isinstance(app, str)
-        assert isinstance(name, str)
+        assert elita.util.type_check.is_string(app)
+        assert elita.util.type_check.is_string(name)
         assert app in self.root['app']
-        assert name in self.root['app']['gitdeploys']
+        assert name in self.root['app'][app]['gitdeploys']
 
         doc = self.mongo_service.get('gitdeploys', {'name': name, 'application': app})
         assert 'location' in doc
         assert 'gitrepo' in doc['location']
         #dereference embedded dbrefs
-        doc['location']['gitrepo'] = self.db.dereference(doc['location']['gitrepo'])
+        doc['location']['gitrepo'] = self.mongo_service.dereference(doc['location']['gitrepo'])
         assert doc['location']['gitrepo']
         assert all([k in doc['location']['gitrepo'] for k in ('keypair', 'gitprovider')])
-        doc['location']['gitrepo']['keypair'] = self.db.dereference(doc['location']['gitrepo']['keypair'])
+        doc['location']['gitrepo']['keypair'] = self.mongo_service.dereference(doc['location']['gitrepo']['keypair'])
         assert doc['location']['gitrepo']['keypair']
-        doc['location']['gitrepo']['gitprovider'] = self.db.dereference(doc['location']['gitrepo']['gitprovider'])
+        doc['location']['gitrepo']['gitprovider'] = self.mongo_service.dereference(doc['location']['gitrepo']['gitprovider'])
         assert doc['location']['gitrepo']['gitprovider']
         return {k: doc[k] for k in doc if k[0] != '_'}
-
-    # DEAD CODE
-
-    # def GetGitDeployLocalPath(self, app, name):
-    #     '''
-    #     Return the local path (on elita) to the working copy of the gitrepo associated with the gitdeploy. IE: the place
-    #      where we decompress the package and commit/push from.
-    #     '''
-    #     assert app and name
-    #     assert isinstance(app, str)
-    #     assert isinstance(name, str)
-    #     assert app in self.root['app']
-    #     assert name in self.root['app']['gitdeploys']
-    #
-    #     gd_doc = self.GetGitDeploy(app, name)
-    #     gdm = GitDeployManager(gd_doc, self.parent)
-    #     return gdm.get_path()
 
     def UpdateGitDeploy(self, app, name, doc):
         '''
         Update gitdeploy object with the data in doc
         '''
         assert app and name and doc
-        assert isinstance(app, str)
-        assert isinstance(name, str)
+        assert elita.util.type_check.is_string(app)
+        assert elita.util.type_check.is_string(name)
         assert elita.util.type_check.is_dictlike(doc)
         assert app in self.root['app']
         assert name in self.root['app']['gitdeploys']
@@ -938,8 +936,8 @@ class GitDataService(GenericChildDataService):
         Delete a gitdeploy object and the root_tree reference
         '''
         assert app and name
-        assert isinstance(app, str)
-        assert isinstance(name, str)
+        assert elita.util.type_check.is_string(app)
+        assert elita.util.type_check.is_string(name)
         assert app in self.root['app']
         assert name in self.root['app'][app]['gitdeploys']
 
@@ -961,7 +959,7 @@ class GitDataService(GenericChildDataService):
         @rtype: dict | None
         '''
         assert name
-        assert isinstance(name, str)
+        assert elita.util.type_check.is_string(name)
         assert name in self.root['global']['gitproviders']
 
         doc = self.mongo_service.get('gitproviders', {'name': name})
@@ -973,8 +971,8 @@ class GitDataService(GenericChildDataService):
         Create new gitprovider object
         '''
         assert name and type and auth
-        assert isinstance(name, str)
-        assert isinstance(type, str)
+        assert elita.util.type_check.is_string(name)
+        assert elita.util.type_check.is_string(type)
         assert provider_type in ('bitbucket', 'github')
         assert elita.util.type_check.is_dictlike(auth)
         assert 'username' in auth and 'password' in auth
@@ -995,7 +993,7 @@ class GitDataService(GenericChildDataService):
         Modify gitprovider with the data in doc
         '''
         assert name and doc
-        assert isinstance(name, str)
+        assert elita.util.type_check.is_string(name)
         assert elita.util.type_check.is_dictlike(doc)
         assert name in self.root['global']['gitproviders']
 
@@ -1006,7 +1004,7 @@ class GitDataService(GenericChildDataService):
         Delete gitprovider object and root_tree reference
         '''
         assert name
-        assert isinstance(name, str)
+        assert elita.util.type_check.is_string(name)
         assert name in self.root['global']['gitproviders']
 
         self.mongo_service.rm_roottree(('global', 'gitproviders', name))
@@ -1019,7 +1017,7 @@ class GitDataService(GenericChildDataService):
         @rtype: list(dict)
         '''
         assert app
-        assert isinstance(app, str)
+        assert elita.util.type_check.is_string(app)
         assert app in self.root['app']
 
         return [k for k in self.root['app'][app]['gitrepos'] if k[0] != '_']
@@ -1031,13 +1029,17 @@ class GitDataService(GenericChildDataService):
         @rtype: dict
         '''
         assert app and name
-        assert isinstance(app, str)
-        assert isinstance(name, str)
+        assert elita.util.type_check.is_string(app)
+        assert elita.util.type_check.is_string(name)
         assert app in self.root['app']
-        assert name in self.root['app']['gitrepos']
+        assert name in self.root['app'][app]['gitrepos']
 
         doc = self.mongo_service.get('gitrepos', {'name': name, 'application': app})
-        assert doc
+        assert doc and 'gitprovider' in doc and 'keypair' in doc
+        gitprovider = self.mongo_service.dereference(doc['gitprovider'])
+        doc['gitprovider'] = {k: gitprovider[k] for k in gitprovider if k[0] != '_'}
+        keypair = self.mongo_service.dereference(doc['keypair'])
+        doc['keypair'] = {k: keypair[k] for k in keypair if k[0] != '_'}
         return {k: doc[k] for k in doc if k[0] != '_'}
 
     def NewGitRepo(self, app, name, keypair, gitprovider, uri):
@@ -1047,7 +1049,7 @@ class GitDataService(GenericChildDataService):
         @rtype: dict
         '''
         assert app and name and keypair and gitprovider and uri
-        assert all([isinstance(p, str) for p in (app, name, keypair, gitprovider, uri)])
+        assert all([elita.util.type_check.is_string(p) for p in (app, name, keypair, gitprovider, uri)])
         assert app in self.root['app']
         assert keypair in self.root['global']['keypairs']
         assert gitprovider in self.root['global']['gitproviders']
@@ -1078,11 +1080,11 @@ class GitDataService(GenericChildDataService):
         Update gitrepo with the data in doc
         '''
         assert app and name and doc
-        assert isinstance(app, str)
-        assert isinstance(name, str)
+        assert elita.util.type_check.is_string(app)
+        assert elita.util.type_check.is_string(name)
         assert elita.util.type_check.is_dictlike(doc)
         assert app in self.root['app']
-        assert name in self.root['app']['gitrepos']
+        assert name in self.root['app'][app]['gitrepos']
 
         self.UpdateObject('gitrepos', {'name': name, 'application': app}, doc)
 
@@ -1091,10 +1093,10 @@ class GitDataService(GenericChildDataService):
         Delete gitrepo object and root_tree reference
         '''
         assert app and name
-        assert isinstance(app, str)
-        assert isinstance(name, str)
+        assert elita.util.type_check.is_string(app)
+        assert elita.util.type_check.is_string(name)
         assert app in self.root['app']
-        assert name in self.root['app']['gitrepos']
+        assert name in self.root['app'][app]['gitrepos']
 
         self.mongo_service.rm_roottree(('app', app, 'gitrepos', name))
         self.mongo_service.delete('gitrepos', {'name': name, 'application': app})
@@ -1107,10 +1109,10 @@ class DeploymentDataService(GenericChildDataService):
         @rtype: dict
         '''
         assert app and build_name and ((environments and groups) or (servers and gitdeploys))
-        assert isinstance(app, str)
-        assert isinstance(build_name, str)
+        assert elita.util.type_check.is_string(app)
+        assert elita.util.type_check.is_string(build_name)
         assert app in self.root['app']
-        assert build_name in self.root['app']['builds']
+        assert build_name in self.root['app'][app]['builds']
         assert all([elita.util.type_check.is_seq(p) for p in (environments, groups, servers, gitdeploys)])
         assert set(environments).issubset(set(self.deps['ServerDataService'].GetEnvironments()))
         assert all([g in self.root['app'][app]['groups'] for g in groups])
@@ -1148,7 +1150,7 @@ class DeploymentDataService(GenericChildDataService):
         @rtype: list(str)
         '''
         assert app
-        assert isinstance(app, str)
+        assert elita.util.type_check.is_string(app)
         assert app in self.root['app']
 
         return [k for k in self.root['app'][app]['deployments'] if k[0] != '_']
@@ -1158,8 +1160,8 @@ class DeploymentDataService(GenericChildDataService):
         Modify deployment object with the data in doc
         '''
         assert app and name and doc
-        assert isinstance(app, str)
-        assert isinstance(name, str)
+        assert elita.util.type_check.is_string(app)
+        assert elita.util.type_check.is_string(name)
         assert elita.util.type_check.is_dictlike(doc)
         assert app in self.root['app']
         assert name in self.root['app'][app]['deployments']
@@ -1176,7 +1178,7 @@ class DeploymentDataService(GenericChildDataService):
         @type gitdeploys: list(str)
         '''
         assert app and name and batches and gitdeploys
-        assert isinstance(app, str)
+        assert elita.util.type_check.is_string(app)
         assert elita.util.type_check.is_dictlike(batches)
         assert elita.util.type_check.is_seq(gitdeploys)  # list of all gitdeploys
 
@@ -1240,9 +1242,9 @@ class DeploymentDataService(GenericChildDataService):
         Phase 1 is gitdeploy processing: decompressing package to local gitrepo, computing changes, commiting/pushing
         '''
         assert app and name and gitdeploy
-        assert all([isinstance(p, str) for p in (app, name, gitdeploy)])
+        assert all([elita.util.type_check.is_string(p) for p in (app, name, gitdeploy)])
         assert (isinstance(progress, int) and progress >= 0) or not progress
-        assert isinstance(step, str) or not step
+        assert elita.util.type_check.is_string(step) or not step
         assert elita.util.type_check.is_optional_seq(changed_files)
         assert app in self.root['app']
         assert name in self.root['app'][app]['deployments']
@@ -1263,7 +1265,7 @@ class DeploymentDataService(GenericChildDataService):
         deployment is done per gitdeploy (to multiple servers)
         '''
         assert app and name and gitdeploy and servers and batch
-        assert all([isinstance(p, str) for p in (app, name, gitdeploy)])
+        assert all([elita.util.type_check.is_string(p) for p in (app, name, gitdeploy)])
         assert elita.util.type_check.is_seq(servers)
         assert isinstance(batch, int) and batch >= 0
         assert app in self.root['app']
@@ -1292,18 +1294,18 @@ class KeyDataService(GenericChildDataService):
         Get keypair doc
         '''
         assert name
-        assert isinstance(name, str)
+        assert elita.util.type_check.is_string(name)
         assert name in self.root['global']['keypairs']
 
         doc = self.mongo_service.get('keypairs', {'name': name})
-        return doc if doc else None
+        return {k: doc[k] for k in doc if k[0] != '_'} if doc else None
 
     def NewKeyPair(self, name, attribs, key_type, private_key, public_key):
         '''
         Create new keypair object and root_tree reference
         '''
         assert name and key_type and private_key and public_key
-        assert all([isinstance(p, str) for p in (name, key_type, private_key, public_key)])
+        assert all([elita.util.type_check.is_string(p) for p in (name, key_type, private_key, public_key)])
         assert elita.util.type_check.is_optional_dict(attribs)
 
         try:
@@ -1345,7 +1347,7 @@ class KeyDataService(GenericChildDataService):
         Update key pair object with data in doc
         '''
         assert name and doc
-        assert isinstance(name, str)
+        assert elita.util.type_check.is_string(name)
         assert elita.util.type_check.is_dictlike(doc)
         assert name in self.root['global']['keypairs']
 
@@ -1356,7 +1358,7 @@ class KeyDataService(GenericChildDataService):
         Delete keypair object and root_tree reference
         '''
         assert name
-        assert isinstance(name, str)
+        assert elita.util.type_check.is_string(name)
         assert name in self.root['global']['keypairs']
 
         self.mongo_service.rm_roottree(('global', 'keypairs', name))
@@ -1609,13 +1611,33 @@ class Application(GenericDataModel):
         'app_name': None
     }
 
+DEFAULT_ADMIN_USERNAME = 'admin'
+DEFAULT_ADMIN_PASSWORD = 'elita'
+DEFAULT_ADMIN_PERMISSIONS = {
+    'apps': {
+        '*': 'read/write',
+        '_global': 'read/write'
+    },
+    'actions': {
+        '*': {
+            '*': 'execute'
+        }
+    },
+    'servers': ['*']
+}
+
 class User(GenericDataModel):
     default_values = {
         'username': None,
         'password': None,
         'hashed_pw': None,
         'salt': None,
-        'attributes': dict()
+        'attributes': dict(),
+        'permissions': {
+            'apps': {},
+            'actions': {},
+            'servers': []
+        }
     }
 
     def init_hook(self):
@@ -1807,7 +1829,14 @@ class DataValidator:
     '''
     __metaclass__ = util.LoggingMetaClass
 
-    def __init__(self, root, db):
+    def __init__(self, settings, root, db):
+        '''
+        @type settings: pyramid.registry.Registry
+        @type root: dict
+        @type db: pymongo.database.Database
+        '''
+        assert settings and root and db
+        self.settings = settings
         self.root = root
         self.db = db
 
@@ -1890,9 +1919,9 @@ class DataValidator:
                         logging.warning("orphan token object: '{}', adding to root tree".format(d['token']))
                         self.root['global']['tokens'][d['token']] = {'_doc': bson.DBRef('tokens', d['_id'])}
                 if c == 'users':
-                    if d['name'] not in self.root['global']['users']:
-                        logging.warning("orphan user object: '{}', adding to root tree".format(d['name']))
-                        self.root['global']['users'][d['name']] = {'_doc': bson.DBRef('users', d['_id'])}
+                    if d['username'] not in self.root['global']['users']:
+                        logging.warning("orphan user object: '{}', adding to root tree".format(d['username']))
+                        self.root['global']['users'][d['username']] = {'_doc': bson.DBRef('users', d['_id'])}
                 if c == 'servers':
                     if d['name'] not in self.root['server']:
                         logging.warning("orphan server object: '{}', adding to root tree".format(d['name']))
@@ -1919,35 +1948,31 @@ class DataValidator:
                 logging.warning("'{}' not found under global".format(l))
                 self.root['global'][l] = dict()
                 self.root['global'][l]['_doc'] = self.NewContainer(global_levels[l]['class'], l, "")
-        if 'admin' not in self.root['global']['users']:
+        if DEFAULT_ADMIN_USERNAME not in self.root['global']['users']:
             logging.warning("admin user not found")
-            uobj = User({
-                'name': 'admin',
-                'password': 'elita',
-                'permissions': {
-                    'apps': {
-                        '*': 'read/write',
-                        '_global': 'read/write'
-                    },
-                    'actions': {
-                        '*': {
-                            '*': 'execute'
-                        }
-                    },
-                    'servers': '*'
+            users = [u for u in self.db['users'].find()]
+            if DEFAULT_ADMIN_USERNAME in [u['username'] for u in users]:
+                admin = self.db['users'].find_one({'username': DEFAULT_ADMIN_USERNAME})
+                assert admin
+                self.root['global']['users'][DEFAULT_ADMIN_USERNAME] = {
+                    '_doc': bson.DBRef('users', admin['_id'])
                 }
-            })
-            id = self.db['users'].insert({
-            "_class": "User",
-            "name": uobj.name,
-            "hashed_pw": uobj.hashed_pw,
-            "attributes": uobj.attributes,
-            "salt": uobj.salt,
-            "permissions": uobj.permissions
-            })
-            self.root['global']['users']['admin'] = {
-                '_doc': bson.DBRef('users', id)
-            }
+            # uobj = User({
+            #     'username': DEFAULT_ADMIN_USERNAME,
+            #     'password': DEFAULT_ADMIN_PASSWORD,
+            #     'permissions': DEFAULT_ADMIN_PERMISSIONS
+            # })
+            # id = self.db['users'].insert({
+            # "_class": "User",
+            # "username": uobj.name,
+            # "hashed_pw": uobj.hashed_pw,
+            # "attributes": uobj.attributes,
+            # "salt": uobj.salt,
+            # "permissions": uobj.permissions
+            # })
+            # self.root['global']['users'][DEFAULT_ADMIN_USERNAME] = {
+            #     '_doc': bson.DBRef('users', id)
+            # }
 
     def check_users(self):
         for u in self.root['global']['users']:
@@ -1965,12 +1990,25 @@ class DataValidator:
                     self.root['global']['users'][u]['permissions'] = {
                         '_doc': bson.DBRef('userpermissions', pid)
                     }
+        users = [u for u in self.db['users'].find()]
+        if DEFAULT_ADMIN_USERNAME not in [u['username'] for u in users]:
+            logging.warning("admin user document not found; creating")
+            datasvc = DataService(settings=self.settings, db=self.db, root=elita.generate_root_tree(self.db))
+            uid, pid = datasvc.usersvc.NewUser(DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD, DEFAULT_ADMIN_PERMISSIONS, {})
+            #this is ugly. DataService updates root_tree internally but it will be overwritten by this class
+            #so we have to reflect the changes in our copy of root_tree
+            self.root['global']['users'][DEFAULT_ADMIN_USERNAME] = {
+                '_doc': bson.DBRef('users', uid),
+                'permissions': {
+                    '_doc': bson.DBRef('userpermissions', pid)
+                }
+            }
 
     def check_user_permissions(self):
         for u in self.db['users'].find():
             if 'permissions' not in u:
                 logging.warning("permissions object not found for user {}; fixing with empty obj"
-                              .format(u['name']))
+                              .format(u['username']))
                 u['permissions'] = {
                     'apps': {},
                     'actions': {},
@@ -1983,12 +2021,12 @@ class DataValidator:
                     u['permissions'][o] = list() if o == 'servers' else dict()
             if not isinstance(u['permissions']['servers'], list):
                 logging.warning("servers key under permissions object for user {} is not a list; fixing"
-                              .format(u['name']))
+                              .format(u['username']))
                 u['permissions']['servers'] = list(u['permissions']['servers'])
             for o in ('apps', 'actions'):
                 if not isinstance(u['permissions'][o], dict):
                     logging.warning("{} key under permissions object for user {} is not a dict; invalid "
-                                        "so replacing with empty dict".format(o, u['name']))
+                                        "so replacing with empty dict".format(o, u['username']))
                     u['permissions'][o] = dict()
             self.db['users'].save(u)
 
@@ -2066,13 +2104,17 @@ class DataValidator:
             del self.root['server'][s]
         update_list = list()
         for d in self.db['servers'].find():
+            update = False
             if 'environment' not in d:
                 logging.warning("environment field not found for server {}; fixing".format(d['_id']))
                 d['environment'] = ""
-                update_list.append(d)
+                update = True
             if 'status' not in d:
                 logging.warning("status field not found for server {}; fixing".format(d['_id']))
                 d['status'] = "ok"
+                update = True
+            if update:
+                update_list.append(d)
         for d in update_list:
             self.db['servers'].save(d)
 

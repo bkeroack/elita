@@ -2,6 +2,13 @@ __author__ = 'bkeroack'
 
 import collections
 import json
+import sys
+
+def is_string(obj):
+    if sys.version_info[0] == 2:
+        return isinstance(obj, basestring)
+    elif sys.version_info[0] == 3:
+        return isinstance(obj, str)
 
 def is_seq(obj):
     return isinstance(obj, collections.Sequence)

@@ -42,7 +42,7 @@ requires = [
 ]
 
 setup(name='elita',
-      version="0.39",
+      version="0.59",
       description='Continuous deployment (continuous delivery) and infrastructure management REST framework',
       long_description=README + '\n\n' + CHANGES,
       license='Apache',
@@ -60,7 +60,8 @@ setup(name='elita',
       keywords='continuous deployment delivery REST automation devops',
       packages=find_packages(exclude=['test*']),
       package_data={
-          'elita_install': ['util/*', '*.ini', '*.txt', '*.rst', '*.cfg']
+          'elita_install': ['util/*', '*.ini', '*.txt', '*.rst', '*.cfg'],
+          'elita_cli': ['*']
       },
       include_package_data=True,
       zip_safe=False,
@@ -68,6 +69,7 @@ setup(name='elita',
       entry_points={
           'paste.app_factory': ['main=elita:main'],
           'console_scripts': [
-              'elita_install=elita_install:Install'
+              'elita_install=elita_install:Install',
+              'elita=elita_cli:Command_Line_Client'
           ]
       })

@@ -110,7 +110,7 @@ class UserPermissions:
         logging.debug("get_action_permissions: {}: {}".format(app, action))
         if self.valid_token and self.username in self.usersvc.GetUsers():
             userobj = self.usersvc.GetUser(self.username)
-            if userobj.name == 'admin':
+            if userobj.username == 'admin':
                 logging.debug("returning admin permissions")
                 return "execute"
             if app in userobj.permissions['actions']:
@@ -132,7 +132,7 @@ class UserPermissions:
         logging.debug("get_permissions: app: {}".format(app))
         if self.valid_token and self.username in self.usersvc.GetUsers():
             userobj = self.usersvc.GetUser(self.username)
-            if userobj.name == 'admin':
+            if userobj.username == 'admin':
                 logging.debug("returning admin permissions")
                 return "read;write"
             elif "*" in userobj.permissions['apps']:
