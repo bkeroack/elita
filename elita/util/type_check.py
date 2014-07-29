@@ -31,6 +31,6 @@ def is_serializable(obj):
     return True
 
 def is_optional_str(obj):
-    return not obj or isinstance(obj, str)
+    return not obj or is_string(obj)
 
 

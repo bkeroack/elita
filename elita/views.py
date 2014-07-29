@@ -1312,12 +1312,30 @@ class UserView(GenericView):
         self.context.permissions = perms
         self.datasvc.usersvc.SaveUser(self.context)
 
-    def GET(self):  # return active
+    def GET(self):
+        # ugly. we want to support both password auth and valid tokens, but only tokens from the same user or with the
+        # '_global' permission.
         if 'password' in self.req.params:
             if not self.context.validate_password(self.req.params['password']):
                 return self.Error(403, "incorrect password")
-        elif 'auth_token' not in self.req.params:
+        elif ('auth_token' not in self.req.params) and ('Auth-Token' not in self.req.headers):
             return self.Error(403, "password or auth token required")
+        else:
+            if 'auth_token' in self.req.params and len(self.req.params.getall('auth_token')) > 1:  # multiple auth tokens
+                return self.Error(403, "incorrect authentication")
+            token = self.req.params.getall('auth_token')[0] if 'auth_token' in self.req.params else self.req.headers['Auth-Token']
+            authsvc = auth.UserPermissions(self.datasvc.usersvc, token, datasvc=self.datasvc)
+            allowed_apps = authsvc.get_allowed_apps()
+            global_read = False
+            for k in allowed_apps:
+                if 'read' in k:
+                    if '_global' in allowed_apps[k]:
+                        global_read = True
+            if not authsvc.valid_token or authsvc.username != self.context.username or not global_read:
+                logging.debug("valid_token: {}".format(authsvc.valid_token))
+                logging.debug("usernames: {}, {}".format(authsvc.username, self.context.username))
+                logging.debug("allowed_apps: {}".format(authsvc.get_allowed_apps()))
+                return self.Error(403, "bad token")
         name = self.context.username
         if len(self.datasvc.usersvc.GetUserTokens(name)) == 0:
             self.datasvc.usersvc.NewToken(name)

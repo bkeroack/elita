@@ -53,6 +53,7 @@ class UserPermissions:
         self.userobj = False
         self.valid_token = False
         self.datasvc = datasvc
+        self.username = ""
         if self.validate_token():
             self.valid_token = True
             logging.debug("valid token")
@@ -62,8 +63,12 @@ class UserPermissions:
     def validate_token(self):
         return self.token in self.usersvc.GetAllTokens()
 
-    def get_allowed_apps(self, username):
+    def get_allowed_apps(self, username=None):
         '''Returns list of tuples: (appname, permissions ('read;write'))'''
+        if not self.valid_token:
+            return {}
+        if not username:
+            username = self.username
         userobj = self.usersvc.GetUser(username)
         assert self.datasvc is not None
         apps = self.datasvc.appsvc.GetApplications()
@@ -141,6 +146,7 @@ class UserPermissions:
             elif app in userobj.permissions['apps']:
                 logging.debug("returning perms: {}".format(userobj.permissions['apps'][app]))
                 return userobj.permissions['apps'][app]
+        logging.debug("invalid user or token: {}; {}".format(self.username, self.token))
         return ""
 
     def validate_pw(self, username, password):

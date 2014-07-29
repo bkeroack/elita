@@ -37,7 +37,11 @@ class Request:
 class MongoService:
     __metaclass__ = elita.util.LoggingMetaClass
 
-    def __init__(self, db, timeout=30):
+    def __init__(self, db):
+        '''
+        @type db = pymongo.database.Database
+        '''
+        assert db
         self.db = db
 
     def create_new(self, collection, keys, classname, doc, remove_existing=True):
@@ -220,6 +224,26 @@ class GenericChildDataService:
         for path in paths:
             self.mongo_service.modify(collection, keys, path[:-1], path[-1])
 
+    def AddThreadLocalRootTree(self, path):
+        '''
+        Add new node to thread-local root_tree (copy from mongo's root_tree)
+        '''
+        assert path
+        assert elita.util.type_check.is_seq(path)
+        root_tree = self.mongo_service.get('root_tree', {})
+        assert root_tree
+        reduce(lambda d, k: d[k], path[:-1], self.root)[path[-1]] = reduce(lambda d, k: d[k], path, root_tree)
+
+    def RmThreadLocalRootTree(self, path):
+        '''
+        Remove deleted node from thread-local root_tree
+        '''
+        assert path
+        assert elita.util.type_check.is_seq(path)
+        node = reduce(lambda d, k: d[k], path[:-1], self.root)
+        del node[path[-1]]
+
+
 class BuildDataService(GenericChildDataService):
 
     def GetBuilds(self, app_name):
@@ -253,17 +277,12 @@ class BuildDataService(GenericChildDataService):
             'build_name': build_name,
             'attributes': attribs
         })
-        new_doc = {
-            'build_name': buildobj.build_name,
-            'files': buildobj.files,
-            'stored': buildobj.stored,
-            'app_name': buildobj.app_name,
-            'packages': buildobj.packages,
-            'attributes': buildobj.attributes
-        }
-        res1 = self.parent.ms.create_new('builds', build_name, 'Builds', new_doc)
-        res2 = self.parent.ms.update_roottree(('app', app_name, 'builds', build_name), 'builds', id)
-        return res1 and res2
+
+        bid = self.mongo_service.create_new('builds', {'app_name': app_name, 'build_name': build_name}, 'Build',
+                                            buildobj.get_doc())
+        self.mongo_service.update_roottree(('app', app_name, 'builds', build_name), 'builds', bid)
+        self.AddThreadLocalRootTree(('app', app_name, 'builds', build_name))
+        return True
 
     def AddPackages(self, app, build, packages):
         '''
@@ -334,6 +353,7 @@ class BuildDataService(GenericChildDataService):
 
         root_path = ('app', app_name, 'builds', build_name)
         self.mongo_service.rm_roottree(root_path)
+        self.RmThreadLocalRootTree(root_path)
         self.mongo_service.delete('builds', {'app_name': app_name, 'build_name': build_name})
         self.DeleteBuildStorage(app_name, build_name)
 
@@ -384,7 +404,9 @@ class UserDataService(GenericChildDataService):
             "servers": list()
         })
         self.mongo_service.update_roottree(('global', 'users', userobj.username), 'users', uid)
+        self.AddThreadLocalRootTree(('global', 'users', userobj.username))
         self.mongo_service.update_roottree(('global', 'users', userobj.username, 'permissions'), 'userpermissions', pid)
+        self.AddThreadLocalRootTree(('global', 'users', userobj.username, 'permissions'))
         return uid, pid
 
     def GetUserTokens(self, username):
@@ -422,6 +444,7 @@ class UserDataService(GenericChildDataService):
         tid = self.mongo_service.create_new('tokens', {'username': username, 'token': token.token}, 'Token',
                                             token.get_doc())
         self.mongo_service.update_roottree(('global', 'tokens', token.token), 'tokens', tid)
+        self.AddThreadLocalRootTree(('global', 'tokens', token.token))
         return token
 
     def GetUsers(self):
@@ -446,6 +469,7 @@ class UserDataService(GenericChildDataService):
         assert name
         assert elita.util.type_check.is_string(name)
         self.mongo_service.rm_roottree(('global', 'users', name))
+        self.RmThreadLocalRootTree(('global', 'users', name))
         self.mongo_service.delete('users', {'username': name})
 
     def DeleteToken(self, token):
@@ -455,6 +479,7 @@ class UserDataService(GenericChildDataService):
         assert token
         assert elita.util.type_check.is_string(token)
         self.mongo_service.rm_roottree(('global', 'tokens', token))
+        self.RmThreadLocalRootTree(('global', 'tokens', token))
         self.mongo_service.delete('tokens', {'token': token})
 
 
@@ -489,7 +514,9 @@ class ApplicationDataService(GenericChildDataService):
             "deployments": {"_doc": bson.DBRef('containers', self.NewContainer("DeploymentContainer", "deployments", app_name))},
             "groups": {"_doc": bson.DBRef('containers', self.NewContainer("GroupContainer", "groups", app_name))}
         }
-        return self.mongo_service.update_roottree(('app', app_name), 'applications', aid, doc=root_doc)
+        res = self.mongo_service.update_roottree(('app', app_name), 'applications', aid, doc=root_doc)
+        self.AddThreadLocalRootTree(('app', app_name))
+        return res
 
     def DeleteApplication(self, app_name):
         '''
@@ -504,6 +531,7 @@ class ApplicationDataService(GenericChildDataService):
         self.mongo_service.delete('gitdeploys', {'application': app_name})
         self.mongo_service.delete('deployments', {'application': app_name})
         self.mongo_service.delete('groups', {'application': app_name})
+        self.RmThreadLocalRootTree(('app', app_name))
 
     def GetApplicationCensus(self, app_name):
         '''
@@ -594,6 +622,7 @@ class GroupDataService(GenericChildDataService):
 
         gid = self.mongo_service.create_new('groups', {'application': app, 'name': name}, 'Group', gp.get_doc())
         self.mongo_service.update_roottree(('app', app, 'groups', name), 'groups', gid)
+        self.AddThreadLocalRootTree(('app', app, 'groups', name))
 
     def DeleteGroup(self, app, name):
         '''
@@ -603,6 +632,7 @@ class GroupDataService(GenericChildDataService):
         assert elita.util.type_check.is_string(app)
         assert elita.util.type_check.is_string(name)
         self.mongo_service.rm_roottree(('app', app, 'groups', name))
+        self.RmThreadLocalRootTree(('app', app, 'groups', name))
         self.mongo_service.delete('groups', {'application': app, 'name': name})
 
     def GetGroupServers(self, app, name, environments=None):
@@ -663,6 +693,7 @@ class JobDataService(GenericChildDataService):
         })
         jid = self.mongo_service.create_new('jobs', {'job_id': str(job.job_id)}, 'Job', job.get_doc())
         self.mongo_service.update_roottree(('job', str(job.job_id)), 'jobs', jid)
+        self.AddThreadLocalRootTree(('job', str(job.job_id)))
         return job
 
     def NewJobData(self, data):
@@ -762,6 +793,7 @@ class ServerDataService(GenericChildDataService):
         self.mongo_service.update_roottree(('server', name), 'servers', sid, doc={
             "gitdeploys": self.NewContainer('GitDeployContainer', name, "gitdeploys")
         })
+        self.AddThreadLocalRootTree(('server', name))
         return {
             'NewServer': {
                 'name': name,
@@ -792,6 +824,7 @@ class ServerDataService(GenericChildDataService):
         assert elita.util.type_check.is_string(name)
         assert name in self.root['server']
         self.mongo_service.rm_roottree(('server', name))
+        self.RmThreadLocalRootTree(('server', name))
         self.mongo_service.delete('servers', {'name': name})
 
     def GetGitDeploys(self, name):
@@ -869,6 +902,7 @@ class GitDataService(GenericChildDataService):
                     gd_doc['actions'][k] = actions[k]
         gdid = self.mongo_service.create_new('gitdeploys', {'name': name, 'application': app_name}, 'GitDeploy', gd_doc)
         self.mongo_service.update_roottree(('app', app_name, 'gitdeploys', name), 'gitdeploys', gdid)
+        self.AddThreadLocalRootTree(('app', app_name, 'gitdeploys', name))
         return {"ok": "done"}
 
     def GetGitDeploys(self, app):
@@ -942,6 +976,7 @@ class GitDataService(GenericChildDataService):
         assert name in self.root['app'][app]['gitdeploys']
 
         self.mongo_service.rm_roottree(('app', app, 'gitdeploys', name))
+        self.RmThreadLocalRootTree(('app', app, 'gitdeploys', name))
         self.mongo_service.delete('gitdeploys', {'name': name, 'application': app})
 
     def GetGitProviders(self):
@@ -972,12 +1007,12 @@ class GitDataService(GenericChildDataService):
         '''
         assert name and type and auth
         assert elita.util.type_check.is_string(name)
-        assert elita.util.type_check.is_string(type)
+        assert elita.util.type_check.is_string(provider_type)
         assert provider_type in ('bitbucket', 'github')
         assert elita.util.type_check.is_dictlike(auth)
         assert 'username' in auth and 'password' in auth
-        assert isinstance(auth['username'], str)
-        assert isinstance(auth['password'], str)
+        assert elita.util.type_check.is_string(auth['username'])
+        assert elita.util.type_check.is_string(auth['password'])
 
         gpo = GitProvider({
             'name': name,
@@ -987,6 +1022,7 @@ class GitDataService(GenericChildDataService):
 
         gpid = self.mongo_service.create_new('gitproviders', {'name': name}, 'GitProvider', gpo.get_doc())
         self.mongo_service.update_roottree(('global', 'gitproviders', name), 'gitproviders', gpid)
+        self.AddThreadLocalRootTree(('global', 'gitproviders', name))
 
     def UpdateGitProvider(self, name, doc):
         '''
@@ -1008,6 +1044,7 @@ class GitDataService(GenericChildDataService):
         assert name in self.root['global']['gitproviders']
 
         self.mongo_service.rm_roottree(('global', 'gitproviders', name))
+        self.RmThreadLocalRootTree(('global', 'gitproviders', name))
         self.mongo_service.delete('gitproviders', {'name': name})
 
     def GetGitRepos(self, app):
@@ -1048,8 +1085,9 @@ class GitDataService(GenericChildDataService):
 
         @rtype: dict
         '''
-        assert app and name and keypair and gitprovider and uri
-        assert all([elita.util.type_check.is_string(p) for p in (app, name, keypair, gitprovider, uri)])
+        assert app and name and keypair and gitprovider
+        assert all([elita.util.type_check.is_string(p) for p in (app, name, keypair, gitprovider)])
+        assert elita.util.type_check.is_optional_str(uri)
         assert app in self.root['app']
         assert keypair in self.root['global']['keypairs']
         assert gitprovider in self.root['global']['gitproviders']
@@ -1073,6 +1111,7 @@ class GitDataService(GenericChildDataService):
 
         grid = self.mongo_service.create_new('gitrepos', {'name': name, 'application': app}, 'GitRepo', gro.get_doc())
         self.mongo_service.update_roottree(('app', app, 'gitrepos', name), 'gitrepos', grid)
+        self.AddThreadLocalRootTree(('app', app, 'gitrepos', name))
         return {'NewGitRepo': 'ok'}
 
     def UpdateGitRepo(self, app, name, doc):
@@ -1099,6 +1138,7 @@ class GitDataService(GenericChildDataService):
         assert name in self.root['app'][app]['gitrepos']
 
         self.mongo_service.rm_roottree(('app', app, 'gitrepos', name))
+        self.RmThreadLocalRootTree(('app', app, 'gitrepos', name))
         self.mongo_service.delete('gitrepos', {'name': name, 'application': app})
 
 class DeploymentDataService(GenericChildDataService):
@@ -1136,7 +1176,7 @@ class DeploymentDataService(GenericChildDataService):
         # we don't know the deployment 'name' until it's inserted
         self.mongo_service.modify('deployments', {'_id': did}, ('name',), str(did))
         self.mongo_service.update_roottree(('app', app, 'deployments', str(did)), 'deployments', did)
-
+        self.AddThreadLocalRootTree(('app', app, 'deployments', str(did)))
         return {
             'NewDeployment': {
                 'application': app,
@@ -1335,7 +1375,7 @@ class KeyDataService(GenericChildDataService):
             }
         kpid = self.mongo_service.create_new('keypairs', {'name': name}, 'KeyPair', kp_obj.get_doc())
         self.mongo_service.update_roottree(('global', 'keypairs', name), 'keypairs', kpid)
-
+        self.AddThreadLocalRootTree(('global', 'keypairs', name))
         return {
             'NewKeyPair': {
                 'status': 'ok'
@@ -1362,6 +1402,7 @@ class KeyDataService(GenericChildDataService):
         assert name in self.root['global']['keypairs']
 
         self.mongo_service.rm_roottree(('global', 'keypairs', name))
+        self.RmThreadLocalRootTree(('global', 'keypairs', name))
         self.mongo_service.delete('keypairs', {'name': name})
 
 
@@ -1416,7 +1457,6 @@ class DataService:
         if job_id is not None:
             self.salt_controller = salt_control.SaltController(self.settings)
             self.remote_controller = salt_control.RemoteCommands(self.salt_controller)
-            self.deploy_controller = deploy.DeployController(self)
 
     def GetAppKeys(self, app):
         return [k for k in self.root['app'][app] if k[0] != '_']
@@ -1905,7 +1945,7 @@ class DataValidator:
                 if c == 'gitrepos':
                     if d['name'] not in self.root['app'][d['application']]['gitrepos']:
                         logging.warning("orphan gitrepo object: '{}/{}', adding to root tree".format(d['application'], d['name']))
-                        self.root['app'][d['application']]['gitrepo'][d['name']] = {'_doc': bson.DBRef('gitrepos', d['_id'])}
+                        self.root['app'][d['application']]['gitrepos'][d['name']] = {'_doc': bson.DBRef('gitrepos', d['_id'])}
                 if c == 'gitdeploys':
                     if d['name'] not in self.root['app'][d['application']]['gitdeploys']:
                         logging.warning("orphan gitdeploy object: '{}/{}', adding to root tree".format(d['application'], d['name']))
