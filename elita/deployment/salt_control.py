@@ -9,6 +9,7 @@ import shutil
 import string
 import yaml
 import logging
+import copy
 import elita.deployment.gitservice
 
 try:
@@ -17,6 +18,7 @@ except ImportError:
     from yaml import Loader, Dumper
 
 import elita.util
+import elita.util.type_check
 
 __author__ = 'bkeroack'
 
@@ -31,6 +33,11 @@ class RemoteCommands:
     __metaclass__ = elita.util.LoggingMetaClass
 
     def __init__(self, sc):
+        '''
+        @type sc: SaltController
+        '''
+        assert sc
+        assert isinstance(sc, SaltController)
         self.sc = sc
 
     def get_os(self, server):
@@ -46,6 +53,56 @@ class RemoteCommands:
             return "unix"
         else:
             return "unknown"
+
+    def group_remote_servers_by_os(self, server_list):
+        '''
+        Determine which servers are Windows and which are Unix-like, so we know where to push keys, etc to.
+        '''
+        unix_servers = list()
+        win_servers = list()
+        for s in server_list:
+            ost = self.get_os(s)
+            if ost == OSTypes.Windows:
+                win_servers.append(s)
+            elif ost == OSTypes.Unix_like:
+                unix_servers.append(s)
+        return {
+            'unix': unix_servers,
+            'windows': win_servers
+        }
+
+    def get_remote_home(self, server_list):
+        '''
+        Get shell expansion of ~ on remote servers (home of user salt-minion is running as)
+
+        @type server_list: list(str)
+        '''
+        assert server_list
+        assert elita.util.type_check.is_seq(server_list)
+        servers_by_os = self.group_remote_servers_by_os(server_list)
+        res_win = self.sc.salt_command(servers_by_os['windows'], 'cmd.run', ['$env:userprofile'],
+                                        opts={'shell': 'powershell'}) if len(servers_by_os['windows']) > 0 else {}
+        res_unix = self.sc.salt_command(servers_by_os['unix'], 'cmd.run', ['eval "echo ~$(whoami)"']) \
+            if len(servers_by_os['unix']) > 0 else {}
+        assert len(set(res_unix.keys()).intersection(set(res_win.keys()))) == 0     # no common keys
+        return dict(res_unix, **res_win)
+
+    def get_home_expanded_path(self, server_list, path_list):
+        '''
+        Given a list of servers and a list of paths with '~' in them, return absolute paths
+
+        @type server_list: list(str)
+        @type path_list: list(str)
+        '''
+
+        assert server_list and path_list
+        assert elita.util.type_check.is_seq(server_list)
+        assert elita.util.type_check.is_seq(path_list)
+        assert all(['~' in p for p in path_list])
+
+        path_by_server = {item[0]: item[1] for item in zip(server_list, path_list)}
+        home_dirs = self.get_remote_home(server_list)
+        return {s: path_by_server[s].replace('~', home_dirs[s]) for s in path_by_server}
 
     def create_directory(self, server_list, path):
         assert isinstance(server_list, list)
@@ -93,11 +150,34 @@ class RemoteCommands:
         Push a list of files to corresponding remote paths. Make sure each remote path exists first.
         Do all pushes in a single salt call (faster).
 
+        Note that these must be files, not directories.
+
         local_remote_path_mapping = { 'local_path': 'remote_path' }
         '''
+        assert target and local_remote_path_mapping
+        assert elita.util.type_check.is_seq(target)
+        assert elita.util.type_check.is_dictlike(local_remote_path_mapping)
+        # paths can't be directories
+        assert all([p[-1] != '/' and local_remote_path_mapping[p][-1] != '/' for p in local_remote_path_mapping])
+
         calls = list()
         params = list()
         temp_files = list()
+
+        #delete remote path first
+        logging.debug("removing any existing remote_path")
+        for server in target:
+            for local_path in local_remote_path_mapping:
+                remote_path = local_remote_path_mapping[local_path]
+                expanded_path = self.get_home_expanded_path([server], [remote_path])[server] if '~' in remote_path else remote_path
+                file_exists = self.sc.salt_command([server], "file.file_exists", [expanded_path])
+                if file_exists[server]:
+                    self.sc.salt_command([server], "file.remove", [expanded_path])
+                    break
+                dir_exists = self.sc.salt_command([server], "file.directory_exists", [expanded_path])
+                if dir_exists[server]:
+                    self.sc.salt_command([server], "file.rmdir", [expanded_path])
+
         for local_path in local_remote_path_mapping:
             if 'salt://' in local_path:
                 salt_uri = local_path
@@ -105,13 +185,12 @@ class RemoteCommands:
                 salt_uri, tf = self._get_salt_uri(local_path)
                 temp_files.append(tf)
             remote_path = local_remote_path_mapping[local_path]
-            calls.append('file.mkdir')
+            expanded_path = self.get_home_expanded_path([server], [remote_path])[server] if '~' in remote_path else remote_path
             calls.append('cp.get_file')
-            params.append([remote_path])
-            params.append([salt_uri, remote_path])
-            logging.debug("push_files: remote_path: {}".format(remote_path))
+            params.append([salt_uri, expanded_path])
+            logging.debug("push_files: remote_path: {}".format(expanded_path))
 
-        rets = self.sc.salt_command(target, calls, params)
+        rets = self.sc.salt_command(target, calls, params, opts={'makedirs': True})
         for tf in temp_files:
             os.unlink(tf)
         return rets
@@ -122,8 +201,15 @@ class RemoteCommands:
     def run_shell_command(self, server_list, cmd):
         return self.sc.salt_command(server_list, 'cmd.run', [cmd])
 
+    def touch(self, server_list, remote_path):
+        #hack: assuming all servers in server_list have the same ~ path expansion
+        expanded_path = self.get_home_expanded_path(server_list, [remote_path])[server_list[0]] if '~' in remote_path else remote_path
+        return self.sc.salt_command(server_list, 'file.touch', [expanded_path])
+
     def append_to_file(self, server_list, remote_path, text_block):
-        return self.sc.salt_command(server_list, 'file.append', [remote_path, text_block])
+        #hack: assuming all servers in server_list have the same ~ path expansion
+        expanded_path = self.get_home_expanded_path(server_list, [remote_path])[server_list[0]] if '~' in remote_path else remote_path
+        return self.sc.salt_command(server_list, 'file.append', [expanded_path, text_block])
 
     def clone_repo(self, server_list, repo_uri, dest):
         cwd, dest_dir = os.path.split(dest)
@@ -179,9 +265,13 @@ class RemoteCommands:
 class SaltController:
     __metaclass__ = elita.util.LoggingMetaClass
 
-    def __init__(self, settings):
-        self.settings = settings
+    def __init__(self, datasvc):
+        '''
+        @type datasvc: elita.models.DataService
+        '''
+        self.settings = datasvc.settings
         self.salt_client = salt.client.LocalClient()
+        self.datasvc = datasvc
         self.file_roots = None
         self.pillar_roots = None
         self.sls_dir = None
@@ -204,7 +294,23 @@ class SaltController:
         return results
 
     def salt_command(self, target, cmd, arg, opts=None, timeout=120):
-        return self.salt_client.cmd(target, cmd, arg, kwarg=opts, timeout=timeout, expr_form='list')
+        results = self.salt_client.cmd(target, cmd, arg, kwarg=opts, timeout=timeout, expr_form='list')
+        results_sanitized = copy.deepcopy(results)
+        elita.util.change_dict_keys(results_sanitized, '.', '_')    # remove '.' in keys for mongo
+        # try to detect if there was an error or exception in any results
+        for path in elita.util.paths_from_nested_dict(results):
+            if elita.util.type_check.is_string(path[-1]):
+                if not all([word.lower() not in path[-1].lower() for word in ('error', 'exception', 'traceback')]):
+                    self.datasvc.jobsvc.NewJobData({'error': 'error detected in salt command results',
+                                                    'detected_in': path[-1],
+                                                    'all_results': results_sanitized,
+                                                    'target': target,
+                                                    'cmd': cmd,
+                                                    'arg': arg})
+                    raise FatalSaltError
+        self.datasvc.jobsvc.NewJobData({'salt_command': {'target': target, 'cmd': cmd, 'arg': arg,
+                                                         'results': results_sanitized}})
+        return results
 
     def run_command(self, target, cmd, shell, timeout=120):
         return self.salt_command(target, 'cmd.run', [cmd], opts={"shell": shell}, timeout=timeout)

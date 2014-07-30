@@ -52,7 +52,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
     
     elita.vm.provision :shell, path: "provision-elita.sh"
-    elita.vm.provision :shell, path: "setup_data.sh"
+    elita.vm.provision :shell, path: "setup-data/setup_data.sh"
   
   end
   

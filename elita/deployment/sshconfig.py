@@ -69,6 +69,7 @@ Host {alias}
         This is pretty hacky since the alias could already exist and this will just append to the config endlessly,
         but fixing that would involve parsing the whole config and that gets complicated.
         '''
+        remote_controller.touch(server_list, sshconf)
         return remote_controller.append_to_file(server_list, sshconf, alias_block)
 
 
@@ -98,23 +99,6 @@ Host {alias}
         self.add_local_alias(alias_block)
         return alias_name
 
-    def group_remote_servers_by_os(self, remote_controller, server_list):
-        '''
-        Determine which servers are Windows and which are Unix-like, so we know where to push keys, etc to.
-        '''
-        unix_servers = list()
-        win_servers = list()
-        for s in server_list:
-            ost = remote_controller.get_os(s)
-            if ost == OSTypes.Windows:
-                win_servers.append(s)
-            elif ost == OSTypes.Unix_like:
-                unix_servers.append(s)
-        return {
-            'unix': unix_servers,
-            'windows': win_servers
-        }
-
     def push_remote_keys(self, remote_controller, server_list, application, gitrepo_name, gitrepo_type, pubkey_data, privkey_data):
         '''
         Write keydata to temp files, push to remote servers. Add alias to remote ssh config
@@ -130,7 +114,7 @@ Host {alias}
 
         keyname = self.get_key_name(application, gitrepo_name)
         real_hostname = "bitbucket.org" if gitrepo_type == "bitbucket" else "github.com"
-        servers_by_os = self.group_remote_servers_by_os(remote_controller, server_list)
+        servers_by_os = remote_controller.group_remote_servers_by_os(server_list)
 
         res_win = dict()
         if len(servers_by_os['windows']) > 0:

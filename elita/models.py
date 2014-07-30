@@ -52,9 +52,9 @@ class MongoService:
         Returns id of new document
         '''
         assert elita.util.type_check.is_string(collection)
-        assert isinstance(keys, dict)
-        assert elita.util.type_check.is_string(classname)
-        assert isinstance(doc, dict)
+        assert elita.util.type_check.is_dictlike(keys)
+        assert elita.util.type_check.is_optional_str(classname)
+        assert elita.util.type_check.is_dictlike(doc)
         assert collection
         # keys/classname are only mandatory if remove_existing=True
         assert (keys and classname and remove_existing) or not remove_existing
@@ -706,7 +706,7 @@ class JobDataService(GenericChildDataService):
         assert data
         assert elita.util.type_check.is_serializable(data)
         assert self.job_id
-        self.mongo_service.create_new('job_data', None, None, {
+        self.mongo_service.create_new('job_data', {}, None, {
             'job_id': self.job_id,
             'data': data
         }, remove_existing=False)
@@ -951,7 +951,7 @@ class GitDataService(GenericChildDataService):
         assert elita.util.type_check.is_string(name)
         assert elita.util.type_check.is_dictlike(doc)
         assert app in self.root['app']
-        assert name in self.root['app']['gitdeploys']
+        assert name in self.root['app'][app]['gitdeploys']
 
         #clean up any actions
         if 'actions' in doc:
@@ -1425,16 +1425,16 @@ class DataService:
         self.root = root
         self.mongo_service = MongoService(db)
 
-        self.buildsvc = BuildDataService(self.mongo_service, root)
-        self.usersvc = UserDataService(self.mongo_service, root)
-        self.appsvc = ApplicationDataService(self.mongo_service, root)
-        self.jobsvc = JobDataService(self.mongo_service, root)
-        self.serversvc = ServerDataService(self.mongo_service, root)
-        self.gitsvc = GitDataService(self.mongo_service, root)
-        self.keysvc = KeyDataService(self.mongo_service, root)
-        self.deploysvc = DeploymentDataService(self.mongo_service, root)
+        self.buildsvc = BuildDataService(self.mongo_service, root, job_id=job_id)
+        self.usersvc = UserDataService(self.mongo_service, root, job_id=job_id)
+        self.appsvc = ApplicationDataService(self.mongo_service, root, job_id=job_id)
+        self.jobsvc = JobDataService(self.mongo_service, root, job_id=job_id)
+        self.serversvc = ServerDataService(self.mongo_service, root, job_id=job_id)
+        self.gitsvc = GitDataService(self.mongo_service, root, job_id=job_id)
+        self.keysvc = KeyDataService(self.mongo_service, root, job_id=job_id)
+        self.deploysvc = DeploymentDataService(self.mongo_service, root, job_id=job_id)
         self.actionsvc = ActionService(self)
-        self.groupsvc = GroupDataService(self.mongo_service, root)
+        self.groupsvc = GroupDataService(self.mongo_service, root, job_id=job_id)
 
         #cross-dependencies between child dataservice objects above
         self.appsvc.populate_dependencies({
@@ -1455,7 +1455,7 @@ class DataService:
         self.job_id = job_id
         #super ugly below - only exists for plugin access
         if job_id is not None:
-            self.salt_controller = salt_control.SaltController(self.settings)
+            self.salt_controller = salt_control.SaltController(self)
             self.remote_controller = salt_control.RemoteCommands(self.salt_controller)
 
     def GetAppKeys(self, app):

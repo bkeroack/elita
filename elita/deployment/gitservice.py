@@ -10,6 +10,7 @@ import socket
 import logging
 
 import elita.util
+import elita.util.type_check
 import salt_control
 import elita.builds
 import sshconfig
@@ -77,7 +78,7 @@ def remove_gitdeploy(datasvc, gitdeploy):
     return "done"
 
 def initialize_gitdeploy(datasvc, gitdeploy, server_list):
-    sc = salt_control.SaltController(datasvc.settings)
+    sc = salt_control.SaltController(datasvc)
     for s in server_list:
         if not sc.verify_connectivity(s):
             return {'error': "server '{}' not accessible via salt".format(s)}
@@ -92,7 +93,7 @@ def initialize_gitdeploy(datasvc, gitdeploy, server_list):
     return res
 
 def deinitialize_gitdeploy(datasvc, gitdeploy, server_list):
-    sc = salt_control.SaltController(datasvc.settings)
+    sc = salt_control.SaltController(datasvc)
     for s in server_list:
         if not sc.verify_connectivity(s):
             return {'error': "server '{}' not accessible via salt".format(s)}
@@ -231,7 +232,7 @@ class BitBucketRepoService(GitRepoService):
         return resp
 
     def delete_repo(self, name):
-        logging.debug(self, "Deleting repo: {}".format(name))
+        logging.debug("Deleting repo: {}".format(name))
         slug=slugify(name)
         username = self.auth['username']
         password = self.auth['password']
@@ -243,7 +244,7 @@ class BitBucketRepoService(GitRepoService):
         return resp
 
     def get_ssh_uri(self, name):
-        logging.debug(self, "getting clone URI for {}".format(name))
+        logging.debug("getting clone URI for {}".format(name))
         slug = slugify(name)
         username = self.auth['username']
         password = self.auth['password']
@@ -251,22 +252,28 @@ class BitBucketRepoService(GitRepoService):
         try:
             resp = r.json()
         except:
-            logging.debug(self, "exception parsing json resp!")
+            logging.debug("exception parsing json resp!")
             return None
         for l in resp['links']['clone']:
             if l['name'] == "ssh":
                 return l['href'][6:]  # chop off leading 'ssh://'
-        logging.debug(self, "nothing found in response!")
+        logging.debug("nothing found in response!")
         return None
 
 class GitDeployManager:
     __metaclass__ = elita.util.LoggingMetaClass
     
     def __init__(self, gitdeploy, datasvc):
+        '''
+        @type gitdeploy: dict
+        @type datasvc: elita.models.DataService
+        '''
+        assert gitdeploy and datasvc
+        assert elita.util.type_check.is_dictlike(gitdeploy)
         self.datasvc = datasvc
         self.gitdeploy = gitdeploy
         self.settings = datasvc.settings
-        self.sc = salt_control.SaltController(self.settings)
+        self.sc = salt_control.SaltController(datasvc)
         self.rc = salt_control.RemoteCommands(self.sc)
 
         if not os.path.isdir(self.get_path()):
@@ -274,8 +281,8 @@ class GitDeployManager:
             setup_local_gitrepo_dir(datasvc, gitrepo)
 
         #if there's no uri for associated gitrepo, try to fetch it
-        if len(gitdeploy['location']['gitrepo']['uri']) == 0:
-            logging.debug(self, "WARNING: found gitrepo with empty URI; fixing")
+        if not gitdeploy['location']['gitrepo']['uri']:
+            logging.debug("WARNING: found gitrepo with empty URI; fixing")
             repo_service = BitBucketRepoService if \
                 gitdeploy['location']['gitrepo']['gitprovider']['type'] == "bitbucket" else GitHubRepoService
             rs = repo_service(gitdeploy['location']['gitrepo']['gitprovider'], self.settings)
@@ -283,14 +290,13 @@ class GitDeployManager:
             assert uri is not None
             #need to get the original doc because of the dereferences
             git_repo = datasvc.gitsvc.GetGitRepo(gitdeploy['application'], gitdeploy['location']['gitrepo']['name'])
-            git_repo['uri'] = uri
-            datasvc.gitsvc.UpdateGitRepo(gitdeploy['application'], git_repo['name'], git_repo)
+            datasvc.gitsvc.UpdateGitRepo(gitdeploy['application'], git_repo['name'], {'uri': uri})
             self.gitdeploy = datasvc.gitsvc.GetGitDeploy(gitdeploy['application'], gitdeploy['name'])
 
         if "last_build" in gitdeploy['location']['gitrepo']:
             self.last_build = gitdeploy['location']['gitrepo']['last_build']
         else:
-            logging.debug(self, "WARNING: found gitrepo without last_build")
+            logging.debug("WARNING: found gitrepo without last_build")
             self.last_build = None
 
         self.deployed_build = gitdeploy['deployed_build']
@@ -355,17 +361,17 @@ class GitDeployManager:
         self.sc.rm_gitdeploy_yaml(self.gitdeploy)
 
     def delete_remote_dir(self, server_list):
-        logging.debug(self, "delete_remote_dir")
+        logging.debug("delete_remote_dir")
         path = self.gitdeploy['location']['path']
         res = self.rc.delete_directory(server_list, path)
-        logging.debug(self, "delete_remote_dir on servers: {}: resp: {}".format(server_list, res))
+        logging.debug("delete_remote_dir on servers: {}: resp: {}".format(server_list, res))
         return res
 
     def create_remote_dir(self, server_list):
-        logging.debug(self, "create_remote_dir")
+        logging.debug("create_remote_dir")
         path = self.gitdeploy['location']['path']
         res = self.rc.create_directory(server_list, path)
-        logging.debug(self, 'create_remote_dir on servers: {}: resp: {}'.format(server_list, res))
+        logging.debug('create_remote_dir on servers: {}: resp: {}'.format(server_list, res))
         return res
 
     def delete_remote_keypair(self, server_list):
@@ -376,47 +382,49 @@ class GitDeployManager:
         Push the keypair to the target servers and set up SSH alias
         '''
         sshc = sshconfig.SSHController()
-        return sshc.push_remote_keys(self.rc, server_list, self.gitdeploy['application'], self.gitdeploy['gitrepo']['name'],
+        return sshc.push_remote_keys(self.rc, server_list, self.gitdeploy['application'],
+                                     self.gitdeploy['location']['gitrepo']['name'],
+                                     self.gitdeploy['location']['gitrepo']['gitprovider']['type'],
                                      self.gitdeploy['location']['gitrepo']['keypair']['private_key'],
                                      self.gitdeploy['location']['gitrepo']['keypair']['public_key'])
 
     def clone_repo(self, server_list):
-        logging.debug(self, "clone_repo: cloning")
+        logging.debug("clone_repo: cloning")
         uri = "ssh://{}".format(self.gitdeploy['location']['gitrepo']['uri'])
         dest = self.gitdeploy['location']['path']
         res = self.rc.clone_repo(server_list, uri, dest)
-        logging.debug(self, "clone_repo: resp: {}".format(res))
+        logging.debug("clone_repo: resp: {}".format(res))
         return res
 
     def create_ignore(self, server_list):
         repo_path = self.gitdeploy['location']['path']
         fd, temp_name = tempfile.mkstemp()
-        logging.debug(self, "create_ignore: writing file")
+        logging.debug("create_ignore: writing file")
         if 'gitignore' in self.gitdeploy['options']:
             gi = self.gitdeploy['options']['gitignore']
             assert isinstance(gi, list)
             with open(temp_name, 'w') as f:
                 for l in gi:
                     f.write("{}\n".format(l))
-        logging.debug(self, "create_ignore: pushing gitignore")
+        logging.debug("create_ignore: pushing gitignore")
         remote_filename = os.path.join(repo_path, ".gitignore")
         res = self.rc.push_files(server_list, {temp_name: remote_filename})
-        logging.debug(self, "create_ignore: push resp: {}".format(res))
-        logging.debug(self, "create_ignore: autocrlf")
+        logging.debug("create_ignore: push resp: {}".format(res))
+        logging.debug("create_ignore: autocrlf")
         res = self.rc.set_git_autocrlf(server_list, repo_path)
-        logging.debug(self, "create_ignore: autocrlf resp: {}".format(res))
-        logging.debug(self, "create_ignore: disabling push")
+        logging.debug("create_ignore: autocrlf resp: {}".format(res))
+        logging.debug("create_ignore: disabling push")
         res = self.rc.set_git_push_url(server_list, repo_path, "do.not.push")
-        logging.debug(self, "create_ignore: disable push resp: {}".format(res))
-        logging.debug(self, "create_ignore: adding file")
+        logging.debug("create_ignore: disable push resp: {}".format(res))
+        logging.debug("create_ignore: adding file")
         res = self.rc.add_all_files_git(server_list, repo_path)
-        logging.debug(self, "create_ignore: add resp: {}".format(res))
-        logging.debug(self, "create_ignore: setting user config")
+        logging.debug("create_ignore: add resp: {}".format(res))
+        logging.debug("create_ignore: setting user config")
         res = self.rc.set_user_git(server_list, repo_path, "elita", "elita@daftserver")
-        logging.debug(self, "create_ignore: config resp: {}".format(res))
-        logging.debug(self, "create_ignore: committing")
+        logging.debug("create_ignore: config resp: {}".format(res))
+        logging.debug("create_ignore: committing")
         res = self.rc.commit_git(server_list, repo_path, "gitignore")
-        logging.debug(self, "create_ignore: commit resp: {}".format(res))
+        logging.debug("create_ignore: commit resp: {}".format(res))
         return res
 
     def get_path(self):
@@ -432,7 +440,7 @@ class GitDeployManager:
     def inspect_latest_diff(self):
         repo = git.Repo(self.get_path())
         m = repo.heads.master
-        logging.debug(self, "commit hash: {}".format(m.commit.hexsha))
+        logging.debug("commit hash: {}".format(m.commit.hexsha))
         s = m.commit.stats
         #replace all '.' with underscore to make Mongo happy
         #make copy for the hook
@@ -440,20 +448,20 @@ class GitDeployManager:
 
     def checkout_default_branch(self):
         branch = self.gitdeploy['location']['default_branch']
-        logging.debug(self, "checkout_default_branch: git checkout {}".format(branch))
+        logging.debug("checkout_default_branch: git checkout {}".format(branch))
         git = self.git_obj()
         return git.checkout(branch)
 
     def decompress_to_repo(self, package_doc):
         path = self.get_path()
-        logging.debug(self, "decompress_to_repo: deleting contents")
+        logging.debug("decompress_to_repo: deleting contents")
         for f in os.listdir(path):
             fpath = os.path.join(path, f)
             if os.path.isdir(fpath) and ".git" not in f:
                 shutil.rmtree(fpath)
             elif os.path.isfile(fpath):
                 os.unlink(fpath)
-        logging.debug(self, "decompress_to_repo: decompressing {} to {}".format(package_doc['filename'], path))
+        logging.debug("decompress_to_repo: decompressing {} to {}".format(package_doc['filename'], path))
         bf = elita.builds.BuildFile(package_doc)
         bf.decompress(path)
 
@@ -462,23 +470,23 @@ class GitDeployManager:
         return git.status()
 
     def add_files_to_repo(self):
-        logging.debug(self, "add_files_to_repo: git add")
+        logging.debug("add_files_to_repo: git add")
         git = self.git_obj()
         return git.add('-A')
 
     def commit_to_repo(self, build_name):
-        logging.debug(self, "commit_to_repo: git commit")
+        logging.debug("commit_to_repo: git commit")
         git = self.git_obj()
         return git.commit(m=build_name)
 
     def push_repo(self):
-        logging.debug(self, "push_repo: git push")
+        logging.debug("push_repo: git push")
         git = self.git_obj()
         return git.push()
 
     def update_repo_last_build(self, build_name):
         gitrepo_name = self.gitdeploy['location']['gitrepo']['name']
-        logging.debug(self, "update_repo_last_build: updating last_build on {} to {}".format(gitrepo_name, build_name))
+        logging.debug("update_repo_last_build: updating last_build on {} to {}".format(gitrepo_name, build_name))
         gitrepo = self.datasvc.gitsvc.GetGitRepo(self.gitdeploy['application'], gitrepo_name)
         gitrepo['last_build'] = build_name
         self.datasvc.gitsvc.UpdateGitRepo(self.gitdeploy['application'], gitrepo_name, gitrepo)

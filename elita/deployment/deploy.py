@@ -363,7 +363,7 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
     '''
 
     client, datasvc = regen_datasvc(settings, job_id)
-    sc = salt_control.SaltController(settings)
+    sc = salt_control.SaltController(datasvc)
     rc = salt_control.RemoteCommands(sc)
 
     assert len(gitdeploy_struct) == 1

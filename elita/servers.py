@@ -46,7 +46,7 @@ class ServerSetup:
             self.datasvc.serversvc.ChangeServer(name, {'status': status})
 
     def new(self, name):
-        sc = deployment.salt_control.SaltController(self.datasvc.settings)
+        sc = deployment.salt_control.SaltController(self.datasvc.settings, self.datasvc.job_id)
         rc = deployment.salt_control.RemoteCommands(sc)
 
         ost = self.set_server_type(rc, name)
