@@ -10,6 +10,7 @@ import pprint
 import datetime
 import pytz
 import logging
+import copy
 
 import elita
 from elita.crypto import keypair
@@ -737,11 +738,13 @@ class JobDataService(GenericChildDataService):
         now = datetime.datetime.now(tz=pytz.utc)
         doc = self.mongo_service.get('jobs', {'job_id': self.job_id})
         assert doc and elita.util.type_check.is_dictlike(doc) and '_id' in doc
+        results_sanitized = copy.deepcopy(results)
+        elita.util.change_dict_keys(results_sanitized, '.', '_')
         diff = (now - doc['_id'].generation_time).total_seconds()
         self.mongo_service.modify('jobs', {'job_id': self.job_id}, ('status',), "completed")
         self.mongo_service.modify('jobs', {'job_id': self.job_id}, ('completed_datetime',), now)
         self.mongo_service.modify('jobs', {'job_id': self.job_id}, ('duration_in_seconds',), diff)
-        self.NewJobData({"completed_results": results})
+        self.NewJobData({"completed_results": results_sanitized})
 
     def NewAction(self, app_name, action_name, params):
         '''

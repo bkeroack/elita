@@ -5,6 +5,7 @@ import elita.util
 import lockfile
 import tempfile
 
+import elita.util.type_check
 from salt_control import OSTypes
 
 ELITA_USER = "elita"
@@ -12,6 +13,9 @@ ELITA_USER = "elita"
 WINDOWS_KEY_LOCATION = 'C:\Program Files (x86)\Git\.ssh'
 UNIX_KEY_LOCATION = '~/.ssh'
 UNIX_MINION_USER = 'root'  # hack
+
+class UnknownGitproviderType(Exception):
+    pass
 
 class SSHController:
     __metaclass__ = elita.util.LoggingMetaClass
@@ -49,6 +53,24 @@ Host {alias}
 
     def get_alias(self, gitrepo_name, app):
         return "{}-{}".format(app, gitrepo_name)
+
+    def get_full_alias_uri(self, gitrepo):
+        '''
+        Get the full aliased URI for a given gitrepo
+        '''
+        assert gitrepo
+        assert elita.util.type_check.is_dictlike(gitrepo)
+        assert 'gitprovider' in gitrepo
+        assert elita.util.type_check.is_dictlike(gitrepo['gitprovider'])
+        assert 'type' in gitrepo['gitprovider']     # make sure gitprovider is dereferenced
+
+        alias_host = self.get_alias(gitrepo['name'], gitrepo['application'])
+        if gitrepo['gitprovider']['type'] == 'bitbucket':
+            return gitrepo['uri'].replace('bitbucket.org', alias_host)
+        elif gitrepo['gitprovider']['type'] == 'github':
+            return gitrepo['uri'].replace('github.com', alias_host)
+        else:
+            raise UnknownGitproviderType
 
     def add_local_alias(self, alias_block):
         '''
@@ -99,7 +121,7 @@ Host {alias}
         self.add_local_alias(alias_block)
         return alias_name
 
-    def push_remote_keys(self, remote_controller, server_list, application, gitrepo_name, gitrepo_type, pubkey_data, privkey_data):
+    def push_remote_keys(self, remote_controller, server_list, application, gitrepo_name, gitrepo_type, privkey_data, pubkey_data):
         '''
         Write keydata to temp files, push to remote servers. Add alias to remote ssh config
         '''
@@ -137,7 +159,8 @@ Host {alias}
             alias_block = self.get_alias_block(self.get_alias(gitrepo_name, application), real_hostname,
                                                local_to_remote_mapping[tf_priv])
             sshconf = os.path.join(UNIX_KEY_LOCATION, "config")
-            res_unix['push_files'] = remote_controller.push_files(servers_by_os['unix'], local_to_remote_mapping)
+            res_unix['push_files'] = remote_controller.push_files(servers_by_os['unix'], local_to_remote_mapping,
+                                                                  mode="600")
             res_unix['add_alias'] = self.add_remote_alias(remote_controller, servers_by_os['unix'], sshconf, alias_block)
 
         os.unlink(tf_pub)

@@ -390,7 +390,9 @@ class GitDeployManager:
 
     def clone_repo(self, server_list):
         logging.debug("clone_repo: cloning")
-        uri = "ssh://{}".format(self.gitdeploy['location']['gitrepo']['uri'])
+        sshc = sshconfig.SSHController()
+        uri = sshc.get_full_alias_uri(self.gitdeploy['location']['gitrepo'])
+        uri = "ssh://{}".format(uri)
         dest = self.gitdeploy['location']['path']
         res = self.rc.clone_repo(server_list, uri, dest)
         logging.debug("clone_repo: resp: {}".format(res))
@@ -420,7 +422,7 @@ class GitDeployManager:
         res = self.rc.add_all_files_git(server_list, repo_path)
         logging.debug("create_ignore: add resp: {}".format(res))
         logging.debug("create_ignore: setting user config")
-        res = self.rc.set_user_git(server_list, repo_path, "elita", "elita@daftserver")
+        res = self.rc.set_user_git(server_list, repo_path, "elita", "elita@elitaserver")
         logging.debug("create_ignore: config resp: {}".format(res))
         logging.debug("create_ignore: committing")
         res = self.rc.commit_git(server_list, repo_path, "gitignore")
