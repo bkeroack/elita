@@ -59,10 +59,11 @@ class MongoService:
         assert collection
         # keys/classname are only mandatory if remove_existing=True
         assert (keys and classname and remove_existing) or not remove_existing
+        if classname:
+            doc['_class'] = classname
         existing = None
         if remove_existing:
             existing = [d for d in self.db[collection].find(keys)]
-            doc['_class'] = classname
             for k in keys:
                 doc[k] = keys[k]
             if '_id' in doc:
@@ -209,7 +210,8 @@ class GenericChildDataService:
         assert elita.util.type_check.is_string(class_name)
         assert elita.util.type_check.is_string(name)
         assert elita.util.type_check.is_string(parent)
-        return self.mongo_service.create_new('containers', {'name': name}, class_name, {'name': name, 'parent': parent})
+        return self.mongo_service.create_new('containers', {'name': name, 'parent': parent}, class_name,
+                                             {'name': name, 'parent': parent}, remove_existing=False)
 
     def UpdateObject(self, collection, keys, doc):
         '''
@@ -268,10 +270,8 @@ class BuildDataService(GenericChildDataService):
         assert isinstance(attribs, dict)
         assert app_name and build_name
 
-        app_doc = self.mongo_service.get('application', {'name': app_name})
+        app_doc = self.mongo_service.get('applications', {'app_name': app_name})
         assert app_doc
-        build_doc = self.mongo_service.get('builds', {'app_name': app_name, 'build_name': build_name})
-        assert not build_doc
 
         buildobj = Build({
             'app_name': app_name,
@@ -320,7 +320,7 @@ class BuildDataService(GenericChildDataService):
         assert isinstance(doc, dict)
         assert app and name
         assert app in self.root['app']
-        assert name in self.root['app']['builds']
+        assert name in self.root['app'][app]['builds']
 
         self.UpdateObject('builds', {'app_name': app, 'build_name': name}, doc)
 
@@ -416,7 +416,7 @@ class UserDataService(GenericChildDataService):
         '''
         assert elita.util.type_check.is_string(username)
         assert username
-        return [d['token'] for d in self.mongo_service.get('tokens', {'username': username}, multi=True)]
+        return [d['token'] for d in self.mongo_service.get('tokens', {'username': username}, multi=True, empty=True)]
 
     def GetUserFromToken(self, token):
         '''
@@ -509,7 +509,7 @@ class ApplicationDataService(GenericChildDataService):
         aid = self.mongo_service.create_new('applications', {'app_name': app_name}, 'Application', {})
         root_doc = {
             "builds": {"_doc": bson.DBRef('containers', self.NewContainer("BuildContainer", "builds", app_name))},
-            "actions": {"_doc": bson.DBRef('containers', self.NewContainer("ActionContainer", "action", app_name))},
+            "actions": {"_doc": bson.DBRef('containers', self.NewContainer("ActionContainer", "actions", app_name))},
             "gitrepos": {"_doc": bson.DBRef('containers', self.NewContainer("GitRepoContainer", "gitrepos", app_name))},
             "gitdeploys": {"_doc": bson.DBRef('containers', self.NewContainer("GitDeployContainer", "gitdeploys", app_name))},
             "deployments": {"_doc": bson.DBRef('containers', self.NewContainer("DeploymentContainer", "deployments", app_name))},
@@ -753,13 +753,16 @@ class JobDataService(GenericChildDataService):
         persistent. Note further that this is *our* (meaning this thread's) root_tree and will only be in effect for the
         duration of this request, so we don't care about any root_tree updates by other threads running concurrently
         '''
-        assert app_name and action_name and params
+        assert app_name and action_name
         assert elita.util.type_check.is_string(app_name)
         assert elita.util.type_check.is_string(action_name)
-        assert elita.util.type_check.is_dictlike(params)
+        assert elita.util.type_check.is_optional_seq(params)
         logging.debug("NewAction: app_name: {}".format(app_name))
         logging.debug("NewAction: action_name: {}".format(action_name))
         if app_name in self.deps['ApplicationDataService'].GetApplications():
+            assert app_name in self.root['app']
+            assert 'actions' in self.root['app'][app_name]
+            assert elita.util.type_check.is_dictlike(self.root['app'][app_name]['actions'])
             self.root['app'][app_name]['actions'][action_name] = Action(app_name, action_name, params, self)
         else:
             logging.debug("NewAction: application '{}' not found".format(app_name))
@@ -1454,6 +1457,9 @@ class DataService:
             'ApplicationDataService': self.appsvc
         })
 
+        #load all plugins and register actions/hooks
+        self.actionsvc.register()
+
         #passed in if this is part of an async job
         self.job_id = job_id
         #super ugly below - only exists for plugin access
@@ -1807,7 +1813,7 @@ class RootTree(collections.MutableMapping):
         self.updater = updater
 
     def is_action(self):
-        return self.doc is not None and self.doc['_class'] == 'ActionContainer'
+        return self.doc and self.doc['_class'] == 'ActionContainer'
 
     def __getitem__(self, key):
         key = self.__keytransform__(key)
@@ -1818,9 +1824,11 @@ class RootTree(collections.MutableMapping):
                 return self.tree[key]
             doc = self.db.dereference(self.tree[key]['_doc'])
             if doc is None:
+                logging.debug("RootTree: __getitem__: {}: doc is None: KeyError".format(key))
                 raise KeyError
             return RootTree(self.db, self.updater, self.tree[key], doc)
         else:
+            logging.debug("RootTree: __getitem__: {}: key not in self.tree: KeyError".format(key))
             raise KeyError
 
     def __setitem__(self, key, value):
@@ -1878,7 +1886,8 @@ class DataValidator:
         @type root: dict
         @type db: pymongo.database.Database
         '''
-        assert settings and root and db
+        # root is optional if this is the first time elita runs
+        assert settings and db
         self.settings = settings
         self.root = root
         self.db = db
@@ -1902,10 +1911,8 @@ class DataValidator:
         self.SaveRoot()
 
     def SaveRoot(self):
-        if '_id' in self.root:
-            self.db['root_tree'].update({"_id": self.root['_id']}, self.root)
-        else:
-            self.db['root_tree'].insert(self.root)
+        logging.debug('saving root_tree')
+        self.db['root_tree'].save(self.root)
 
     def NewContainer(self, class_name, name, parent):
         cdoc = self.db['containers'].insert({'_class': class_name,
@@ -2036,10 +2043,21 @@ class DataValidator:
         users = [u for u in self.db['users'].find()]
         if DEFAULT_ADMIN_USERNAME not in [u['username'] for u in users]:
             logging.warning("admin user document not found; creating")
-            datasvc = DataService(settings=self.settings, db=self.db, root=elita.generate_root_tree(self.db))
-            uid, pid = datasvc.usersvc.NewUser(DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD, DEFAULT_ADMIN_PERMISSIONS, {})
-            #this is ugly. DataService updates root_tree internally but it will be overwritten by this class
-            #so we have to reflect the changes in our copy of root_tree
+            userobj = User({
+                'username': DEFAULT_ADMIN_USERNAME,
+                'permissions': DEFAULT_ADMIN_PERMISSIONS,
+                'password': DEFAULT_ADMIN_PASSWORD
+            })
+            doc = userobj.get_doc()
+            doc['_class'] = 'User'
+            uid = self.db['users'].insert(doc)
+            pid = self.db['userpermissions'].insert({
+                "_class": "UserPermissions",
+                "username": DEFAULT_ADMIN_USERNAME,
+                "applications": list(),
+                "actions": dict(),
+                "servers": list()
+            })
             self.root['global']['users'][DEFAULT_ADMIN_USERNAME] = {
                 '_doc': bson.DBRef('users', uid),
                 'permissions': {
@@ -2340,16 +2358,16 @@ class DataValidator:
             self.db['containers'].save(c)
 
     def check_root(self):
-        self.root = dict() if self.root is None else self.root
+        if not self.root:
+            logging.warning("no root_tree found!")
+        self.root = dict() if not self.root else self.root
         if '_class' in self.root:
             logging.warning("'_class' found in base of root; deleting")
             del self.root['_class']
         if '_doc' not in self.root:
             logging.warning("'_doc' not found in base of root")
             self.root['_doc'] = self.NewContainer('Root', 'Root', '')
-        rt_list = [d for d in self.db['root_tree'].find({'_lock': {'$exists': False}})]
-        if not rt_list:
-            logging.warning("no root_tree found!")
+        rt_list = [d for d in self.db['root_tree'].find()]
         if len(rt_list) > 1:
             logging.warning("duplicate root_tree docs found! Removing all but the first")
             for d in rt_list[1:]:

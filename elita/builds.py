@@ -56,7 +56,7 @@ def store_uploaded_build(datasvc, app, build, file_type, temp_file):
             build_doc['files'].append({"file_type": ftype, "path": fname})
     build_doc['stored'] = True
     logging.debug("packages: {}".format(build_doc['packages'].keys()))
-    datasvc.buildsvc.UpdateBuild(app, build_doc)
+    datasvc.buildsvc.UpdateBuild(app, build, build_doc)
 
     datasvc.jobsvc.NewJobData({'status': 'running hook BUILD_UPLOAD_SUCCESS'})
     args = {

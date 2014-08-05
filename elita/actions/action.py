@@ -49,6 +49,8 @@ class ActionService:
 
     def __init__(self, datasvc):
         self.datasvc = datasvc
+
+    def register(self):
         self.hooks = RegisterHooks(self.datasvc)
         self.hooks.register()
         self.actions = RegisterActions(self.datasvc)

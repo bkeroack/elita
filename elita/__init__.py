@@ -6,8 +6,11 @@ import pymongo
 import models
 
 def GetMongoClient(settings):
+    assert settings
     client = pymongo.MongoClient(settings['elita.mongo.host'], int(settings['elita.mongo.port']))
+    assert client
     db = client[settings['elita.mongo.db']]
+    assert db
     return db, db['root_tree'].find_one(), client
 
 def DataStore(request):
@@ -15,14 +18,15 @@ def DataStore(request):
     return db
 
 def generate_root_tree(db):
+    assert db
     tree = db['root_tree'].find_one()
+    assert tree
     updater = models.RootTreeUpdater(tree, db)
     return models.RootTree(db, updater, tree, db.dereference(tree['_doc']))
 
 def RootService(request):
     '''
     Get root tree.
-
     '''
     return generate_root_tree(request.db)
 
@@ -36,6 +40,7 @@ def root_factory(request):
 
 def main(global_config, **settings):
     """ This function returns a Pyramid WSGI application.
+    @type settings: pyramid.registry.Registry
     """
 
     #data validator / migrations

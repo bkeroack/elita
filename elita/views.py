@@ -198,6 +198,11 @@ class GenericView:
 class NotFoundView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, permissionless=True)
+        logger.debug("REQUEST: url: {}".format(request.url))
+        logger.debug("REQUEST: context: {}".format(context.__class__.__name__))
+        logger.debug("REQUEST: method: {}".format(request.method))
+        logger.debug("REQUEST: params: {}".format(request.params))
+
     def notfound(self):
         return self.Error(404, "not found (404)")
     def GET(self):
