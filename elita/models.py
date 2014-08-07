@@ -1159,11 +1159,12 @@ class DeploymentDataService(GenericChildDataService):
         assert elita.util.type_check.is_string(build_name)
         assert app in self.root['app']
         assert build_name in self.root['app'][app]['builds']
-        assert all([elita.util.type_check.is_seq(p) for p in (environments, groups, servers, gitdeploys)])
-        assert set(environments).issubset(set(self.deps['ServerDataService'].GetEnvironments()))
-        assert all([g in self.root['app'][app]['groups'] for g in groups])
-        assert all([s in self.root['server'] for s in servers])
-        assert all([gd in self.root['app'][app]['gitdeploys'] for gd in gitdeploys])
+        assert all([not p for p in (environments, groups)]) or all([elita.util.type_check.is_seq(p) for p in (environments, groups)])
+        assert all([not p for p in (servers, gitdeploys)]) or all([elita.util.type_check.is_seq(p) for p in (servers, gitdeploys)])
+        assert not environments or set(environments).issubset(set(self.deps['ServerDataService'].GetEnvironments()))
+        assert not groups or all([g in self.root['app'][app]['groups'] for g in groups])
+        assert not servers or all([s in self.root['server'] for s in servers])
+        assert not gitdeploys or all([gd in self.root['app'][app]['gitdeploys'] for gd in gitdeploys])
 
 
         dpo = Deployment({
@@ -1283,14 +1284,37 @@ class DeploymentDataService(GenericChildDataService):
 
         self.UpdateDeployment(app, name, doc)
 
+    def StartDeployment_Phase(self, app, name, phase):
+        '''
+        Mark the progress field currently_on as phaseN
+        '''
+        assert app and name and phase
+        assert all([elita.util.type_check.is_string(p) for p in (app, name)])
+        assert isinstance(phase, int) and (phase == 1 or phase == 2)
+        assert app in self.root['app']
+        assert name in self.root['app'][app]['deployments']
+
+        self.UpdateDeployment(app, name, {'progress': {'currently_on': 'phase{}'.format(phase)}})
+
+    def CompleteDeployment(self, app, name):
+        '''
+        Mark deployment as done
+        '''
+        assert app and name
+        assert all([elita.util.type_check.is_string(p) for p in (app, name)])
+        assert app in self.root['app']
+        assert name in self.root['app'][app]['deployments']
+
+        self.UpdateDeployment(app, name, {'progress': {'currently_on': 'completed'}})
+
     def UpdateDeployment_Phase1(self, app, name, gitdeploy, progress=None, step=None, changed_files=None):
         '''
         Phase 1 is gitdeploy processing: decompressing package to local gitrepo, computing changes, commiting/pushing
         '''
         assert app and name and gitdeploy
         assert all([elita.util.type_check.is_string(p) for p in (app, name, gitdeploy)])
-        assert (isinstance(progress, int) and progress >= 0) or not progress
-        assert elita.util.type_check.is_string(step) or not step
+        assert (isinstance(progress, int) and 0 <= progress <= 100) or not progress
+        assert elita.util.type_check.is_string(step) or elita.util.type_check.is_seq(step) or not step
         assert elita.util.type_check.is_optional_seq(changed_files)
         assert app in self.root['app']
         assert name in self.root['app'][app]['deployments']
@@ -1303,14 +1327,14 @@ class DeploymentDataService(GenericChildDataService):
         if changed_files:
             progress_dict['changed_files'] = changed_files
 
-        self.UpdateDeployment(app, name, {'progress': {'phase1': {'gitdeploys': {name: progress_dict}}}})
+        self.UpdateDeployment(app, name, {'progress': {'phase1': {'gitdeploys': {gitdeploy: progress_dict}}}})
 
     def UpdateDeployment_Phase2(self, app, name, gitdeploy, servers, batch, progress=None, state=None):
         '''
         Phase 2 is performing git pulls across all remote servers. Progress is presented per server, but the backend
         deployment is done per gitdeploy (to multiple servers)
         '''
-        assert app and name and gitdeploy and servers and batch
+        assert app and name and gitdeploy and servers
         assert all([elita.util.type_check.is_string(p) for p in (app, name, gitdeploy)])
         assert elita.util.type_check.is_seq(servers)
         assert isinstance(batch, int) and batch >= 0
@@ -1455,6 +1479,10 @@ class DataService:
         self.jobsvc.populate_dependencies({
             'ActionService': self.actionsvc,
             'ApplicationDataService': self.appsvc
+        })
+        self.deploysvc.populate_dependencies({
+            'ServerDataService': self.serversvc,
+            'GroupDataService': self.groupsvc
         })
 
         #load all plugins and register actions/hooks

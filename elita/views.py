@@ -522,6 +522,9 @@ class DeploymentContainerView(GenericView):
         build_name = self.req.params['build_name']
         if build_name not in self.datasvc.buildsvc.GetBuilds(app):
             return self.Error(400, "unknown build '{}'".format(build_name))
+        build_obj = self.datasvc.buildsvc.GetBuild(app, build_name)
+        if not build_obj.stored:
+            return self.Error(400, "no stored data for build: {} (stored == false)".format(build_name))
         try:
             body = self.req.json_body
         except:
@@ -546,6 +549,11 @@ class DeploymentContainerView(GenericView):
             return self.Error(400, "invalid rolling_pause: {}".format(rolling_pause))
 
         if "environments" in body and "groups" in body:
+
+            for c in ('environments', 'groups'):
+                if not isinstance(body[c], list):
+                    return self.Error(400, "{} must be a list".format(c))
+
             envs = self.datasvc.serversvc.GetEnvironments()
             if not self.check_against_existing(envs.keys(), body['environments']):
                 return self.Error(400, "unknown environments: {}".format(self.get_unknown(envs.keys(), body['environments'])))
@@ -570,6 +578,10 @@ class DeploymentContainerView(GenericView):
                                       .format(k, body['environments'], body['groups']))
 
         if "servers" in body and "gitdeploys" in body:
+
+            for c in ('servers', 'gitdeploys'):
+                if not isinstance(body[c], list):
+                    return self.Error(400, "{} must be a list".format(c))
 
             existing_servers = self.datasvc.serversvc.GetServers()
             if not self.check_against_existing(existing_servers, body['servers']):
@@ -598,8 +610,15 @@ class DeploymentContainerView(GenericView):
         if len(target['servers']) == 0:
             return self.Error(400, "no servers specified for deployment (are you sure the gitdeploys are initialized?)")
 
-        environments = body['environments'] if 'environments' in body else "(not specified)"
-        groups = body['groups'] if 'groups' in body else "(not specified)"
+        # do a final check to make sure all required packages are present in the build
+        gddocs = [self.datasvc.gitsvc.GetGitDeploy(app, gd) for gd in target['gitdeploys']]
+        for gd in gddocs:
+            if gd['package'] not in build_obj.packages:
+                return self.Error(400, "package {} not found in build {} (required by gitdeploy {})"
+                                  .format(gd['package'], build_name, gd['name']))
+
+        environments = body['environments'] if 'environments' in body else None
+        groups = body['groups'] if 'groups' in body else None
         dpo = self.datasvc.deploysvc.NewDeployment(app, build_name, environments, groups, target['servers'], target['gitdeploys'])
         d_id = dpo['NewDeployment']['id']
         target['environments'] = environments if isinstance(environments, list) else None
@@ -610,7 +629,7 @@ class DeploymentContainerView(GenericView):
             'target': target,
             'rolling_divisor': rolling_divisor,
             'rolling_pause': rolling_pause,
-            'deployment': d_id
+            'deployment_id': d_id
         }
         msg = self.run_async('deploy_{}_{}'.format(app,  build_name), "deployment", args,
                              elita.deployment.deploy.run_deploy, args)

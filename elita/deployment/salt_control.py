@@ -257,23 +257,28 @@ class RemoteCommands:
 
     def commit_git(self, server_list, location, message):
         return self.sc.salt_command(server_list, 'cmd.run', ['git commit -m "{}"'.format(message)],
-                                    opts={'cwd': location}, timeout=120)
+                                    opts={'cwd': location}, timeout=30)
 
     def set_user_git(self, server_list, location, email, name):
         return {
             "name": self.sc.salt_command(server_list, 'cmd.run', ['git config user.name "{}"'.format(name)],
-                                         opts={'cwd': location}, timeout=120),
+                                         opts={'cwd': location}, timeout=30),
             "email": self.sc.salt_command(server_list, 'cmd.run', ['git config user.email "{}"'.format(email)],
-                                         opts={'cwd': location}, timeout=120)
+                                         opts={'cwd': location}, timeout=30)
         }
 
     def set_git_autocrlf(self, server_list, location):
         return self.sc.salt_command(server_list, 'cmd.run', ['git config core.autocrlf input'],
-                                    opts={'cwd': location}, timeout=120)
+                                    opts={'cwd': location}, timeout=30)
 
     def set_git_push_url(self, server_list, location, url):
         return self.sc.salt_command(server_list, 'cmd.run', ['git remote set-url --push origin "{}"'.format(url)],
-                                    opts={'cwd': location}, timeout=120)
+                                    opts={'cwd': location}, timeout=30)
+
+    # def set_git_upstream(self, server_list, location, branch):
+    #     return self.sc.salt_command(server_list, 'cmd.run',
+    #                                 ['git branch --set-upstream-to=origin/{} {}'.format(branch, branch)],
+    #                                 opts={'cwd': location}, timeout=30)
 
     def highstate(self, server_list):
         return self.sc.salt_command(server_list, 'state.highstate', [], timeout=300)

@@ -4,7 +4,7 @@ import sys
 import logging
 import traceback
 import time
-import multiprocessing
+import billiard
 import itertools
 import pprint
 pp = pprint.PrettyPrinter(indent=4)
@@ -44,6 +44,7 @@ def run_deploy(datasvc, application, build_name, target, rolling_divisor, rollin
         logging.debug("run_deploy: EXCEPTION: {}".format(f_exc))
         datasvc.deploysvc.UpdateDeployment(application, deployment_id, {"status": "error"})
         return {"deploy_status": "error", "details": results}
+    datasvc.deploysvc.CompleteDeployment(application, deployment_id)
     datasvc.deploysvc.UpdateDeployment(application, deployment_id, {"status": "complete" if ret else "error"})
     return {"deploy_status": "done" if ret else "error"}
 
@@ -151,7 +152,7 @@ class BatchCompute:
     def compute_rolling_batches(divisor, rolling_group_docs, nonrolling_group_docs):
         assert isinstance(divisor, int)
         assert len(rolling_group_docs) > 0
-        assert isinstance(rolling_group_docs, dict)
+        assert elita.util.type_check.is_dictlike(rolling_group_docs)
         assert all(map(lambda x: 'servers' in x[1] and 'gitdeploys' in x[1], rolling_group_docs.iteritems()))
         return BatchCompute.dedupe_batches(
             BatchCompute.add_nonrolling_groups(
@@ -267,7 +268,15 @@ def _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, settings, jo
                                               progress=10,
                                               step='Checking out default branch')
 
-    res = gdm.checkout_default_branch()
+    try:
+        res = gdm.checkout_default_branch()
+    except:
+        exc_msg = str(sys.exc_info()[1]).split('\n')
+        exc_msg.insert(0, "ERROR: checkout_default_branch")
+        datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
+                                                  step=exc_msg)
+        return
+
     logging.debug("_threadsafe_process_gitdeploy: git checkout output: {}".format(str(res)))
 
     if gdm.last_build == build_doc['build_name']:
@@ -281,14 +290,29 @@ def _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, settings, jo
                                               step='Decompressing package to repository')
 
         datasvc.jobsvc.NewJobData({"ProcessGitdeploys": {gddoc['name']: "processing"}})
-        gdm.decompress_to_repo(package_doc)
+
+        try:
+            gdm.decompress_to_repo(package_doc)
+        except:
+            exc_msg = str(sys.exc_info()[1]).split('\n')
+            exc_msg.insert(0, "ERROR: decompress_to_repo")
+            datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
+                                                      step=exc_msg)
+            return
 
         datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
                                               progress=50,
                                               step='Checking for changes')
 
         logging.debug("_threadsafe_process_gitdeploy: Checking for changes")
-        res = gdm.check_repo_status()
+        try:
+            res = gdm.check_repo_status()
+        except:
+            exc_msg = str(sys.exc_info()[1]).split('\n')
+            exc_msg.insert(0, "ERROR: check_repo_status")
+            datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
+                                                      step=exc_msg)
+            return
         logging.debug("_threadsafe_process_gitdeploy: git status results: {}".format(str(res)))
 
         if "nothing to commit" in res:
@@ -301,22 +325,48 @@ def _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, settings, jo
                                               progress=60,
                                               step='Adding changes to repository')
             datasvc.jobsvc.NewJobData({"ProcessGitdeploys": {gddoc['name']: "adding to repository"}})
-            res = gdm.add_files_to_repo()
+            try:
+                res = gdm.add_files_to_repo()
+            except:
+                exc_msg = str(sys.exc_info()[1]).split('\n')
+                exc_msg.insert(0, "ERROR: add_files_to_repo")
+                datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
+                                                          step=exc_msg)
+                return
             logging.debug("_threadsafe_process_gitdeploy: git add result: {}".format(str(res)))
 
             datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
                                               progress=70,
                                               step='Committing changes to repository')
             datasvc.jobsvc.NewJobData({"ProcessGitdeploys": {gddoc['name']: "committing"}})
-            res = gdm.commit_to_repo(build_doc['build_name'])
+            try:
+                res = gdm.commit_to_repo(build_doc['build_name'])
+            except:
+                exc_msg = str(sys.exc_info()[1]).split('\n')
+                exc_msg.insert(0, "ERROR: commit_to_repo")
+                datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
+                                                          step=exc_msg)
+                return
             logging.debug("_threadsafe_process_gitdeploy: git commit result: {}".format(str(res)))
 
             datasvc.jobsvc.NewJobData({"ProcessGitdeploys": {gddoc['name']: "checking diff"}})
-            res = gdm.inspect_latest_diff()
+            try:
+                res = gdm.inspect_latest_diff()
+            except:
+                exc_msg = str(sys.exc_info()[1]).split('\n')
+                exc_msg.insert(0, "ERROR: inspect_latest_diff")
+                datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
+                                                          step=exc_msg)
+                return
             logging.debug("_threadsafe_process_gitdeploy: inspect diff result: {}".format(str(res)))
 
             # change to a list of dicts without filenames as keys to keep mongo happy
-            changed_files = [res[k].update({'filename': k}) for k in res]
+            changed_files = [{
+                'filename': k,
+                'deletions': res[k]['deletions'],
+                'lines': res[k]['lines'],
+                'insertions': res[k]['insertions']
+            } for k in res]
 
             datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
                                               changed_files=changed_files)
@@ -325,14 +375,28 @@ def _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, settings, jo
                                               progress=90,
                                               step='Pushing changes to gitprovider')
             datasvc.jobsvc.NewJobData({"ProcessGitdeploys": {gddoc['name']: "pushing"}})
-            res = gdm.push_repo()
+            try:
+                res = gdm.push_repo()
+            except:
+                exc_msg = str(sys.exc_info()[1]).split('\n')
+                exc_msg.insert(0, "ERROR: push_repo")
+                datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
+                                                          step=exc_msg)
+                return
             logging.debug("_threadsafe_process_gitdeploy: git push result: {}".format(str(res)))
             datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
                                               progress=100,
                                               step='Complete')
             # Changes detected, so add gitdeploy and the relevant servers that must be deployed to
             changed = True
-        gdm.update_repo_last_build(build_doc['build_name'])
+        try:
+            gdm.update_repo_last_build(build_doc['build_name'])
+        except:
+            exc_msg = str(sys.exc_info()[1]).split('\n')
+            exc_msg.insert(0, "ERROR: update_repo_last_build")
+            datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
+                                                      step=exc_msg)
+            return
     # in the event that the gitrepo hasn't changed, but the gitdeploy indicates that we haven't successfully
     # deployed to all servers, we want to force git pull
     # this can happen if multiple gitdeploys share the same gitrepo
@@ -354,7 +418,7 @@ def _threadsafe_pull_callback(results, tag, **kwargs):
     datasvc.jobsvc.NewJobData({"DeployServers": {"results": results, "tag": tag}})
     for r in results:
         datasvc.deploysvc.UpdateDeployment_Phase2(app, deployment_id, gitdeploy, [r], batch_number,
-                                                  state=results[r])
+                                                  state=results[r]['ret'])
 
 def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, job_id, deployment_id, batch_number):
     '''
@@ -483,8 +547,8 @@ class DeployController:
         @type gitdeploys: list(str)
         '''
         assert app_name and build_name and servers and gitdeploys
-        assert isinstance(app_name, str)
-        assert isinstance(build_name, str)
+        assert elita.util.type_check.is_string(app_name)
+        assert elita.util.type_check.is_string(build_name)
         assert elita.util.type_check.is_seq(servers)
         assert elita.util.type_check.is_seq(gitdeploys)
         assert isinstance(batch_number, int) and batch_number >= 0
@@ -494,13 +558,15 @@ class DeployController:
         #reset changed gitdeploys
         self.changed_gitdeploys = dict()
 
-        queue = multiprocessing.Queue()
+        queue = billiard.Queue()
         procs = list()
+
+        self.datasvc.deploysvc.StartDeployment_Phase(app_name, self.deployment_id, 1)
         for gd in gitdeploys:
             gddoc = self.datasvc.gitsvc.GetGitDeploy(app_name, gd)
             gitdeploy_docs[gd] = gddoc
             if parallel:
-                p = multiprocessing.Process(target=_threadsafe_process_gitdeploy,
+                p = billiard.Process(target=_threadsafe_process_gitdeploy,
                                             args=(gddoc, build_doc, servers, queue, self.datasvc.settings,
                                                   self.datasvc.job_id, self.deployment_id))
                 p.start()
@@ -527,18 +593,19 @@ class DeployController:
             for g in gd:
                 self.changed_gitdeploys[g] = gd[g]
 
-        queue = multiprocessing.Queue()
+        queue = billiard.Queue()
         procs = list()
+        self.datasvc.deploysvc.StartDeployment_Phase(app_name, self.deployment_id, 2)
         for gd in self.changed_gitdeploys:
             if parallel:
-                p = multiprocessing.Process(target=_threadsafe_pull_gitdeploy,
+                p = billiard.Process(target=_threadsafe_pull_gitdeploy,
                                             args=(app_name, {gd: self.changed_gitdeploys[gd]}, queue, self.datasvc.settings,
                                                   self.datasvc.job_id, self.deployment_id, batch_number))
                 p.start()
                 procs.append(p)
             else:
                 _threadsafe_pull_gitdeploy(app_name, {gd: self.changed_gitdeploys[gd]}, queue, self.datasvc.settings,
-                                           self.datasvc.job_id, self.deployment_id)
+                                           self.datasvc.job_id, self.deployment_id, batch_number)
         if parallel:
             for p in procs:
                 p.join(600)

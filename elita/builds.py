@@ -30,7 +30,9 @@ def store_indirect_build(datasvc, app, build, file_type, uri, verify):
 
 def store_uploaded_build(datasvc, app, build, file_type, temp_file):
     builds_dir = datasvc.settings['elita.builds.dir']
-    bs_obj = BuildStorage(builds_dir, app, build, file_type=file_type, input_file=temp_file)
+    minimum_build_size = int(datasvc.settings['elita.builds.minimum_size'])
+    bs_obj = BuildStorage(builds_dir, app, build, file_type=file_type, input_file=temp_file,
+                          size_cutoff=minimum_build_size)
     datasvc.jobsvc.NewJobData({'status': 'validating file size and type'})
     if not bs_obj.validate():
         return {'error': "Invalid file type or corrupted file--check log"}
@@ -91,6 +93,8 @@ class BuildStorage:
     
     def __init__(self, builds_toplevel_dir=None, application=None, name=None, file_type=None, input_file=None,
                  size_cutoff=1000000):
+        assert isinstance(size_cutoff, int)
+        assert size_cutoff > 0
         self.builds_toplevel_dir = builds_toplevel_dir
         self.name = name
         self.application = application
@@ -113,7 +117,10 @@ class BuildStorage:
         return fname
 
     def validate_file_size(self):
-        return os.path.getsize(self.temp_file_name) >= self.size_cutoff
+        filesize = os.path.getsize(self.temp_file_name)
+        logging.debug("validate_file_size: size_cutoff: {}".format(self.size_cutoff))
+        logging.debug("validate_file_size: temp size: {}".format(filesize))
+        return filesize >= self.size_cutoff
 
     def validate(self):
         if not self.validate_file_size():

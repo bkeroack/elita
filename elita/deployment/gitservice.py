@@ -201,6 +201,8 @@ class GitRepoService:
                 logging.debug("setup_gitdeploy_dir: cloning repo")
                 res = git.clone("ssh://{}".format(alias_uri), gitrepo_name)
                 logging.debug("setup_gitdeploy_dir: res: {}".format(res))
+                res = git.branch("--set-upstream-to=origin/master", "master")
+                logging.debug("setup_gitdeploy_dir: git set upstream: {}".format(res))
                 self.git_user_config(path)
         else:
             logging.debug("setup_gitdeploy_dir: local dir exists! not creating")
@@ -484,7 +486,7 @@ class GitDeployManager:
     def push_repo(self):
         logging.debug("push_repo: git push")
         git = self.git_obj()
-        return git.push()
+        return git.push("-u", "origin", self.gitdeploy['location']['default_branch'])
 
     def update_repo_last_build(self, build_name):
         gitrepo_name = self.gitdeploy['location']['gitrepo']['name']
