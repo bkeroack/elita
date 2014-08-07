@@ -417,8 +417,38 @@ def _threadsafe_pull_callback(results, tag, **kwargs):
     gitdeploy = kwargs['gitdeploy']
     datasvc.jobsvc.NewJobData({"DeployServers": {"results": results, "tag": tag}})
     for r in results:
-        datasvc.deploysvc.UpdateDeployment_Phase2(app, deployment_id, gitdeploy, [r], batch_number,
-                                                  state=results[r]['ret'])
+        #callback results always have a 'ret' key but underneath it may be a simple string or a big complex object
+        #for state call results. We have to unpack the state results if necessary
+        this_result = results[r]['ret']
+        datasvc.jobsvc.NewJobData(this_result)
+        if elita.util.type_check.is_dictlike(this_result):  # state result
+            assert len(this_result.keys()) == 1
+            top_key = this_result.keys()[0]
+            assert top_key[:3] == 'cmd'
+            assert elita.util.type_check.is_dictlike(this_result[top_key])
+            assert all([k in this_result[top_key] for k in ("name", "result", "changes")])
+            assert elita.util.type_check.is_dictlike(this_result[top_key]["changes"])
+            assert "retcode" in this_result[top_key]["changes"]
+            if this_result[top_key]["changes"]["retcode"] > 0 or not this_result[top_key]["result"]:
+                state = ["ERROR: state failed"]
+                state.append(this_result[top_key]["name"])
+                state.append("return code: {}".format(this_result[top_key]["changes"]["retcode"]))
+                for output in ("stderr", "stdout"):
+                    if output in this_result[top_key]["changes"]:
+                        state.append("{}:".format(output))
+                        for l in str(this_result[top_key]["changes"][output]).split('\n'):
+                            state.append(l)
+                datasvc.jobsvc.NewJobData({'status': 'error', 'message': 'failing deployment due to detected error'})
+                datasvc.deploysvc.UpdateDeployment_Phase2(app, deployment_id, gitdeploy, [r], batch_number,
+                                                          state=state)
+                datasvc.deploysvc.FailDeployment(app, deployment_id)
+                return
+            datasvc.deploysvc.UpdateDeployment_Phase2(app, deployment_id, gitdeploy, [r], batch_number,
+                                                      state='Returned: {}'.format(this_result[top_key]["name"]),
+                                                      progress=66)
+        else:   # simple result
+            datasvc.deploysvc.UpdateDeployment_Phase2(app, deployment_id, gitdeploy, [r], batch_number,
+                                                      state=results[r]['ret'])
 
 def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, job_id, deployment_id, batch_number):
     '''
@@ -471,11 +501,11 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
     successes = dict()
     for r in res:
         for host in r:
-            for cmd in r[host]:
+            for cmd in r[host]['ret']:
                 if "gitdeploy" in cmd:
-                    if "result" in r[host][cmd]:
-                        if not r[host][cmd]["result"]:
-                            errors[host] = r[host][cmd]["changes"] if "changes" in r[host][cmd] else r[host][cmd]
+                    if "result" in r[host]['ret'][cmd]:
+                        if not r[host]['ret'][cmd]["result"]:
+                            errors[host] = r[host]['ret'][cmd]["changes"] if "changes" in r[host]['ret'][cmd] else r[host]['ret'][cmd]
                         else:
                             if host not in successes:
                                 successes[host] = dict()
@@ -483,9 +513,9 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
                             if state not in successes[host]:
                                 successes[host][state] = dict()
                             successes[host][state][command] = {
-                                "stdout": r[host][cmd]["changes"]["stdout"],
-                                "stderr": r[host][cmd]["changes"]["stderr"],
-                                "retcode": r[host][cmd]["changes"]["retcode"],
+                                "stdout": r[host]['ret'][cmd]["changes"]["stdout"],
+                                "stderr": r[host]['ret'][cmd]["changes"]["stderr"],
+                                "retcode": r[host]['ret'][cmd]["changes"]["retcode"],
                             }
     if len(errors) > 0:
         for e in errors:

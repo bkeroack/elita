@@ -26,10 +26,10 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
 
     elita.vm.network "private_network", ip: "10.37.129.100"
-  
-    elita.vm.synced_folder "salt/state-tree", "/srv/salt"
-    
+
     elita.vm.synced_folder "salt/keys", "/srv/keys"
+
+    elita.vm.synced_folder "nginx", "/srv/nginx"
   
     elita.vm.synced_folder "..", "/home/vagrant/elita"
 

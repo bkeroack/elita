@@ -1296,6 +1296,18 @@ class DeploymentDataService(GenericChildDataService):
 
         self.UpdateDeployment(app, name, {'progress': {'currently_on': 'phase{}'.format(phase)}})
 
+    def FailDeployment(self, app, name):
+        '''
+        Mark deployment as failed in event of errors
+        '''
+        assert app and name
+        assert all([elita.util.type_check.is_string(p) for p in (app, name)])
+        assert app in self.root['app']
+        assert name in self.root['app'][app]['deployments']
+
+        self.UpdateDeployment(app, name, {'progress': {'currently_on': 'failure'}})
+        self.UpdateDeployment(app, name, {'status': 'error'})
+
     def CompleteDeployment(self, app, name):
         '''
         Mark deployment as done
@@ -1345,10 +1357,11 @@ class DeploymentDataService(GenericChildDataService):
 
         for s in servers:
             progress_dict['batch{}'.format(batch)][s] = dict()
+            progress_dict['batch{}'.format(batch)][s][gitdeploy] = dict()
             if progress:
-                progress_dict['batch{}'.format(batch)][s]['progress'] = progress
+                progress_dict['batch{}'.format(batch)][s][gitdeploy]['progress'] = progress
             if state:
-                progress_dict['batch{}'.format(batch)][s]['state'] = state
+                progress_dict['batch{}'.format(batch)][s][gitdeploy]['state'] = state
 
         self.UpdateDeployment(app, name, {'progress': {'phase2': progress_dict}})
 
