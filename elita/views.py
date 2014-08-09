@@ -1179,7 +1179,8 @@ class GroupContainerView(GenericView):
         attributes = gitdeploys['attributes'] if 'attributes' in gitdeploys else dict()
 
         existing_gitdeploys = set(self.datasvc.gitsvc.GetGitDeploys(self.context.parent))
-        submitted_gitdeploys = set(gitdeploys['gitdeploys'])
+        submitted_gitdeploys = set([gd for sublist in gitdeploys['gitdeploys'] for gd in sublist]) \
+            if isinstance(gitdeploys['gitdeploys'][0], list) else set(gitdeploys['gitdeploys'])
         if not existing_gitdeploys.issuperset(submitted_gitdeploys):
             return self.Error(400, "unknown gitdeploys: {}".format(list(submitted_gitdeploys - existing_gitdeploys)))
 

@@ -646,7 +646,9 @@ class GroupDataService(GenericChildDataService):
         assert elita.util.type_check.is_string(name)
         group = self.GetGroup(app, name)
         assert group
-        server_sets = [set(self.deps['GitDataService'].GetGitDeploy(app, gd)['servers']) for gd in group['gitdeploys']]
+        # this is ugly. gitdeploys can either be a list of strings or a list of lists. We have to flatten the
+        # list of lists if necessary
+        server_sets = [set(self.deps['GitDataService'].GetGitDeploy(app, gd)['servers']) for sublist in group['gitdeploys'] for gd in sublist] if isinstance(group['gitdeploys'][0], list) else [set(self.deps['GitDataService'].GetGitDeploy(app, gd)['servers']) for gd in group['gitdeploys']]
         if environments:
             envs = self.deps['ServerDataService'].GetEnvironments()
             for e in environments:
