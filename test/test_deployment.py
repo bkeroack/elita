@@ -3,7 +3,7 @@ import mock
 import elita.deployment.deploy
 import elita.deployment.salt_control
 from elita.deployment import gitservice
-from elita.models import DataService, BuildDataService, GitDataService, JobDataService, GroupDataService
+from elita.models import DataService, BuildDataService, GitDataService, JobDataService, GroupDataService, DeploymentDataService
 #import logging
 
 
@@ -41,6 +41,7 @@ def setup_mock_datasvc():
     mock_datasvc.attach_mock(mock.Mock(spec=BuildDataService), "buildsvc")
     mock_datasvc.attach_mock(mock.Mock(spec=GitDataService), "gitsvc")
     mock_datasvc.attach_mock(mock.Mock(spec=JobDataService), "jobsvc")
+    mock_datasvc.attach_mock(mock.Mock(spec=DeploymentDataService), "deploysvc")
     mock_datasvc.job_id = ""
     mock_datasvc.gitsvc.GetGitDeploy = return_gitdeploy
     mock_datasvc.buildsvc.GetBuildDoc = return_build
@@ -68,7 +69,7 @@ def test_simple_deployment(mockRD, mockGitDeployManager, mockRemoteCommands, moc
     mockRD.return_value = None, mock_datasvc
     mockGitDeployManager.last_build = "nobuild"
 
-    dc = elita.deployment.deploy.DeployController(mock_datasvc)
+    dc = elita.deployment.deploy.DeployController(mock_datasvc, 'mock_id')
 
     ok, results = dc.run("example_app", "example_build", servers, gitdeploys, parallel=True)
 
@@ -104,10 +105,19 @@ def test_rolling_deployment(mockRD, mockGitDeployManager, mockRemoteCommands, mo
     mock_datasvc.groupsvc.GetGroupServers = return_group_servers
     mockRD.return_value = None, mock_datasvc
 
-    dc = elita.deployment.deploy.DeployController(mock_datasvc)
-    rdc = elita.deployment.deploy.RollingDeployController(mock_datasvc, dc)
+    dc = elita.deployment.deploy.DeployController(mock_datasvc, 'mock_id')
+    rdc = elita.deployment.deploy.RollingDeployController(mock_datasvc, dc, 'mock_id')
 
-    rdc.run("example_app", "example_build", {"groups": ["gp0", "gp1"], "environments": ["testing"]}, 2, 0, parallel=True)
+    gp0 = return_group("example_app", "gp0")
+    gp1 = return_group("example_app", "gp1")
+
+    rdc.run("example_app", "example_build",
+            {
+                "groups": ["gp0", "gp1"],
+                "environments": ["testing"],
+                "gitdeploys": list(set(gp0['gitdeploys'] + gp1['gitdeploys'])),
+                "servers": list(set(gp0['servers'] + gp1['servers']))
+            }, 2, 0, parallel=True)
 
     #assert False
 

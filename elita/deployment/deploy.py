@@ -83,9 +83,10 @@ class BatchCompute:
             ...
         ]
         '''
+        logging.debug("********************* - dedupe_batches: {}".format(batches))
         assert len(batches) > 0
         assert all(map(lambda x: 'servers' in x and 'gitdeploys' in x, batches))
-        return map(lambda x: {"servers": list(set(x['servers'])), "gitdeploys": list(set(x['gitdeploys']))}, batches)
+        return map(lambda x: {"servers": list(set(x['servers'])), "gitdeploys": list(set(elita.util.flatten_list(x['gitdeploys'])))}, batches)
 
     @staticmethod
     def reduce_group_batches(accumulated, update):
@@ -199,7 +200,7 @@ class RollingDeployController:
 
             logging.debug("computed batches: {}".format(batches))
 
-            self.datasvc.deploysvc.update_deployment_plan(application, self.deployment_id, batches, target['gitdeploys'])
+            self.datasvc.deploysvc.InitializeDeploymentPlan(application, self.deployment_id, batches, target['gitdeploys'])
 
             self.datasvc.jobsvc.NewJobData({
                 "RollingDeployment": {

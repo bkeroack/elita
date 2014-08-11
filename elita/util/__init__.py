@@ -3,6 +3,7 @@ __author__ = 'bkeroack'
 from types import FunctionType
 import functools
 import logging
+import collections
 
 import type_check
 
@@ -99,3 +100,22 @@ def paths_from_nested_dict(dict_obj, path=None):
         else:
             unique_paths.append(tuple(path + [item[0]] + [item[1]]))
     return unique_paths
+
+def flatten(list_obj):
+    '''
+    Given a nested n-dimensional list, return a flattened list
+    '''
+    assert list_obj
+    assert isinstance(list_obj, collections.Iterable)
+    for item in list_obj:
+        if isinstance(item, collections.Iterable) and not type_check.is_string(item):
+            for x in flatten(item):
+                yield x
+        else:
+            yield item
+
+def flatten_list(list_obj):
+    '''
+    Above without having to iterate
+    '''
+    return [x for x in flatten(list_obj)]

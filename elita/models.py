@@ -80,6 +80,8 @@ class MongoService:
         Modifies document with the keys in doc. Does so atomically but remember that any key will overwrite the existing
         key.
 
+        doc_or_obj could be None, zero, etc.
+
         Returns boolean indicating success
         '''
         assert hasattr(path, '__iter__')
@@ -87,7 +89,6 @@ class MongoService:
         assert elita.util.type_check.is_string(collection)
         assert isinstance(keys, dict)
         assert collection and keys
-        assert doc_or_obj
         dlist = [d for d in self.db[collection].find(keys)]
         assert dlist
         canonical_id = dlist[0]['_id']
@@ -592,7 +593,9 @@ class GroupDataService(GenericChildDataService):
         assert app and name
         assert elita.util.type_check.is_string(app)
         assert elita.util.type_check.is_string(name)
-        return self.mongo_service.get('groups', {'application': app, 'name': name})
+        doc = self.mongo_service.get('groups', {'application': app, 'name': name})
+        doc['servers'] = self.GetGroupServers(app, name, group_doc=doc)
+        return {k: doc[k] for k in doc if k[0] != '_'}
 
     def NewGroup(self, app, name, gitdeploys, rolling_deploy=False, description="", attributes=None):
         '''
@@ -636,16 +639,22 @@ class GroupDataService(GenericChildDataService):
         self.RmThreadLocalRootTree(('app', app, 'groups', name))
         self.mongo_service.delete('groups', {'application': app, 'name': name})
 
-    def GetGroupServers(self, app, name, environments=None):
+    def GetGroupServers(self, app, name, environments=None, group_doc=None):
         '''
         Build sets from initialized servers in each gitdeploy in the group, then take intersection of all the sets
         If environments specified, take intersection with that set as well
+
+        Allow caller to provide group_doc to prevent infinite recursion from GetGroup calling GetGroupServers
         '''
         assert app and name
         assert elita.util.type_check.is_string(app)
         assert elita.util.type_check.is_string(name)
-        group = self.GetGroup(app, name)
-        assert group
+        assert app in self.root['app']
+        assert name in self.root['app'][app]['groups']
+        if not group_doc:
+            group = self.GetGroup(app, name)
+        else:
+            group = group_doc
         # this is ugly. gitdeploys can either be a list of strings or a list of lists. We have to flatten the
         # list of lists if necessary
         server_sets = [set(self.deps['GitDataService'].GetGitDeploy(app, gd)['servers']) for sublist in group['gitdeploys'] for gd in sublist] if isinstance(group['gitdeploys'][0], list) else [set(self.deps['GitDataService'].GetGitDeploy(app, gd)['servers']) for gd in group['gitdeploys']]
@@ -1228,7 +1237,8 @@ class DeploymentDataService(GenericChildDataService):
         '''
         assert app and name and batches and gitdeploys
         assert elita.util.type_check.is_string(app)
-        assert elita.util.type_check.is_dictlike(batches)
+        assert elita.util.type_check.is_seq(batches)
+        assert all([elita.util.type_check.is_dictlike(b) for b in batches])
         assert elita.util.type_check.is_seq(gitdeploys)  # list of all gitdeploys
 
         for gd in gitdeploys:
@@ -1247,7 +1257,7 @@ class DeploymentDataService(GenericChildDataService):
             }
             self.UpdateDeployment(app, name, doc)
 
-        gitdeploy_docs = {gd: self.deps['GroupDataService'].GetGroup(app, gd) for gd in gitdeploys}
+        gitdeploy_docs = {gd: self.deps['GitDataService'].GetGitDeploy(app, gd) for gd in gitdeploys}
 
         # at a low level, deployment operates in a gitdeploy-centric way
         # but on a human level, a server-centric view is more intuitive, so we generate a list of servers per batch,
@@ -1272,18 +1282,20 @@ class DeploymentDataService(GenericChildDataService):
             }
         }
         for i, batch in enumerate(batches):
-            doc['progress']['phase2'][i] = {}
+            batch_name = 'batch{}'.format(i)
+            doc['progress']['phase2'][batch_name] = {}
             for server in batch['servers']:
-                doc['progress']['phase2'][i][server] = {}
+                doc['progress']['phase2'][batch_name][server] = {}
                 for gitdeploy in batch['gitdeploys']:
-                    if server in elita.deployment.deploy.determine_deployabe_servers(gitdeploy_docs[gitdeploy], [server]):
-                        doc['progress']['phase2'][i][server][gitdeploy] = {
+                    if server in elita.deployment.deploy.determine_deployabe_servers(gitdeploy_docs[gitdeploy]['servers'], [server]):
+                        doc['progress']['phase2'][batch_name][server][gitdeploy] = {
                             'path': gitdeploy_docs[gitdeploy]['location']['path'],
-                            'package': gitdeploy_docs[gitdeploy]['location']['package'],
+                            'package': gitdeploy_docs[gitdeploy]['package'],
                             'progress': 0,
                             'state': 'not started'
                         }
 
+        logging.debug('InitializeDeploymentPlan: doc: {}'.format(doc))
         self.UpdateDeployment(app, name, doc)
 
     def StartDeployment_Phase(self, app, name, phase):
@@ -1497,7 +1509,8 @@ class DataService:
         })
         self.deploysvc.populate_dependencies({
             'ServerDataService': self.serversvc,
-            'GroupDataService': self.groupsvc
+            'GroupDataService': self.groupsvc,
+            'GitDataService': self.gitsvc
         })
 
         #load all plugins and register actions/hooks

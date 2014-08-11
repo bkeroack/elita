@@ -567,8 +567,19 @@ class DeploymentContainerView(GenericView):
             servers_in_groups = set([s for s in [self.datasvc.groupsvc.GetGroupServers(app, g) for g in body['groups']]
                                  for s in s])
             target['servers'] = list(servers_in_environments.intersection(servers_in_groups))
-            target['gitdeploys'] = list(set(itertools.chain(*[g['gitdeploys'] for g in [self.datasvc.groupsvc.GetGroup(app, g)
-                                                                               for g in body['groups']]])))
+            target['gitdeploys'] = set()
+            for group in body['groups']:
+                group = self.datasvc.groupsvc.GetGroup(app, group)
+                assert 'gitdeploys' in group
+                assert isinstance(group['gitdeploys'], list)
+                assert len(group['gitdeploys']) > 0
+                if isinstance(group['gitdeploys'][0], list):
+                    target['gitdeploys'].update([gd for sublist in group['gitdeploys'] for gd in sublist])
+                else:
+                    target['gitdeploys'].update(group['gitdeploys'])
+            target['gitdeploys'] = list(target['gitdeploys'])
+            #target['gitdeploys'] = list(set(itertools.chain(*[g['gitdeploys'] for g in [self.datasvc.groupsvc.GetGroup(app, g)
+            #                                                                   for g in body['groups']]])))
 
             logging.debug("DeploymentContainerView: calculated target: {}".format(target))
 
