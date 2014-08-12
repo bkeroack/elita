@@ -83,7 +83,6 @@ class BatchCompute:
             ...
         ]
         '''
-        logging.debug("********************* - dedupe_batches: {}".format(batches))
         assert len(batches) > 0
         assert all(map(lambda x: 'servers' in x and 'gitdeploys' in x, batches))
         return map(lambda x: {"servers": list(set(x['servers'])), "gitdeploys": list(set(elita.util.flatten_list(x['gitdeploys'])))}, batches)
@@ -284,7 +283,7 @@ def _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, settings, jo
         datasvc.jobsvc.NewJobData({"ProcessGitdeploys": {gddoc['name']: "already processed"}})
         datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
                                               progress=100,
-                                              step='Complete (already processed, last_build == deployment_build)')
+                                              step='Complete (already processed)')
     else:
         datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
                                               progress=25,
@@ -456,6 +455,10 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
     Thread-safe way of performing a deployment SLS call for one specific gitdeploy on a group of servers
     gitdeploy_struct: { "gitdeploy_name": [ list_of_servers_to_deploy_to ] }
     '''
+    assert application and gitdeploy_struct and queue and settings and job_id and deployment_id
+    assert all([elita.util.type_check.is_string(gd) for gd in gitdeploy_struct])
+    assert all([elita.util.type_check.is_seq(gitdeploy_struct[gd]) for gd in gitdeploy_struct])
+    assert isinstance(batch_number, int) and batch_number >= 0
 
     client, datasvc = regen_datasvc(settings, job_id)
     sc = salt_control.SaltController(datasvc)

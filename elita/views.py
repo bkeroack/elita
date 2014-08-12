@@ -578,8 +578,6 @@ class DeploymentContainerView(GenericView):
                 else:
                     target['gitdeploys'].update(group['gitdeploys'])
             target['gitdeploys'] = list(target['gitdeploys'])
-            #target['gitdeploys'] = list(set(itertools.chain(*[g['gitdeploys'] for g in [self.datasvc.groupsvc.GetGroup(app, g)
-            #                                                                   for g in body['groups']]])))
 
             logging.debug("DeploymentContainerView: calculated target: {}".format(target))
 
