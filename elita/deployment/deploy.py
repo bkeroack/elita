@@ -68,9 +68,21 @@ class BatchCompute:
             assert len(batches) > 0
             assert all(map(lambda x: 'servers' in x and 'gitdeploys' in x, batches))
             assert all(map(lambda x: 'servers' in x[1] and 'gitdeploys' in x[1], nonrolling_docs.iteritems()))
+            non_rolling_batches = list()
             for g in nonrolling_docs:
-                for k in ('servers', 'gitdeploys'):
-                    batches[0][k] += nonrolling_docs[g][k]
+                servers = nonrolling_docs[g]['servers']
+                gitdeploys = nonrolling_docs[g]['gitdeploys']
+                if isinstance(nonrolling_docs[g]['gitdeploys'][0], list):
+                    for gdb in nonrolling_docs[g]['gitdeploys']:
+                        non_rolling_batches.append({'gitdeploys': gdb, 'servers': servers})
+                else:
+                    non_rolling_batches.append({'gitdeploys': gitdeploys, 'servers': servers})
+            for i, nrb in enumerate(non_rolling_batches):
+                if i > len(batches)-1:
+                    batches.append(nrb)
+                else:
+                    batches[i]['servers'] = list(set(nrb['servers'] + batches[i]['servers']))
+                    batches[i]['gitdeploys'] = list(set(nrb['gitdeploys'] + batches[i]['gitdeploys']))
         return batches
 
     @staticmethod
@@ -158,7 +170,7 @@ class BatchCompute:
             BatchCompute.add_nonrolling_groups(
                 BatchCompute.coalesce_batches(
                     map(lambda x: BatchCompute.compute_group_batches(divisor, x), rolling_group_docs.iteritems())
-                ), nonrolling_group_docs
+                ), nonrolling_group_docs,
             )
         )
 
@@ -415,143 +427,161 @@ def _threadsafe_pull_callback(results, tag, **kwargs):
     deployment_id = kwargs['deployment_id']
     batch_number = kwargs['batch_number']
     gitdeploy = kwargs['gitdeploy']
-    datasvc.jobsvc.NewJobData({"DeployServers": {"results": results, "tag": tag}})
-    for r in results:
-        #callback results always have a 'ret' key but underneath it may be a simple string or a big complex object
-        #for state call results. We have to unpack the state results if necessary
-        this_result = results[r]['ret']
-        datasvc.jobsvc.NewJobData(this_result)
-        if elita.util.type_check.is_dictlike(this_result):  # state result
-            assert len(this_result.keys()) == 1
-            top_key = this_result.keys()[0]
-            assert top_key[:3] == 'cmd'
-            assert elita.util.type_check.is_dictlike(this_result[top_key])
-            assert all([k in this_result[top_key] for k in ("name", "result", "changes")])
-            assert elita.util.type_check.is_dictlike(this_result[top_key]["changes"])
-            assert "retcode" in this_result[top_key]["changes"]
-            if this_result[top_key]["changes"]["retcode"] > 0 or not this_result[top_key]["result"]:
-                state = ["ERROR: state failed"]
-                state.append(this_result[top_key]["name"])
-                state.append("return code: {}".format(this_result[top_key]["changes"]["retcode"]))
-                for output in ("stderr", "stdout"):
-                    if output in this_result[top_key]["changes"]:
-                        state.append("{}:".format(output))
-                        for l in str(this_result[top_key]["changes"][output]).split('\n'):
-                            state.append(l)
-                datasvc.jobsvc.NewJobData({'status': 'error', 'message': 'failing deployment due to detected error'})
+    try:
+        datasvc.jobsvc.NewJobData({"DeployServers": {"results": results, "tag": tag}})
+        for r in results:
+            #callback results always have a 'ret' key but underneath it may be a simple string or a big complex object
+            #for state call results. We have to unpack the state results if necessary
+            this_result = results[r]['ret']
+            datasvc.jobsvc.NewJobData(this_result)
+            if elita.util.type_check.is_dictlike(this_result):  # state result
+                assert len(this_result.keys()) == 1
+                top_key = this_result.keys()[0]
+                assert top_key[:3] == 'cmd'
+                assert elita.util.type_check.is_dictlike(this_result[top_key])
+                assert all([k in this_result[top_key] for k in ("name", "result", "changes")])
+                assert elita.util.type_check.is_dictlike(this_result[top_key]["changes"])
+                assert "retcode" in this_result[top_key]["changes"]
+                if this_result[top_key]["changes"]["retcode"] > 0 or not this_result[top_key]["result"]:
+                    state = ["ERROR: state failed"]
+                    state.append(this_result[top_key]["name"])
+                    state.append("return code: {}".format(this_result[top_key]["changes"]["retcode"]))
+                    for output in ("stderr", "stdout"):
+                        if output in this_result[top_key]["changes"]:
+                            state.append("{}:".format(output))
+                            for l in str(this_result[top_key]["changes"][output]).split('\n'):
+                                state.append(l)
+                    datasvc.jobsvc.NewJobData({'status': 'error', 'message': 'failing deployment due to detected error'})
+                    datasvc.deploysvc.UpdateDeployment_Phase2(app, deployment_id, gitdeploy, [r], batch_number,
+                                                              state=state)
+                    datasvc.deploysvc.FailDeployment(app, deployment_id)
+                    return
                 datasvc.deploysvc.UpdateDeployment_Phase2(app, deployment_id, gitdeploy, [r], batch_number,
-                                                          state=state)
-                datasvc.deploysvc.FailDeployment(app, deployment_id)
-                return
-            datasvc.deploysvc.UpdateDeployment_Phase2(app, deployment_id, gitdeploy, [r], batch_number,
-                                                      state='Returned: {}'.format(this_result[top_key]["name"]),
-                                                      progress=66)
-        else:   # simple result
-            datasvc.deploysvc.UpdateDeployment_Phase2(app, deployment_id, gitdeploy, [r], batch_number,
-                                                      state=results[r]['ret'])
+                                                          state='Returned: {}'.format(this_result[top_key]["name"]),
+                                                          progress=66)
+            else:   # simple result
+                datasvc.deploysvc.UpdateDeployment_Phase2(app, deployment_id, gitdeploy, [r], batch_number,
+                                                          state=results[r]['ret'])
+    except:
+        exc_msg = str(sys.exc_info()[1]).split('\n')
+        exc_msg.insert(0, "ERROR: _threadsafe_pull_callback")
+        datasvc.jobsvc.NewJobData({"DeployServers": {"error": exc_msg, "tag": tag}})
+        datasvc.deploysvc.FailDeployment(app, deployment_id)
 
 def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, job_id, deployment_id, batch_number):
     '''
     Thread-safe way of performing a deployment SLS call for one specific gitdeploy on a group of servers
     gitdeploy_struct: { "gitdeploy_name": [ list_of_servers_to_deploy_to ] }
     '''
-    assert application and gitdeploy_struct and queue and settings and job_id and deployment_id
-    assert all([elita.util.type_check.is_string(gd) for gd in gitdeploy_struct])
-    assert all([elita.util.type_check.is_seq(gitdeploy_struct[gd]) for gd in gitdeploy_struct])
-    assert isinstance(batch_number, int) and batch_number >= 0
-
+    # Wrap in a big try/except so we can log any failures in phase2 progress and fail the deployment
+    assert settings
+    assert job_id
+    assert gitdeploy_struct
     client, datasvc = regen_datasvc(settings, job_id)
-    sc = salt_control.SaltController(datasvc)
-    rc = salt_control.RemoteCommands(sc)
-
-    assert len(gitdeploy_struct) == 1
     gd_name = gitdeploy_struct.keys()[0]
     servers = gitdeploy_struct[gd_name]
+    try:
+        assert application
+        assert queue
+        assert deployment_id
+        assert all([elita.util.type_check.is_string(gd) for gd in gitdeploy_struct])
+        assert all([elita.util.type_check.is_seq(gitdeploy_struct[gd]) for gd in gitdeploy_struct])
+        assert isinstance(batch_number, int) and batch_number >= 0
+        sc = salt_control.SaltController(datasvc)
+        rc = salt_control.RemoteCommands(sc)
+        assert len(gitdeploy_struct) == 1
 
-    datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, servers, batch_number,
-                                              progress=10,
-                                              state="Beginning deployment")
+        datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, servers, batch_number,
+                                                  progress=10,
+                                                  state="Beginning deployment")
 
-    #until salt Helium is released, we can only execute an SLS *file* as opposed to a single module call
-    sls_map = {sc.get_gitdeploy_entry_name(application, gd_name): servers}
-    if len(servers) == 0:
-        datasvc.jobsvc.NewJobData({"DeployServers": {gd_name: "no servers"}})
-        return True
+        #until salt Helium is released, we can only execute an SLS *file* as opposed to a single module call
+        sls_map = {sc.get_gitdeploy_entry_name(application, gd_name): servers}
+        if len(servers) == 0:
+            datasvc.jobsvc.NewJobData({"DeployServers": {gd_name: "no servers"}})
+            return True
 
-    #clear uncommitted changes on targets
-    datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, servers, batch_number,
-                                              progress=33,
-                                              state="Clearing uncommitted changes")
-    gd_doc = datasvc.gitsvc.GetGitDeploy(application, gd_name)
-    branch = gd_doc['location']['default_branch']
-    path = gd_doc['location']['path']
-    res = rc.discard_git_changes(servers, path)
-    logging.debug("_threadsafe_process_gitdeploy: discard git changes result: {}".format(str(res)))
-    res = rc.checkout_branch(servers, path, branch)
-    logging.debug("_threadsafe_process_gitdeploy: git checkout result: {}".format(str(res)))
+        #clear uncommitted changes on targets
+        datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, servers, batch_number,
+                                                  progress=33,
+                                                  state="Clearing uncommitted changes")
+        gd_doc = datasvc.gitsvc.GetGitDeploy(application, gd_name)
+        branch = gd_doc['location']['default_branch']
+        path = gd_doc['location']['path']
+        res = rc.discard_git_changes(servers, path)
+        logging.debug("_threadsafe_process_gitdeploy: discard git changes result: {}".format(str(res)))
+        res = rc.checkout_branch(servers, path, branch)
+        logging.debug("_threadsafe_process_gitdeploy: git checkout result: {}".format(str(res)))
 
-    datasvc.jobsvc.NewJobData({"DeployServers": {gd_name: "deploying", "servers": servers}})
-    logging.debug("_threadsafe_pull_gitdeploy: sls_map: {}".format(sls_map))
+        datasvc.jobsvc.NewJobData({"DeployServers": {gd_name: "deploying", "servers": servers}})
+        logging.debug("_threadsafe_pull_gitdeploy: sls_map: {}".format(sls_map))
 
-    datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, servers, batch_number,
-                                              progress=50,
-                                              state="Issuing state commands (git pull, etc)")
-    res = rc.run_slses_async(_threadsafe_pull_callback, sls_map, args={'datasvc': datasvc, 'application': application,
-                                                                       'deployment_id': deployment_id,
-                                                                       'batch_number': batch_number,
-                                                                       'gitdeploy': gd_name})
-    logging.debug("_threadsafe_pull_gitdeploy: results: {}".format(res))
-    errors = dict()
-    successes = dict()
-    for r in res:
-        for host in r:
-            for cmd in r[host]['ret']:
-                if "gitdeploy" in cmd:
-                    if "result" in r[host]['ret'][cmd]:
-                        if not r[host]['ret'][cmd]["result"]:
-                            errors[host] = r[host]['ret'][cmd]["changes"] if "changes" in r[host]['ret'][cmd] else r[host]['ret'][cmd]
-                        else:
-                            if host not in successes:
-                                successes[host] = dict()
-                            module, state, command, subcommand = str(cmd).split('|')
-                            if state not in successes[host]:
-                                successes[host][state] = dict()
-                            successes[host][state][command] = {
-                                "stdout": r[host]['ret'][cmd]["changes"]["stdout"],
-                                "stderr": r[host]['ret'][cmd]["changes"]["stderr"],
-                                "retcode": r[host]['ret'][cmd]["changes"]["retcode"],
-                            }
-    if len(errors) > 0:
-        for e in errors:
-            datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, [e], batch_number,
-                                              state="ERROR: stderr: {}; stdout: {}; retcode: {}".format(
-                                                  errors[e]["changes"]["stderr"],
-                                                  errors[e]["changes"]["stdout"],
-                                                  errors[e]["changes"]["retcode"]
-                                              ))
-        logging.debug("_threadsafe_pull_gitdeploy: SLS error servers: {}".format(errors.keys()))
-        logging.debug("_threadsafe_pull_gitdeploy: SLS error responses: {}".format(errors))
+        datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, servers, batch_number,
+                                                  progress=50,
+                                                  state="Issuing state commands (git pull, etc)")
+        res = rc.run_slses_async(_threadsafe_pull_callback, sls_map, args={'datasvc': datasvc, 'application': application,
+                                                                           'deployment_id': deployment_id,
+                                                                           'batch_number': batch_number,
+                                                                           'gitdeploy': gd_name})
+        logging.debug("_threadsafe_pull_gitdeploy: results: {}".format(res))
+        errors = dict()
+        successes = dict()
+        for r in res:
+            for host in r:
+                for cmd in r[host]['ret']:
+                    if "gitdeploy" in cmd:
+                        if "result" in r[host]['ret'][cmd]:
+                            if not r[host]['ret'][cmd]["result"]:
+                                errors[host] = r[host]['ret'][cmd]["changes"] if "changes" in r[host]['ret'][cmd] else r[host]['ret'][cmd]
+                            else:
+                                if host not in successes:
+                                    successes[host] = dict()
+                                module, state, command, subcommand = str(cmd).split('|')
+                                if state not in successes[host]:
+                                    successes[host][state] = dict()
+                                successes[host][state][command] = {
+                                    "stdout": r[host]['ret'][cmd]["changes"]["stdout"],
+                                    "stderr": r[host]['ret'][cmd]["changes"]["stderr"],
+                                    "retcode": r[host]['ret'][cmd]["changes"]["retcode"],
+                                }
+        if len(errors) > 0:
+            for e in errors:
+                datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, [e], batch_number,
+                                                  state="ERROR: stderr: {}; stdout: {}; retcode: {}".format(
+                                                      errors[e]["changes"]["stderr"],
+                                                      errors[e]["changes"]["stdout"],
+                                                      errors[e]["changes"]["retcode"]
+                                                  ))
+            logging.debug("_threadsafe_pull_gitdeploy: SLS error servers: {}".format(errors.keys()))
+            logging.debug("_threadsafe_pull_gitdeploy: SLS error responses: {}".format(errors))
 
-    if len(successes) > 0:
-        datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, successes.keys(), batch_number,
-                                                  progress=100, state="Complete")
+        if len(successes) > 0:
+            datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, successes.keys(), batch_number,
+                                                      progress=100, state="Complete")
 
-    deploy_results = {
-        gd_name: {
-            "errors": len(errors) > 0,
-            "error_results": errors,
-            "successes": len(successes) > 0,
-            "success_results": successes
+        deploy_results = {
+            gd_name: {
+                "errors": len(errors) > 0,
+                "error_results": errors,
+                "successes": len(successes) > 0,
+                "success_results": successes
+            }
         }
-    }
 
-    queue.put(deploy_results)
+        queue.put(deploy_results)
 
-    datasvc.jobsvc.NewJobData({
-        "DeployServers": deploy_results
-    })
+        datasvc.jobsvc.NewJobData({
+            "DeployServers": deploy_results
+        })
 
-    return len(errors) == 0
+        return len(errors) == 0
+
+    except:
+        exc_msg = str(sys.exc_info()[1]).split('\n')
+        exc_msg.insert(0, "ERROR: _threadsafe_pull_callback")
+        datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, servers, batch_number,
+                                                  state=exc_msg)
+        datasvc.deploysvc.FailDeployment(application, deployment_id)
 
 
 class DeployController:

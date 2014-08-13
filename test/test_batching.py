@@ -32,14 +32,41 @@ ordered_groups = {
     "group3":
         {
             "servers": ["server10", "server11"],
-            "gitdeploys": [["gd0"], ["gd4"]]
+            "gitdeploys": [["gd9"], ["gd4"]]
         },
     "group4":
         {
             "servers": ["server12", "server13"],
-            "gitdeploys": [["gd0"], ["gd5"]]
+            "gitdeploys": [["gd9"], ["gd5"]]
         }
 }
+
+simulated_scorebig_rolling_groups = {
+    "ConsumerWebApp": {
+        "servers": ["web0", "web1"],
+        "gitdeploys": [["Configs"], ["Consumer"]]
+    }
+}
+
+simulated_scorebig_nonrolling_groups = {
+    "ServiceBusLowApplication": {
+        "servers": ["sbl0", "sbl1"],
+        "gitdeploys": [["Configs"], ["ServiceBusLow"]]
+    }
+}
+
+def generate_server_batch_mapping(batches):
+    server_batch_mapping = dict()
+    for i, b in enumerate(batches):
+        for s in b['servers']:
+            for group in ordered_groups:
+                if s in ordered_groups[group]['servers']:
+                    for g in b['gitdeploys']:
+                        if s in server_batch_mapping:
+                            server_batch_mapping[s][g] = i
+                        else:
+                            server_batch_mapping[s] = {g: i}
+    return server_batch_mapping
 
 def test_rolling_batches():
     '''
@@ -82,7 +109,7 @@ def test_ordered_rolling_batches():
     assert len(batches) == 4
     assert all(["servers" in x and "gitdeploys" in x for x in batches])
     assert all([len(x['servers']) == 2 for x in batches])
-    assert all([batches[x]['gitdeploys'] == ['gd0'] for x in (0, 2)])
+    assert all([batches[x]['gitdeploys'] == ['gd9'] for x in (0, 2)])
     assert all([sorted(batches[x]['gitdeploys']) == sorted(['gd4', 'gd5']) for x in (1, 3)])
     assert all([sorted(batches[x]['servers']) == sorted(['server12', 'server10']) for x in (0, 1)])
     assert all([sorted(batches[x]['servers']) == sorted(['server11', 'server13']) for x in (2, 3)])
@@ -98,7 +125,32 @@ def test_ordered_and_unordered_rolling_batches():
 
     assert len(batches) == 4
     assert all(["servers" in x and "gitdeploys" in x for x in batches])
-    #TODO: implement real ordering checks
+
+    server_batch_mapping = generate_server_batch_mapping(batches)
+    for s in server_batch_mapping:
+        if 'gd4' in server_batch_mapping[s]:
+            assert server_batch_mapping[s]['gd9'] < server_batch_mapping[s]['gd4']
+        elif 'gd5' in server_batch_mapping[s]:
+            assert server_batch_mapping[s]['gd9'] < server_batch_mapping[s]['gd5']
+
+def test_simulated_scorebig_ordered_groups():
+    '''
+    Test that ordered groups similar to ScoreBig setup are split into batches respecting ordering
+    '''
+    batches = elita.deployment.deploy.BatchCompute.compute_rolling_batches(divisor, simulated_scorebig_rolling_groups,
+                                                                           simulated_scorebig_nonrolling_groups)
+
+    print(pp.pformat(batches))
+    assert len(batches) == 4
+    assert all(["servers" in x and "gitdeploys" in x for x in batches])
+
+    server_batch_mapping = generate_server_batch_mapping(batches)
+    for s in server_batch_mapping:
+        if 'Consumer' in server_batch_mapping[s]:
+            assert server_batch_mapping[s]['Configs'] < server_batch_mapping[s]['Consumer']
+        elif 'ServiceBusLow' in server_batch_mapping[s]:
+            assert server_batch_mapping[s]['Configs'] < server_batch_mapping[s]['ServiceBusLow']
+
 
 if __name__ == '__main__':
     test_rolling_batches()
