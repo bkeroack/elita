@@ -95,7 +95,8 @@ class MongoService:
         if len(dlist) > 1:
             logging.warning("Found duplicate entries for query {} in collection {}; using the first and removing others"
                             .format(keys, collection))
-            self.db[collection].remove({'_id': {'$ne': canonical_id}})
+            keys['_id'] = {'$ne': canonical_id}
+            self.db[collection].remove(keys)
         path_dot_notation = '.'.join(path)
         result = self.db[collection].update({'_id': canonical_id}, {'$set': {path_dot_notation: doc_or_obj}})
         return result['n'] == 1 and result['updatedExisting'] and not result['err']
@@ -158,9 +159,10 @@ class MongoService:
         dlist = [d for d in self.db[collection].find(keys)]
         assert dlist or empty
         if len(dlist) > 1 and not multi:
-            logging.warning("Found duplicate entries for query {} in collection {}; dropping all but the first"
-                            .format(keys, collection))
-            self.db[collection].remove({'_id': {'$ne': dlist[0]['_id']}})
+            logging.warning("Found duplicate entries ({}) for query {} in collection {}; dropping all but the first"
+                            .format(len(dlist), keys, collection))
+            keys['_id'] = {'$ne': dlist[0]['_id']}
+            self.db[collection].remove(keys)
         return dlist if multi else (dlist[0] if dlist else dlist)
 
     def dereference(self, dbref):
@@ -1951,12 +1953,13 @@ class DataValidator:
     def run(self):
         logging.debug("running")
         self.check_root()
+        self.check_root_references()
+        self.check_users()
+        self.check_user_permissions()
         self.check_doc_consistency()
         self.check_toplevel()
         self.check_containers()
         self.check_global()
-        self.check_users()
-        self.check_user_permissions()
         self.check_apps()
         self.check_jobs()
         self.check_deployments()
@@ -1987,9 +1990,11 @@ class DataValidator:
             'jobs',
             'tokens',
             'users',
-            'servers'
+            'servers',
+            'groups'
         ]
         for c in collects:
+            rm_docs = list()
             for d in self.db[c].find():
                 if '_class' not in d:
                     logging.warning("class specification not found in object {} from collection {}"
@@ -2000,39 +2005,84 @@ class DataValidator:
                     if d['app_name'] not in self.root['app']:
                         logging.warning("orphan application object: '{}', adding to root tree".format(d['app_name']))
                         self.root['app'][d['app_name']] = {'_doc': bson.DBRef('applications', d['_id'])}
+                    if self.root['app'][d['app_name']]['_doc'].id != d['_id']:
+                        logging.warning("unlinked application document found, deleting")
+                        rm_docs.append(d['_id'])
                 if c == 'builds':
                     if d['build_name'] not in self.root['app'][d['app_name']]['builds']:
                         logging.warning("orphan build object: '{}/{}', adding to root tree".format(d['app_name'], d['build_name']))
                         self.root['app'][d['app_name']]['builds'][d['build_name']] = {'_doc': bson.DBRef('builds', d['_id'])}
+                    if self.root['app'][d['app_name']]['builds'][d['build_name']]['_doc'].id != d['_id']:
+                        logging.warning("unlinked build document found, deleting")
+                        rm_docs.append(d['_id'])
                 if c == 'gitproviders':
                     if d['name'] not in self.root['global']['gitproviders']:
                         logging.warning("orphan gitprovider object: '{}', adding to root tree".format(d['name']))
                         self.root['global']['gitproviders'][d['name']] = {'_doc': bson.DBRef('gitproviders', d['_id'])}
+                    if self.root['global']['gitproviders'][d['name']]['_doc'].id != d['_id']:
+                        logging.warning("unlinked gitprovider document found, deleting")
+                        rm_docs.append(d['_id'])
                 if c == 'gitrepos':
                     if d['name'] not in self.root['app'][d['application']]['gitrepos']:
                         logging.warning("orphan gitrepo object: '{}/{}', adding to root tree".format(d['application'], d['name']))
                         self.root['app'][d['application']]['gitrepos'][d['name']] = {'_doc': bson.DBRef('gitrepos', d['_id'])}
+                    if self.root['app'][d['application']]['gitrepos'][d['name']]['_doc'].id != d['_id']:
+                        logging.warning("unlinked gitrepo document found, deleting")
+                        rm_docs.append(d['_id'])
                 if c == 'gitdeploys':
                     if d['name'] not in self.root['app'][d['application']]['gitdeploys']:
                         logging.warning("orphan gitdeploy object: '{}/{}', adding to root tree".format(d['application'], d['name']))
                         self.root['app'][d['application']]['gitdeploys'][d['name']] = {'_doc': bson.DBRef('gitdeploys', d['_id'])}
+                    if self.root['app'][d['application']]['gitdeploys'][d['name']]['_doc'].id != d['_id']:
+                        logging.warning("unlinked gitdeploy document found, deleting")
+                        rm_docs.append(d['_id'])
                 if c == 'jobs':
                     if d['job_id'] not in self.root['job']:
                         logging.warning("orphan job object: '{}', adding to root tree".format(d['job_id']))
                         self.root['job'][d['job_id']] = {'_doc': bson.DBRef('jobs', d['_id'])}
+                    #we don't really care about unlinked jobs
                 if c == 'tokens':
                     if d['token'] not in self.root['global']['tokens']:
                         logging.warning("orphan token object: '{}', adding to root tree".format(d['token']))
                         self.root['global']['tokens'][d['token']] = {'_doc': bson.DBRef('tokens', d['_id'])}
+                    if self.root['global']['tokens'][d['token']]['_doc'].id != d['_id']:
+                        logging.warning("unlinked token document found, deleting")
+                        rm_docs.append(d['_id'])
                 if c == 'users':
                     if d['username'] not in self.root['global']['users']:
                         logging.warning("orphan user object: '{}', adding to root tree".format(d['username']))
                         self.root['global']['users'][d['username']] = {'_doc': bson.DBRef('users', d['_id'])}
+                    if self.root['global']['users'][d['username']]['_doc'].id != d['_id']:
+                        logging.warning("unlinked user document found ({}), deleting".format(d['username']))
+                        rm_docs.append(d['_id'])
                 if c == 'servers':
                     if d['name'] not in self.root['server']:
                         logging.warning("orphan server object: '{}', adding to root tree".format(d['name']))
                         self.root['server'][d['name']] = {'_doc': bson.DBRef('servers', d['_id'])}
+                    if self.root['server'][d['name']]['_doc'].id != d['_id']:
+                        logging.warning("unlinked server document found, deleting")
+                        rm_docs.append(d['_id'])
+                if c == 'groups':
+                    if d['name'] not in self.root['app'][d['application']]['groups']:
+                        logging.warning("orphan group object: '{}', adding to root tree".format(d['name']))
+                        self.root['app'][d['application']]['groups'][d['name']] = {'_doc': bson.DBRef('groups', d['_id'])}
+                    if self.root['app'][d['application']]['groups'][d['name']]['_doc'].id != d['_id']:
+                        logging.warning("unlinked group document found ({}), deleting".format(d['name']))
+                        rm_docs.append(d['_id'])
+            for id in rm_docs:
+                self.db[c].remove({'_id': id})
 
+    @staticmethod
+    def check_root_refs(db, obj):
+        for k in obj:
+            if k == '_doc':
+                if not db.dereference(obj[k]):
+                    logging.warning("Invalid dbref found! {}".format(obj[k].collection))
+            elif k[0] != '_':
+                DataValidator.check_root_refs(db, obj[k])
+
+    def check_root_references(self):
+        DataValidator.check_root_refs(self.db, self.root)
 
     def check_global(self):
         global_levels = {
@@ -2097,6 +2147,14 @@ class DataValidator:
                         '_doc': bson.DBRef('userpermissions', pid)
                     }
         users = [u for u in self.db['users'].find()]
+        for u in users:
+            if 'username' not in u:
+                logging.warning("user found without username property; fixing {}".format(u['_id']))
+                if 'name' in u:
+                    u['username'] = u['name']
+                    self.db['users'].save(u)
+                else:
+                    logging.warning("...couldn't fix user because name field not found!")
         if DEFAULT_ADMIN_USERNAME not in [u['username'] for u in users]:
             logging.warning("admin user document not found; creating")
             userobj = User({
@@ -2311,6 +2369,10 @@ class DataValidator:
             if 'servers' not in d and not delete:
                 logging.warning("servers not found under gitdeploy {}; fixing".format(d['_id']))
                 d['servers'] = list()
+                fix = True
+            if 'server' in d:
+                logging.warning("gitdeploy found with obsolete server field {}; removing".format(d['_id']))
+                del d['server']
                 fix = True
             if len([x for x, y in collections.Counter(d['servers']).items() if y > 1]) > 0 and not delete:
                 logging.warning("duplicate server entries found in gitdeploy {}; fixing".format(d['_id']))

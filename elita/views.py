@@ -921,7 +921,9 @@ class GitRepoView(GenericView):
     def GET(self):
         gitrepo = self.datasvc.gitsvc.GetGitRepo(self.context.application, self.context.name)
         assert gitrepo and 'gitprovider' in gitrepo and 'auth' in gitrepo['gitprovider']
-        gitrepo['gitprovider']['auth']['password'] = "*****"
+        #re-reference embedded fields
+        gitrepo['gitprovider'] = gitrepo['gitprovider']['name']
+        gitrepo['keypair'] = gitrepo['keypair']['name']
         return {
             'gitrepo': gitrepo
         }
@@ -998,30 +1000,9 @@ class GitDeployView(GenericView):
 
     def GET(self):
         gddoc = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
-        return {
-            'gitdeploy': {
-                'created_datetime': self.get_created_datetime_text(),
-                'name': gddoc['name'],
-                'package': gddoc['package'],
-                'application': gddoc['application'],
-                'deployed_build': gddoc['deployed_build'],
-                'attributes': gddoc['attributes'],
-                'servers': gddoc['servers'] if 'servers' in gddoc else "(not found)",
-                'options': gddoc['options'],
-                'actions': gddoc['actions'],
-                'location': {
-                    'path': gddoc['location']['path'],
-                    'gitrepo': {
-                        'name': gddoc['location']['gitrepo']['name'],
-                        'last_build': gddoc['location']['gitrepo']['last_build'],
-                        'gitprovider': {
-                            'name': gddoc['location']['gitrepo']['gitprovider']['name'],
-                            'type': gddoc['location']['gitrepo']['gitprovider']['type']
-                        }
-                    }
-                }
-            }
-        }
+        #re-reference embedded
+        gddoc['location']['gitrepo'] = gddoc['location']['gitrepo']['name']
+        return {k: gddoc[k] for k in gddoc if k[0] != '_'}
 
     def check_servers_list(self, body):
         if "servers" not in body:
@@ -1040,7 +1021,6 @@ class GitDeployView(GenericView):
                 return False, self.Error(400, "no servers matched pattern: {}".format(sglob))
         self.servers = servers
         return True, None
-
 
     def update(self, body):
         keys = {'attributes', 'options', 'package', 'actions', 'location'}

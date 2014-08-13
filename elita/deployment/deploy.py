@@ -15,6 +15,9 @@ import gitservice
 import salt_control
 from elita.actions.action import regen_datasvc
 
+class FatalDeploymentError(Exception):
+    pass
+
 #async callable
 def run_deploy(datasvc, application, build_name, target, rolling_divisor, rolling_pause, deployment_id):
     '''
@@ -170,7 +173,7 @@ class BatchCompute:
             BatchCompute.add_nonrolling_groups(
                 BatchCompute.coalesce_batches(
                     map(lambda x: BatchCompute.compute_group_batches(divisor, x), rolling_group_docs.iteritems())
-                ), nonrolling_group_docs,
+                ), nonrolling_group_docs
             )
         )
 
@@ -220,23 +223,18 @@ class RollingDeployController:
                 }
             })
 
-            changed_gds = list()
             for i, b in enumerate(batches):
-
-                # for first batch, we pass all gitdeploys
-                # for subsequent batches we only pass the gitdeploys that we know have changes
-                if i == 0:
-                    deploy_gds = b['gitdeploys']
-                elif i == 1:
-                    deploy_gds = changed_gds
-                logging.debug("doing DeployController.run: deploy_gds: {}".format(deploy_gds))
-                ok, results = self.dc.run(application, build_name, b['servers'], deploy_gds, force=i > 0, parallel=parallel)
-                changed_gds = self.dc.changed_gitdeploys.keys()
+                logging.debug("doing DeployController.run: deploy_gds: {}".format(b['gitdeploys']))
+                ok, results = self.dc.run(application, build_name, b['servers'], b['gitdeploys'], force=i > 0,
+                                          parallel=parallel, batch_number=i)
                 if not ok:
                     self.datasvc.jobsvc.NewJobData({"RollingDeployment": "error"})
                     return False
 
                 if i != (len(batches)-1):
+                    msg = "pausing for {} seconds between batches".format(rolling_pause)
+                    self.datasvc.jobsvc.NewJobData({"RollingDeployment": msg})
+                    logging.debug("RollingDeployController: {}".format(msg))
                     time.sleep(rolling_pause)
 
         else:
@@ -271,7 +269,6 @@ def _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, settings, jo
 
     package = gddoc['package']
     package_doc = build_doc['packages'][package]
-    changed = False
 
     client, datasvc = regen_datasvc(settings, job_id)
     gdm = gitservice.GitDeployManager(gddoc, datasvc)
@@ -399,8 +396,6 @@ def _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, settings, jo
             datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gddoc['name'],
                                               progress=100,
                                               step='Complete')
-            # Changes detected, so add gitdeploy and the relevant servers that must be deployed to
-            changed = True
         try:
             gdm.update_repo_last_build(build_doc['build_name'])
         except:
@@ -412,11 +407,9 @@ def _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, settings, jo
     # in the event that the gitrepo hasn't changed, but the gitdeploy indicates that we haven't successfully
     # deployed to all servers, we want to force git pull
     # this can happen if multiple gitdeploys share the same gitrepo
-    if gdm.stale:
-        changed = True
 
-    if changed:
-        queue.put({gddoc['name']: determine_deployabe_servers(gddoc['servers'], servers)})
+    #always pull for now
+    queue.put({gddoc['name']: determine_deployabe_servers(gddoc['servers'], servers)})
 
 def _threadsafe_pull_callback(results, tag, **kwargs):
     '''
@@ -578,7 +571,7 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
 
     except:
         exc_msg = str(sys.exc_info()[1]).split('\n')
-        exc_msg.insert(0, "ERROR: _threadsafe_pull_callback")
+        exc_msg.insert(0, "ERROR: Exception in _threadsafe_pull_gitdeploy")
         datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, servers, batch_number,
                                                   state=exc_msg)
         datasvc.deploysvc.FailDeployment(application, deployment_id)
@@ -630,9 +623,9 @@ class DeployController:
             gddoc = self.datasvc.gitsvc.GetGitDeploy(app_name, gd)
             gitdeploy_docs[gd] = gddoc
             if parallel:
-                p = billiard.Process(target=_threadsafe_process_gitdeploy,
-                                            args=(gddoc, build_doc, servers, queue, self.datasvc.settings,
-                                                  self.datasvc.job_id, self.deployment_id))
+                p = billiard.Process(target=_threadsafe_process_gitdeploy, name=gd,
+                                     args=(gddoc, build_doc, servers, queue, self.datasvc.settings,
+                                     self.datasvc.job_id, self.deployment_id))
                 p.start()
                 procs.append(p)
 
@@ -650,19 +643,30 @@ class DeployController:
             for p in procs:
                 p.join(300)
                 if p.is_alive():
-                    logging.debug("ERROR: _threadsafe_process_gitdeploy: timeout waiting for child process!")
+                    logging.debug("ERROR: _threadsafe_process_gitdeploy: timeout waiting for child process ({})!".
+                                  format(p.name))
+                    self.datasvc.jobsvc.NewJobData({'status': 'error',
+                                                    'message': 'timeout waiting for child process (process_gitdeploy: {}'.format(p.name)})
+                    self.datasvc.deploysvc.UpdateDeployment_Phase1(app_name, self.deployment_id, p.name,
+                                                          step="ERROR: timed out waiting for child process")
+                    self.datasvc.deploysvc.FailDeployment(app_name, self.deployment_id)
+                    return False, None
+
 
         while not queue.empty():
             gd = queue.get(block=False)
-            for g in gd:
-                self.changed_gitdeploys[g] = gd[g]
+            if gd:
+                for g in gd:
+                    self.changed_gitdeploys[g] = gd[g]
+
+        logging.debug("DeployController: run: post-phase1: changed_gitdeploys: {}".format(self.changed_gitdeploys))
 
         queue = billiard.Queue()
         procs = list()
         self.datasvc.deploysvc.StartDeployment_Phase(app_name, self.deployment_id, 2)
         for gd in self.changed_gitdeploys:
             if parallel:
-                p = billiard.Process(target=_threadsafe_pull_gitdeploy,
+                p = billiard.Process(target=_threadsafe_pull_gitdeploy, name=gd,
                                             args=(app_name, {gd: self.changed_gitdeploys[gd]}, queue, self.datasvc.settings,
                                                   self.datasvc.job_id, self.deployment_id, batch_number))
                 p.start()
@@ -672,9 +676,17 @@ class DeployController:
                                            self.datasvc.job_id, self.deployment_id, batch_number)
         if parallel:
             for p in procs:
-                p.join(600)
+                p.join(300)
                 if p.is_alive():
-                    logging.debug("ERROR: _threadsafe_pull_gitdeploy: timeout waiting for child process!")
+                    logging.debug("ERROR: _threadsafe_pull_gitdeploy: timeout waiting for child process ({})!".
+                                  format(p.name))
+                    self.datasvc.jobsvc.NewJobData({'status': 'error',
+                                                    'message': 'timeout waiting for child process (pull_gitdeploy: {}'.format(p.name)})
+                    self.datasvc.deploysvc.UpdateDeployment_Phase2(app_name, self.deployment_id, p.name,
+                                                                   self.changed_gitdeploys[p.name], batch_number,
+                                                                   state="ERROR: timeout waiting for child process")
+                    self.datasvc.deploysvc.FailDeployment(app_name, self.deployment_id)
+                    return False, None
 
         results = list()
         while not queue.empty():
