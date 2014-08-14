@@ -9,7 +9,7 @@ import fnmatch
 import tempfile
 import json
 import socket
-import itertools
+import os
 
 from elita.actions import action
 import models
@@ -386,6 +386,7 @@ class BuildView(GenericView):
             fname = self.req.POST['build'].filename
             logger.debug("BuildView: PUT: filename: {}".format(fname))
             fd, temp_file = tempfile.mkstemp()
+            os.close(fd)
             with open(temp_file, 'wb') as f:
                 f.write(self.req.POST['build'].file.read(-1))
             return self.run_build_storage_direct(temp_file)
