@@ -6,8 +6,9 @@ import requests
 import zipfile
 import tarfile
 import tempfile
+import logging
 
-import util
+import elita.util
 
 class SupportedFileType:
     TarGz = 'tar.gz'
@@ -17,19 +18,21 @@ class SupportedFileType:
 
 #async callables
 def store_indirect_build(datasvc, app, build, file_type, uri, verify):
-    util.debugLog(store_indirect_build, "indirect_upload: downloading from {}".format(uri))
+    logging.debug("indirect_upload: downloading from {}".format(uri))
     datasvc.jobsvc.NewJobData({'status': 'Downloading build file from {}'.format(uri)})
     r = requests.get(uri, verify=verify)
     fd, temp_file = tempfile.mkstemp()
     with open(temp_file, 'wb') as f:
         f.write(r.content)
-    util.debugLog(store_indirect_build, "download and file write complete")
+    logging.debug("download and file write complete")
     datasvc.jobsvc.NewJobData({'status': "download and file write complete"})
     return store_uploaded_build(datasvc, app, build, file_type, temp_file)
 
 def store_uploaded_build(datasvc, app, build, file_type, temp_file):
     builds_dir = datasvc.settings['elita.builds.dir']
-    bs_obj = BuildStorage(builds_dir, app, build, file_type=file_type, input_file=temp_file)
+    minimum_build_size = int(datasvc.settings['elita.builds.minimum_size'])
+    bs_obj = BuildStorage(builds_dir, app, build, file_type=file_type, input_file=temp_file,
+                          size_cutoff=minimum_build_size)
     datasvc.jobsvc.NewJobData({'status': 'validating file size and type'})
     if not bs_obj.validate():
         return {'error': "Invalid file type or corrupted file--check log"}
@@ -37,7 +40,7 @@ def store_uploaded_build(datasvc, app, build, file_type, temp_file):
     datasvc.jobsvc.NewJobData({'status': 'storing file in builds dir'})
     fname = bs_obj.store()
 
-    util.debugLog(store_uploaded_build, "bs_results: {}".format(fname))
+    logging.debug("bs_results: {}".format(fname))
 
     datasvc.jobsvc.NewJobData({'status': 'updating build packages'})
     build_doc = datasvc.buildsvc.GetBuildDoc(app, build)
@@ -54,8 +57,8 @@ def store_uploaded_build(datasvc, app, build, file_type, temp_file):
         if not found:
             build_doc['files'].append({"file_type": ftype, "path": fname})
     build_doc['stored'] = True
-    util.debugLog(store_uploaded_build, "packages: {}".format(build_doc['packages'].keys()))
-    datasvc.buildsvc.UpdateBuild(app, build_doc)
+    logging.debug("packages: {}".format(build_doc['packages'].keys()))
+    datasvc.buildsvc.UpdateBuild(app, build, build_doc)
 
     datasvc.jobsvc.NewJobData({'status': 'running hook BUILD_UPLOAD_SUCCESS'})
     args = {
@@ -86,8 +89,12 @@ class BuildError(Exception):
 
 
 class BuildStorage:
+    __metaclass__ = elita.util.LoggingMetaClass
+    
     def __init__(self, builds_toplevel_dir=None, application=None, name=None, file_type=None, input_file=None,
                  size_cutoff=1000000):
+        assert isinstance(size_cutoff, int)
+        assert size_cutoff > 0
         self.builds_toplevel_dir = builds_toplevel_dir
         self.name = name
         self.application = application
@@ -110,7 +117,10 @@ class BuildStorage:
         return fname
 
     def validate_file_size(self):
-        return os.path.getsize(self.temp_file_name) >= self.size_cutoff
+        filesize = os.path.getsize(self.temp_file_name)
+        logging.debug("validate_file_size: size_cutoff: {}".format(self.size_cutoff))
+        logging.debug("validate_file_size: temp size: {}".format(filesize))
+        return filesize >= self.size_cutoff
 
     def validate(self):
         if not self.validate_file_size():
@@ -131,19 +141,19 @@ class BuildStorage:
     def validate_tar(self, compression):
         try:
             with tarfile.open(name=self.temp_file_name, mode='r:{}'.format(compression)) as tf:
-                util.debugLog(self, "tar.{}: {}, {}, {} members".format(compression, self.application, self.name,
+                logging.debug("tar.{}: {}, {}, {} members".format(compression, self.application, self.name,
                                                                         len(tf.getnames())))
         except tarfile.ReadError:
-            util.debugLog(self, "tar.{}: invalid tar file!".format(compression))
+            logging.debug("tar.{}: invalid tar file!".format(compression))
             return False
         return True
 
     def validate_zip(self):
         try:
             with zipfile.ZipFile(self.temp_file_name, mode='r') as zf:
-                util.debugLog(self, "zip: {}, {}, {} members".format(self.application, self.name, len(zf.namelist())))
+                logging.debug("zip: {}, {}, {} members".format(self.application, self.name, len(zf.namelist())))
         except zipfile.BadZipfile:
-            util.debugLog(self, "zip: invalid zip file!")
+            logging.debug("zip: invalid zip file!")
             return False
         return True
 

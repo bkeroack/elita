@@ -6,18 +6,29 @@ import pymongo
 import models
 
 def GetMongoClient(settings):
+    assert settings
     client = pymongo.MongoClient(settings['elita.mongo.host'], int(settings['elita.mongo.port']))
+    assert client
     db = client[settings['elita.mongo.db']]
+    assert db
     return db, db['root_tree'].find_one(), client
 
 def DataStore(request):
     db, root, client = GetMongoClient(request.registry.settings)
     return db
 
+def generate_root_tree(db):
+    assert db
+    tree = db['root_tree'].find_one()
+    assert tree
+    updater = models.RootTreeUpdater(tree, db)
+    return models.RootTree(db, updater, tree, db.dereference(tree['_doc']))
+
 def RootService(request):
-    tree = request.db['root_tree'].find_one()
-    updater = models.RootTreeUpdater(tree, request.db)
-    return models.RootTree(request.db, updater, tree, request.db.dereference(tree['_doc']))
+    '''
+    Get root tree.
+    '''
+    return generate_root_tree(request.db)
 
 def DataService(request):
     return models.DataService(request.registry.settings, request.db, request.root)
@@ -27,14 +38,14 @@ def root_factory(request):
     foo = request.db, request.datasvc
     return request.root
 
-
 def main(global_config, **settings):
     """ This function returns a Pyramid WSGI application.
+    @type settings: pyramid.registry.Registry
     """
 
     #data validator / migrations
     db, root, client = GetMongoClient(settings)
-    dv = models.DataValidator(root, db)
+    dv = models.DataValidator(settings, root, db)
     dv.run()
     client.close()
 

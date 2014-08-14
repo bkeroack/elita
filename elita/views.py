@@ -9,15 +9,17 @@ import fnmatch
 import tempfile
 import json
 import socket
-import itertools
+import os
 
 from elita.actions import action
 import models
 import builds
 import auth
+import servers
 import elita.deployment.gitservice
 import elita_exceptions
 import elita.deployment.deploy
+import elita.util
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
@@ -31,6 +33,8 @@ AFFIRMATIVE_SYNONYMS = ("true", "True", "TRUE", "yup", "yep", "yut", "yes", "yea
 
 
 class GenericView:
+    __metaclass__ = elita.util.LoggingMetaClass
+
     def __init__(self, context, request, app_name="_global", permissionless=False, allow_pw_auth=False, is_action=False):
         self.required_params = {"GET": [], "PUT": [], "POST": [], "DELETE": []}  # { reqverb: [ params ] }
         logger.debug("{}: {} ; {}".format(self.__class__.__name__, context.__class__.__name__, request.subpath))
@@ -66,24 +70,6 @@ class GenericView:
             return True, attribs
         else:
             return True, {}
-
-    def do_patch(self, change_func, change_params, get_func, get_params):
-        try:
-            body = self.req.json_body
-        except:
-            return False, self.Error(400, "problem deserializing JSON body (bad JSON?)")
-        keys = set(body.keys())
-        cur_keys = set([k for k in self.context.doc if k[0] != '_'])
-        if not keys.issubset(cur_keys):
-            return False, self.Error(400, {"unknown modification keys": list(cur_keys - keys)})
-        self.datasvc.appsvc.ChangeApplication(self.context.app_name, body)
-        app_doc = self.datasvc.appsvc.GetApplication(self.context.app_name)
-        return True, self.status_ok({
-            'modified': {
-                'changed': body,
-                'new_object': app_doc
-            }
-        })
 
     #for verifying user-supplied parameters
     def check_against_existing(self, existing, submitted):
@@ -212,6 +198,11 @@ class GenericView:
 class NotFoundView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, permissionless=True)
+        logger.debug("REQUEST: url: {}".format(request.url))
+        logger.debug("REQUEST: context: {}".format(context.__class__.__name__))
+        logger.debug("REQUEST: method: {}".format(request.method))
+        logger.debug("REQUEST: params: {}".format(request.params))
+
     def notfound(self):
         return self.Error(404, "not found (404)")
     def GET(self):
@@ -395,6 +386,7 @@ class BuildView(GenericView):
             fname = self.req.POST['build'].filename
             logger.debug("BuildView: PUT: filename: {}".format(fname))
             fd, temp_file = tempfile.mkstemp()
+            os.close(fd)
             with open(temp_file, 'wb') as f:
                 f.write(self.req.POST['build'].file.read(-1))
             return self.run_build_storage_direct(temp_file)
@@ -454,7 +446,12 @@ class ServerContainerView(GenericView):
         if not existing:
             msg = {"error": "server provisioning not implemented yet!"}
         else:
-            msg = "none"
+            job_data = {
+                'server': name,
+                'environment': environment,
+                'existing': existing
+            }
+            msg = self.run_async("setup_new_server", "async", job_data, servers.setup_new_server, {'name': name})
         if res['NewServer']['status'] == 'ok':
             return self.status_ok({
                 "new_server": {
@@ -484,6 +481,8 @@ class ServerView(GenericView):
     def GET(self):
         return {
             'server_name': self.context.name,
+            'server_type': self.context.server_type,
+            'status': self.context.status,
             'created_datetime': self.get_created_datetime_text(),
             'environment': self.context.environment,
             'attributes': self.context.attributes,
@@ -524,6 +523,9 @@ class DeploymentContainerView(GenericView):
         build_name = self.req.params['build_name']
         if build_name not in self.datasvc.buildsvc.GetBuilds(app):
             return self.Error(400, "unknown build '{}'".format(build_name))
+        build_obj = self.datasvc.buildsvc.GetBuild(app, build_name)
+        if not build_obj.stored:
+            return self.Error(400, "no stored data for build: {} (stored == false)".format(build_name))
         try:
             body = self.req.json_body
         except:
@@ -548,6 +550,11 @@ class DeploymentContainerView(GenericView):
             return self.Error(400, "invalid rolling_pause: {}".format(rolling_pause))
 
         if "environments" in body and "groups" in body:
+
+            for c in ('environments', 'groups'):
+                if not isinstance(body[c], list):
+                    return self.Error(400, "{} must be a list".format(c))
+
             envs = self.datasvc.serversvc.GetEnvironments()
             if not self.check_against_existing(envs.keys(), body['environments']):
                 return self.Error(400, "unknown environments: {}".format(self.get_unknown(envs.keys(), body['environments'])))
@@ -561,8 +568,17 @@ class DeploymentContainerView(GenericView):
             servers_in_groups = set([s for s in [self.datasvc.groupsvc.GetGroupServers(app, g) for g in body['groups']]
                                  for s in s])
             target['servers'] = list(servers_in_environments.intersection(servers_in_groups))
-            target['gitdeploys'] = list(set(itertools.chain(*[g['gitdeploys'] for g in [self.datasvc.groupsvc.GetGroup(app, g)
-                                                                               for g in body['groups']]])))
+            target['gitdeploys'] = set()
+            for group in body['groups']:
+                group = self.datasvc.groupsvc.GetGroup(app, group)
+                assert 'gitdeploys' in group
+                assert isinstance(group['gitdeploys'], list)
+                assert len(group['gitdeploys']) > 0
+                if isinstance(group['gitdeploys'][0], list):
+                    target['gitdeploys'].update([gd for sublist in group['gitdeploys'] for gd in sublist])
+                else:
+                    target['gitdeploys'].update(group['gitdeploys'])
+            target['gitdeploys'] = list(target['gitdeploys'])
 
             logging.debug("DeploymentContainerView: calculated target: {}".format(target))
 
@@ -572,6 +588,10 @@ class DeploymentContainerView(GenericView):
                                       .format(k, body['environments'], body['groups']))
 
         if "servers" in body and "gitdeploys" in body:
+
+            for c in ('servers', 'gitdeploys'):
+                if not isinstance(body[c], list):
+                    return self.Error(400, "{} must be a list".format(c))
 
             existing_servers = self.datasvc.serversvc.GetServers()
             if not self.check_against_existing(existing_servers, body['servers']):
@@ -600,8 +620,15 @@ class DeploymentContainerView(GenericView):
         if len(target['servers']) == 0:
             return self.Error(400, "no servers specified for deployment (are you sure the gitdeploys are initialized?)")
 
-        environments = body['environments'] if 'environments' in body else "(not specified)"
-        groups = body['groups'] if 'groups' in body else "(not specified)"
+        # do a final check to make sure all required packages are present in the build
+        gddocs = [self.datasvc.gitsvc.GetGitDeploy(app, gd) for gd in target['gitdeploys']]
+        for gd in gddocs:
+            if gd['package'] not in build_obj.packages:
+                return self.Error(400, "package {} not found in build {} (required by gitdeploy {})"
+                                  .format(gd['package'], build_name, gd['name']))
+
+        environments = body['environments'] if 'environments' in body else None
+        groups = body['groups'] if 'groups' in body else None
         dpo = self.datasvc.deploysvc.NewDeployment(app, build_name, environments, groups, target['servers'], target['gitdeploys'])
         d_id = dpo['NewDeployment']['id']
         target['environments'] = environments if isinstance(environments, list) else None
@@ -612,7 +639,7 @@ class DeploymentContainerView(GenericView):
             'target': target,
             'rolling_divisor': rolling_divisor,
             'rolling_pause': rolling_pause,
-            'deployment': d_id
+            'deployment_id': d_id
         }
         msg = self.run_async('deploy_{}_{}'.format(app,  build_name), "deployment", args,
                              elita.deployment.deploy.run_deploy, args)
@@ -651,7 +678,8 @@ class DeploymentView(GenericView):
                 'build': self.context.build_name,
                 'servers': self.context.servers if hasattr(self.context, 'servers') else None,
                 'gitdeploys': self.context.gitdeploys if hasattr(self.context, 'gitdeploys') else None,
-                'status': self.context.status
+                'status': self.context.status,
+                'progress': self.context.progress
             }
         }
 
@@ -832,7 +860,11 @@ class GitRepoContainerView(GenericView):
         if not existing:
             uri = None
             kp = self.datasvc.keysvc.GetKeyPair(keypair)
+            if not kp:
+                return self.Error(400, "unknown keypair")
             gp_doc = self.datasvc.gitsvc.GetGitProvider(gitprovider)
+            if not gp_doc:
+                return self.Error(400, "unkown gitprovider")
             logger.debug("GitRepoContainerView: gp_doc: {}".format(gp_doc))
             repo_callable = elita.deployment.gitservice.create_repo_callable_from_type(gp_doc['type'])
             if not repo_callable:
@@ -888,18 +920,13 @@ class GitRepoView(GenericView):
         self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
 
     def GET(self):
-        gp_doc = self.datasvc.Dereference(self.context.gitprovider)
-        gp_doc = {k: gp_doc[k] for k in gp_doc if k[0] != '_'}
-        gp_doc['auth']['password'] = "*****"
+        gitrepo = self.datasvc.gitsvc.GetGitRepo(self.context.application, self.context.name)
+        assert gitrepo and 'gitprovider' in gitrepo and 'auth' in gitrepo['gitprovider']
+        #re-reference embedded fields
+        gitrepo['gitprovider'] = gitrepo['gitprovider']['name']
+        gitrepo['keypair'] = gitrepo['keypair']['name']
         return {
-            'gitrepo': {
-                'created_datetime': self.get_created_datetime_text(),
-                'name': self.context.name,
-                'application': self.context.application,
-                'last_build': self.context.last_build,
-                'uri': self.context.uri if hasattr(self.context, 'uri') else None,
-                'gitprovider': gp_doc
-            }
+            'gitrepo': gitrepo
         }
 
     def DELETE(self):
@@ -974,30 +1001,9 @@ class GitDeployView(GenericView):
 
     def GET(self):
         gddoc = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
-        return {
-            'gitdeploy': {
-                'created_datetime': self.get_created_datetime_text(),
-                'name': gddoc['name'],
-                'package': gddoc['package'],
-                'application': gddoc['application'],
-                'deployed_build': gddoc['deployed_build'],
-                'attributes': gddoc['attributes'],
-                'servers': gddoc['servers'] if 'servers' in gddoc else "(not found)",
-                'options': gddoc['options'],
-                'actions': gddoc['actions'],
-                'location': {
-                    'path': gddoc['location']['path'],
-                    'gitrepo': {
-                        'name': gddoc['location']['gitrepo']['name'],
-                        'last_build': gddoc['location']['gitrepo']['last_build'],
-                        'gitprovider': {
-                            'name': gddoc['location']['gitrepo']['gitprovider']['name'],
-                            'type': gddoc['location']['gitrepo']['gitprovider']['type']
-                        }
-                    }
-                }
-            }
-        }
+        #re-reference embedded
+        gddoc['location']['gitrepo'] = gddoc['location']['gitrepo']['name']
+        return {k: gddoc[k] for k in gddoc if k[0] != '_'}
 
     def check_servers_list(self, body):
         if "servers" not in body:
@@ -1016,7 +1022,6 @@ class GitDeployView(GenericView):
                 return False, self.Error(400, "no servers matched pattern: {}".format(sglob))
         self.servers = servers
         return True, None
-
 
     def update(self, body):
         keys = {'attributes', 'options', 'package', 'actions', 'location'}
@@ -1164,7 +1169,8 @@ class GroupContainerView(GenericView):
         attributes = gitdeploys['attributes'] if 'attributes' in gitdeploys else dict()
 
         existing_gitdeploys = set(self.datasvc.gitsvc.GetGitDeploys(self.context.parent))
-        submitted_gitdeploys = set(gitdeploys['gitdeploys'])
+        submitted_gitdeploys = set([gd for sublist in gitdeploys['gitdeploys'] for gd in sublist]) \
+            if isinstance(gitdeploys['gitdeploys'][0], list) else set(gitdeploys['gitdeploys'])
         if not existing_gitdeploys.issuperset(submitted_gitdeploys):
             return self.Error(400, "unknown gitdeploys: {}".format(list(submitted_gitdeploys - existing_gitdeploys)))
 
@@ -1321,13 +1327,31 @@ class UserView(GenericView):
         self.context.permissions = perms
         self.datasvc.usersvc.SaveUser(self.context)
 
-    def GET(self):  # return active
+    def GET(self):
+        # ugly. we want to support both password auth and valid tokens, but only tokens from the same user or with the
+        # '_global' permission.
         if 'password' in self.req.params:
             if not self.context.validate_password(self.req.params['password']):
                 return self.Error(403, "incorrect password")
-        elif 'auth_token' not in self.req.params:
+        elif ('auth_token' not in self.req.params) and ('Auth-Token' not in self.req.headers):
             return self.Error(403, "password or auth token required")
-        name = self.context.name
+        else:
+            if 'auth_token' in self.req.params and len(self.req.params.getall('auth_token')) > 1:  # multiple auth tokens
+                return self.Error(403, "incorrect authentication")
+            token = self.req.params.getall('auth_token')[0] if 'auth_token' in self.req.params else self.req.headers['Auth-Token']
+            authsvc = auth.UserPermissions(self.datasvc.usersvc, token, datasvc=self.datasvc)
+            allowed_apps = authsvc.get_allowed_apps()
+            global_read = False
+            for k in allowed_apps:
+                if 'read' in k:
+                    if '_global' in allowed_apps[k]:
+                        global_read = True
+            if not authsvc.valid_token or authsvc.username != self.context.username or not global_read:
+                logging.debug("valid_token: {}".format(authsvc.valid_token))
+                logging.debug("usernames: {}, {}".format(authsvc.username, self.context.username))
+                logging.debug("allowed_apps: {}".format(authsvc.get_allowed_apps()))
+                return self.Error(403, "bad token")
+        name = self.context.username
         if len(self.datasvc.usersvc.GetUserTokens(name)) == 0:
             self.datasvc.usersvc.NewToken(name)
         return self.status_ok_with_token(name)
@@ -1485,6 +1509,12 @@ import pkg_resources
 @view_config(name="about", renderer='json')
 def About(request):
     apps = request.datasvc.appsvc.GetApplications()
+    appstats = {
+        a: {
+            'builds': len(request.datasvc.buildsvc.GetBuilds(a)),
+            'gitrepos': len(request.datasvc.gitsvc.GetGitRepos(a)),
+            'gitdeploys': len(request.datasvc.gitsvc.GetGitDeploys(a))
+        } for a in apps}
     return {
         'about': {
             'name': 'elita',
@@ -1493,11 +1523,8 @@ def About(request):
             'hostname': socket.getfqdn()
         },
         'stats': {
-            'applications': len(apps),
+            'applications': appstats,
             'servers': len(request.datasvc.serversvc.GetServers()),
-            'builds': {a: len(request.datasvc.buildsvc.GetBuilds(a)) for a in apps},
-            'gitrepos': {a: len(request.datasvc.gitsvc.GetGitRepos(a)) for a in apps},
-            'gitdeploys': {a: len(request.datasvc.gitsvc.GetGitDeploys(a)) for a in apps},
             'users': len(request.datasvc.usersvc.GetUsers())
         }
     }

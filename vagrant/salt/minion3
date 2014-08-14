@@ -1,0 +1,4 @@
+id: server3
+master: 10.37.129.100
+log_level_logfile: DEBUG
+

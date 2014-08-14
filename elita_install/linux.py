@@ -11,7 +11,7 @@ import logging
 from clint.textui import puts, colored, indent
 
 
-ELITA_HOME = "/var/run/elita"
+ELITA_HOME = "/home/elita"
 ELITA_LOG_DIR = "/var/log/elita"
 ELITA_ETC = "/etc/elita"
 ELITA_INITD = "/etc/init.d/elita"
@@ -64,7 +64,7 @@ def chown_dir(dirname):
 
 def create_user_and_group():
     try:
-        useradd("elita", s="/bin/false", d=ELITA_HOME)
+        useradd("elita", s="/bin/false", d=ELITA_HOME, G='root')    # root group so elita can run salt
     except:
         puts(colored.red("Error creating user/group elita!"))
 
@@ -94,8 +94,8 @@ def create_salt_dirs():
     mk_dir('/srv/salt')
     mk_dir('/srv/salt/elita')
     mk_dir('/srv/salt/elita/files')
-    mk_dir('/srv/salt/elita/win')
-    mk_dir('/srv/salt/elita/linux')
+    mk_dir('/srv/salt/elita/files/win')
+    mk_dir('/srv/salt/elita/files/linux')
     mk_dir('/srv/pillar')
     chown("elita:elita", "/srv/pillar", R=True)
     chown("elita:elita", "/srv/salt", R=True)
@@ -143,6 +143,8 @@ def InstallUbuntu():
     do_step("Setting ownership on config directory", chown_dir, [ELITA_ETC])
 
     do_step("Creating running directory: {}".format(ELITA_HOME), mk_dir, [ELITA_HOME])
+
+    do_step("Creating Python egg cache directory", mk_dir, [os.path.join(ELITA_HOME, ".python-eggs")])
 
     do_step("Setting ownership on running directory", chown_dir, [ELITA_HOME])
 

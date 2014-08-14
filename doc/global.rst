@@ -384,7 +384,7 @@ Create Gitprovider
 
    .. sourcecode:: bash
 
-      $ curl -XPUT '/global/gitproviders?name=mygitprovider' -d '{
+      $ curl -H "Content-Type: application/json" -XPUT '/global/gitproviders?name=mygitprovider' -d '{
           "type": "bitbucket",
           "auth": {
             "username": "my-username",
@@ -465,11 +465,15 @@ Keypairs can be uploaded either as JSON-encoded strings (PUT request) or as file
 
    :param name: keypair name (URL-encoded)
    :param type: keypair type ("git" or "salt")
-   :jsonparam string body: JSON object containing JSON-encoded public and private keys
+   :param from: source of keypair data ("json" or "files")
+   :jsonparam string body: (optional) JSON object containing JSON-encoded public and private keys
    :type name: string
    :type type: string
+   :type from: string
 
-   Create new keypair by providing JSON.
+   Create new keypair by providing JSON-formatted keys or by uploading key files directly. Both keys must be in SSH format.
+   Use the URL parameter "from" to indicate which request is being made: "json" means the key data is JSON-encoded
+   within the request body, "files" means the key files are provided as POST file data.
 
    **Example JSON body**
 
@@ -483,14 +487,21 @@ Keypairs can be uploaded either as JSON-encoded strings (PUT request) or as file
           "public_key": "ssh-rsa ... foo@bar.com\\n"
       }
 
-   **Example request**
+   **Example request (JSON-encoded keys)**
 
    .. sourcecode:: bash
 
-      $ curl -XPUT '/global/keypairs?type=git&name=mykeypair' -d '{
+      $ curl -H "Content-Type: application/json" -XPUT '/global/keypairs?type=git&name=mykeypair&from=json' -d '{
           "private_key": "-----BEGIN RSA PRIVATE KEY-----\\n...\\n-----END RSA PRIVATE KEY-----\\n",
           "public_key": "ssh-rsa ... foo@bar.com\\n"
       }'
+
+   **Example request (key files)**
+
+   .. sourcecode:: bash
+
+      $ curl -XPOST '/global/keypairs?type=git&name=mykeypair&from=files' -F "private_key=@/path/to/private.key"
+      -F "public_key=@/path/to/public.key"
 
 .. http:post::   /global/keypairs
 
@@ -507,7 +518,7 @@ Keypairs can be uploaded either as JSON-encoded strings (PUT request) or as file
 
    .. sourcecode:: bash
 
-      $ curl -XPOST '/global/keypairs?type=git&name=mykeypair' -F "private_key=@/home/user/keys/mykey"
+      $ curl -XPOST '/global/keypairs?type=git&name=mykeypair&from=files' -F "private_key=@/home/user/keys/mykey"
       -F "public_key=@/home/user/keys/mykey.pub"
 
 

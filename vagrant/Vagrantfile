@@ -1,0 +1,194 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# Vagrantfile API/syntax version. Don't touch unless you know what you're doing!
+VAGRANTFILE_API_VERSION = "2"
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+  
+  config.vm.define "elita", primary: true do |elita|
+  
+    #fixes tty issue
+    elita.ssh.shell = "bash -c 'BASH_ENV=/etc/profile exec bash'"
+    
+    elita.vm.provider "virtualbox" do |v, override|
+      override.vm.box = "ubuntu/trusty64"
+    end
+    
+    elita.vm.provider "parallels" do |v, override|
+      override.vm.box = "parallels/ubuntu-14.04"
+    end
+    
+    elita.vm.provider "parallels" do |v|
+      v.name = "elita_vagrant"
+      v.memory = 1024
+      v.cpus = 2
+    end
+
+    elita.vm.network "private_network", ip: "10.37.129.100"
+
+    elita.vm.synced_folder "salt/keys", "/srv/keys"
+
+    elita.vm.synced_folder "nginx", "/srv/nginx"
+  
+    elita.vm.synced_folder "..", "/home/vagrant/elita"
+
+    elita.vm.synced_folder "setup-data", "/home/vagrant/setup-data"
+    
+    elita.vm.synced_folder "../../elita_scorebig", "/home/vagrant/elita_scorebig"
+  
+    elita.vm.provision :salt do |salt|
+
+      salt.master_config = "salt/master"
+        
+      salt.master_key = "salt/keys/master.pem"
+      salt.master_pub = "salt/keys/master.pub"
+      
+      salt.seed_master = {server0: "salt/keys/minion0.pub"}
+        
+      salt.run_highstate = false
+      salt.install_master = true
+      salt.no_minion = true
+    end
+    
+    elita.vm.provision :shell, path: "provision-elita.sh"
+    elita.vm.provision :shell, path: "setup-data/setup_data.sh"
+  
+  end
+  
+  config.vm.define "server0" do |server0|
+    
+    #fixes tty issue
+    server0.ssh.shell = "bash -c 'BASH_ENV=/etc/profile exec bash'"
+    
+    server0.vm.provider "virtualbox" do |v, override|
+      override.vm.box = "ubuntu/trusty64"
+    end
+    
+    server0.vm.provider "parallels" do |v, override|
+      override.vm.box = "parallels/ubuntu-14.04"
+    end
+    
+    server0.vm.provider "parallels" do |v|
+      v.name = "server0_vagrant"
+      v.memory = 1024
+      v.cpus = 2
+    end
+    
+    server0.vm.network "private_network", ip: "10.37.129.101"
+  
+    #server0.vm.synced_folder "salt/state-tree", "/srv/salt"
+  
+    server0.vm.provision :salt do |salt|
+
+      salt.minion_config = "salt/minion0"
+        
+      salt.minion_key = "salt/keys/minion0.pem"
+      salt.minion_pub = "salt/keys/minion0.pub"
+        
+      salt.run_highstate = true
+    end 
+
+  end
+  
+  config.vm.define "server1" do |server1|
+    
+    #fixes tty issue
+    server1.ssh.shell = "bash -c 'BASH_ENV=/etc/profile exec bash'"
+    
+    server1.vm.provider "virtualbox" do |v, override|
+      override.vm.box = "ubuntu/trusty64"
+    end
+    
+    server1.vm.provider "parallels" do |v, override|
+      override.vm.box = "parallels/ubuntu-14.04"
+    end
+    
+    server1.vm.provider "parallels" do |v|
+      v.name = "server1_vagrant"
+      v.memory = 1024
+      v.cpus = 2
+    end
+    
+    server1.vm.network "private_network", ip: "10.37.129.102"
+  
+    server1.vm.provision :salt do |salt|
+
+      salt.minion_config = "salt/minion1"
+        
+      salt.minion_key = "salt/keys/minion1.pem"
+      salt.minion_pub = "salt/keys/minion1.pub"
+        
+      salt.run_highstate = true
+    end 
+
+  end
+  
+  config.vm.define "server2" do |server2|
+    
+    #fixes tty issue
+    server2.ssh.shell = "bash -c 'BASH_ENV=/etc/profile exec bash'"
+    
+    server2.vm.provider "virtualbox" do |v, override|
+      override.vm.box = "ubuntu/trusty64"
+    end
+    
+    server2.vm.provider "parallels" do |v, override|
+      override.vm.box = "parallels/ubuntu-14.04"
+    end
+    
+    server2.vm.provider "parallels" do |v|
+      v.name = "server2_vagrant"
+      v.memory = 1024
+      v.cpus = 2
+    end
+    
+    server2.vm.network "private_network", ip: "10.37.129.103"
+  
+    server2.vm.provision :salt do |salt|
+
+      salt.minion_config = "salt/minion2"
+        
+      salt.minion_key = "salt/keys/minion2.pem"
+      salt.minion_pub = "salt/keys/minion2.pub"
+        
+      salt.run_highstate = true
+    end 
+
+  end
+  
+  config.vm.define "server3" do |server3|
+    
+    #fixes tty issue
+    server3.ssh.shell = "bash -c 'BASH_ENV=/etc/profile exec bash'"
+    
+    server3.vm.provider "virtualbox" do |v, override|
+      override.vm.box = "ubuntu/trusty64"
+    end
+    
+    server3.vm.provider "parallels" do |v, override|
+      override.vm.box = "parallels/ubuntu-14.04"
+    end
+    
+    server3.vm.provider "parallels" do |v|
+      v.name = "server3_vagrant"
+      v.memory = 1024
+      v.cpus = 2
+    end
+    
+    server3.vm.network "private_network", ip: "10.37.129.104"
+  
+    server3.vm.provision :salt do |salt|
+
+      salt.minion_config = "salt/minion3"
+        
+      salt.minion_key = "salt/keys/minion3.pem"
+      salt.minion_pub = "salt/keys/minion3.pub"
+        
+      salt.run_highstate = true
+    end 
+
+  end
+  
+
+end

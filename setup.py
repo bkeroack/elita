@@ -7,26 +7,42 @@ README = open(os.path.join(here, 'README.rst')).read()
 CHANGES = open(os.path.join(here, 'CHANGES.txt')).read()
 
 requires = [
+    #core deps
     'pyramid',
     'gunicorn',
     'gevent',
-    'unittest2',
-    'pymongo',
+    'salt',
     'celery',
+    'pymongo',
+
+    # direct git integration
+    'gitpython>=0.3.2.RC1',
+
+    #for api calls, calculate slugs for BitBucket URLs
     'requests',
     'python-slugify',
-    'salt',
-    #'M2Crypto',
-    'PyYAML',
-    'lockfile',
-    'sh',
     'simplejson',
-    'gitpython>=0.3.2.RC1',
-    'clint'
-    ]
+
+    # to parse salt states
+    'PyYAML',
+
+    # to parse ssh config
+    #'paramiko',
+
+    # we need to lock, eg, salt state files during modification
+    'lockfile',
+
+    # for installation primarily
+    'sh',
+    'clint',
+
+    #testing
+    'nose',
+    'mock'
+]
 
 setup(name='elita',
-      version="0.39",
+      version="0.59",
       description='Continuous deployment (continuous delivery) and infrastructure management REST framework',
       long_description=README + '\n\n' + CHANGES,
       license='Apache',
@@ -44,7 +60,8 @@ setup(name='elita',
       keywords='continuous deployment delivery REST automation devops',
       packages=find_packages(exclude=['test*']),
       package_data={
-          'elita_install': ['util/*', '*.ini', '*.txt', '*.rst', '*.cfg']
+          'elita_install': ['util/*', '*.ini', '*.txt', '*.rst', '*.cfg'],
+          'elita_cli': ['*']
       },
       include_package_data=True,
       zip_safe=False,
@@ -52,6 +69,7 @@ setup(name='elita',
       entry_points={
           'paste.app_factory': ['main=elita:main'],
           'console_scripts': [
-              'elita_install=elita_install:Install'
+              'elita_install=elita_install:Install',
+              'elita=elita_cli:Command_Line_Client'
           ]
       })
