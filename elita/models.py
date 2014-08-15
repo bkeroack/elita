@@ -1909,7 +1909,6 @@ class RootTree(collections.MutableMapping):
         return key
 
 class RootTreeUpdater:
-    __metaclass__ = util.LoggingMetaClass
 
     def __init__(self, tree, db):
         self.tree = tree
