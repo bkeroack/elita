@@ -740,7 +740,7 @@ class JobDataService(GenericChildDataService):
         assert job_id
         assert elita.util.type_check.is_string(job_id)
         return sorted([{'created_datetime': d['_id'].generation_time.isoformat(' '), 'data': d['data']} for
-                       d in self.mongo_service.get('job_data', {'job_id': job_id}, multi=True)],
+                       d in self.mongo_service.get('job_data', {'job_id': job_id}, multi=True, empty=True)],
                       key=lambda k: k['created_datetime'])
 
     def SaveJobResults(self, results):
