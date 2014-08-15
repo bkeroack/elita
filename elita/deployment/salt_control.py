@@ -292,7 +292,7 @@ class RemoteCommands:
         Runs all listed SLSes asynchronously
         '''
         cmd_group = [{'command': 'state.sls', 'arguments': [s], 'servers': sls_map[s]} for s in sls_map]
-        return self.sc.salt_commands_async(callback, args, cmd_group, timeout=300)
+        return self.sc.salt_commands_async(callback, args, cmd_group, timeout=600)
 
 class SaltController:
     __metaclass__ = elita.util.LoggingMetaClass

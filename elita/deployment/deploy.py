@@ -517,6 +517,7 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
                                                                            'batch_number': batch_number,
                                                                            'gitdeploy': gd_name})
         logging.debug("_threadsafe_pull_gitdeploy: results: {}".format(res))
+
         errors = dict()
         successes = dict()
         for r in res:
@@ -552,8 +553,17 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
             datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, successes.keys(), batch_number,
                                                       progress=100, state="Complete")
 
+        missing = list(set([host for r in res for host in r]).difference(set(servers)))
+        if missing:
+            datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, missing, batch_number,
+                                                      state="ERROR: no results (timed out waiting for salt?)")
+            logging.debug("_threadsafe_pull_gitdeploy: error: empty results for: {}; possible salt timeout".format(missing))
+            datasvc.jobsvc.NewJobData({"_threadsafe_pull_gitdeploy": "empty results for {}".format(missing)})
+            datasvc.deploysvc.FailDeployment(application, deployment_id)
+
         deploy_results = {
             gd_name: {
+                "raw_results": res,
                 "errors": len(errors) > 0,
                 "error_results": errors,
                 "successes": len(successes) > 0,
@@ -567,7 +577,6 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
             "DeployServers": deploy_results
         })
 
-        return len(errors) == 0
 
     except:
         exc_msg = str(sys.exc_info()[1]).split('\n')
@@ -691,6 +700,9 @@ class DeployController:
         results = list()
         while not queue.empty():
             results.append(queue.get(block=False))
+
+        if not results:
+            return False, results
 
         for r in results:
             for gd in r:

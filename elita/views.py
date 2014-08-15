@@ -352,6 +352,10 @@ class BuildContainerView(GenericView):
 
 
 class BuildView(GenericView):
+    # we have to override the logging metaclass because we return raw filedata in GET and all that will be dumped
+    # to log otherwise (bad)
+    __metaclass__ = type
+
     def __init__(self, context, request):
         self.app_name = context.app_name
         GenericView.__init__(self, context, request, app_name=self.app_name)

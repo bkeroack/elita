@@ -7,7 +7,7 @@ import models
 
 def GetMongoClient(settings):
     assert settings
-    client = pymongo.MongoClient(settings['elita.mongo.host'], int(settings['elita.mongo.port']))
+    client = pymongo.MongoClient(settings['elita.mongo.host'], int(settings['elita.mongo.port']), fsync=True)
     assert client
     db = client[settings['elita.mongo.db']]
     assert db
