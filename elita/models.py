@@ -36,7 +36,8 @@ class Request:
     db = None
 
 class MongoService:
-    __metaclass__ = elita.util.LoggingMetaClass
+    # logspam
+    #__metaclass__ = elita.util.LoggingMetaClass
 
     def __init__(self, db):
         '''
@@ -68,7 +69,7 @@ class MongoService:
                 doc[k] = keys[k]
             if '_id' in doc:
                 del doc['_id']
-        id = self.db[collection].save(doc)
+        id = self.db[collection].save(doc, fsync=True, j=True)
         logging.debug("new id: {}".format(id))
         if existing and remove_existing:
             keys['_id'] = {'$ne': id}
@@ -98,7 +99,7 @@ class MongoService:
             keys['_id'] = {'$ne': canonical_id}
             self.db[collection].remove(keys)
         path_dot_notation = '.'.join(path)
-        result = self.db[collection].update({'_id': canonical_id}, {'$set': {path_dot_notation: doc_or_obj}})
+        result = self.db[collection].update({'_id': canonical_id}, {'$set': {path_dot_notation: doc_or_obj}}, fsync=True, j=True)
         return result['n'] == 1 and result['updatedExisting'] and not result['err']
 
     def delete(self, collection, keys):
@@ -115,7 +116,7 @@ class MongoService:
         if len(dlist) > 1:
             logging.warning("Found duplicate entries for query {} in collection {}; removing all".format(keys,
                                                                                                         collection))
-        return self.db[collection].remove(keys)
+        return self.db[collection].remove(keys, fsync=True, j=True)
 
     def update_roottree(self, path, collection, id, doc=None):
         '''
@@ -131,7 +132,7 @@ class MongoService:
         path_dot_notation = '.'.join(path)
         root_tree_doc = doc if doc else {}
         root_tree_doc['_doc'] = bson.DBRef(collection, id)
-        result = self.db['root_tree'].update({}, {'$set': {path_dot_notation: root_tree_doc}})
+        result = self.db['root_tree'].update({}, {'$set': {path_dot_notation: root_tree_doc}}, fsync=True, j=True)
         return result['n'] == 1 and result['updatedExisting'] and not result['err']
 
     def rm_roottree(self, path):
@@ -141,7 +142,7 @@ class MongoService:
         assert hasattr(path, '__iter__')
         assert path
         path_dot_notation = '.'.join(path)
-        result = self.db['root_tree'].update({}, {'$unset': {path_dot_notation: ''}})
+        result = self.db['root_tree'].update({}, {'$unset': {path_dot_notation: ''}}, fsync=True, j=True)
         return result['n'] == 1 and result['updatedExisting'] and not result['err']
 
     def get(self, collection, keys, multi=False, empty=False):
