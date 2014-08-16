@@ -238,8 +238,8 @@ class RollingDeployController:
                     time.sleep(rolling_pause)
 
         else:
-
-            self.datasvc.deploysvc.update_deployment_plan(application, self.deployment_id,
+            #app, name, batches, gitdeploys):
+            self.datasvc.deploysvc.InitializeDeploymentPlan(application, self.deployment_id,
                                         [{'gitdeploys': target['gitdeploys'], 'servers': target['servers']}],
                                         target['gitdeploys'])
 
