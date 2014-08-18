@@ -33,7 +33,7 @@ AFFIRMATIVE_SYNONYMS = ("true", "True", "TRUE", "yup", "yep", "yut", "yes", "yea
 
 
 class GenericView:
-    __metaclass__ = elita.util.LoggingMetaClass
+    #__metaclass__ = elita.util.LoggingMetaClass
 
     def __init__(self, context, request, app_name="_global", permissionless=False, allow_pw_auth=False, is_action=False):
         self.required_params = {"GET": [], "PUT": [], "POST": [], "DELETE": []}  # { reqverb: [ params ] }
@@ -352,9 +352,6 @@ class BuildContainerView(GenericView):
 
 
 class BuildView(GenericView):
-    # we have to override the logging metaclass because we return raw filedata in GET and all that will be dumped
-    # to log otherwise (bad)
-    __metaclass__ = type
 
     def __init__(self, context, request):
         self.app_name = context.app_name
