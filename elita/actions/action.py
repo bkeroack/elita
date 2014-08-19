@@ -33,7 +33,7 @@ def run_job(self, settings, callable, args):
             "exception": f_exc
         }
         logging.debug("EXCEPTION: {}".format(f_exc))
-    datasvc.jobsvc.SaveJobResults(results)
+    datasvc.jobsvc.SaveJobResults(results if results else {"status": "job returned no data"})
     client.close()
 
 #generic interface to run code async (not explicit named actions/hooks)

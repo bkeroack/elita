@@ -880,7 +880,7 @@ class GitRepoContainerView(GenericView):
                 'gitprovider': gp_doc['name'],
                 'name': name,
                 'application': self.context.parent,
-                'keypair': kp
+                'keypair': kp['name']
             }
             msg = self.run_async("create_repository", "async", job_data, repo_callable, args)
             ret = self.datasvc.gitsvc.NewGitRepo(self.context.parent, name, keypair, gitprovider, uri=uri)
@@ -985,6 +985,8 @@ class GitDeployContainerView(GenericView):
             assert 'default_branch' in location
         except AssertionError:
             return self.Error(400, "invalid location object: one or more of ('path', 'gitrepo', 'default_branch') not found")
+        if location['gitrepo'] not in self.datasvc.gitsvc.GetGitRepos(app):
+            return self.Error(400, "unknown gitrepo: {}".format(location['gitrepo']))
         res = self.datasvc.gitsvc.NewGitDeploy(name, app, package, options, actions, location, attribs)
         if 'error' in res:
             return self.Error(500, {"NewGitDeploy": res})

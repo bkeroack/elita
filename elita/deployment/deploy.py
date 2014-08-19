@@ -620,17 +620,20 @@ class DeployController:
         assert isinstance(batch_number, int) and batch_number >= 0
 
         build_doc = self.datasvc.buildsvc.GetBuildDoc(app_name, build_name)
-        gitdeploy_docs = dict()
+        gitdeploy_docs = {gd: self.datasvc.gitsvc.GetGitDeploy(app_name, gd) for gd in gitdeploys}
         #reset changed gitdeploys
         self.changed_gitdeploys = dict()
 
         queue = billiard.Queue()
         procs = list()
 
+        #we need to get a list of gitdeploys with unique gitrepos, so build a reverse mapping
+        gitrepo_gitdeploy_mapping = {gitdeploy_docs[gd]['gitrepo']['name']: gd for gd in gitdeploys}
+
         self.datasvc.deploysvc.StartDeployment_Phase(app_name, self.deployment_id, 1)
-        for gd in gitdeploys:
-            gddoc = self.datasvc.gitsvc.GetGitDeploy(app_name, gd)
-            gitdeploy_docs[gd] = gddoc
+        for gr in gitrepo_gitdeploy_mapping:
+            gd = gitrepo_gitdeploy_mapping[gr]
+            gddoc = gitdeploy_docs[gd]
             if parallel:
                 p = billiard.Process(target=_threadsafe_process_gitdeploy, name=gd,
                                      args=(gddoc, build_doc, servers, queue, self.datasvc.settings,

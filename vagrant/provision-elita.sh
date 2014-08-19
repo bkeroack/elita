@@ -19,6 +19,10 @@ cp /srv/keys/minion0.pub /etc/salt/pki/master/minions/server0
 cp /srv/keys/minion1.pub /etc/salt/pki/master/minions/server1
 cp /srv/keys/minion2.pub /etc/salt/pki/master/minions/server2
 cp /srv/keys/minion3.pub /etc/salt/pki/master/minions/server3
+cp /srv/keys/web01.pub /etc/salt/pki/master/minions/web01
+cp /srv/keys/web02.pub /etc/salt/pki/master/minions/web02
+cp /srv/keys/bus01.pub /etc/salt/pki/master/minions/bus01
+cp /srv/keys/bus02.pub /etc/salt/pki/master/minions/bus02
 
 #have to restart salt to get it to accept keys
 service salt-master stop

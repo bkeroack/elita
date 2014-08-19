@@ -11,7 +11,7 @@ def is_string(obj):
         return isinstance(obj, str)
 
 def is_seq(obj):
-    return isinstance(obj, collections.Sequence)
+    return isinstance(obj, collections.Sequence) and not is_string(obj)
 
 def is_optional_seq(obj):
     return not obj or is_seq(obj)

@@ -1143,7 +1143,6 @@ class GitDataService(GenericChildDataService):
         assert elita.util.type_check.is_string(name)
         assert elita.util.type_check.is_dictlike(doc)
         assert app in self.root['app']
-        assert name in self.root['app'][app]['gitrepos']
 
         self.UpdateObject('gitrepos', {'name': name, 'application': app}, doc)
 
@@ -1229,7 +1228,7 @@ class DeploymentDataService(GenericChildDataService):
         
         self.UpdateObject('deployments', {'application': app, 'name': name}, doc)
 
-    def InitializeDeploymentPlan(self, app, name, batches, gitdeploys):
+    def InitializeDeploymentPlan(self, app, name, batches, gitrepos):
         '''
         Create the appropriate structure in the "progress" field of the deployment.
 
@@ -1238,18 +1237,18 @@ class DeploymentDataService(GenericChildDataService):
         @type batches: list(dict)
         @type gitdeploys: list(str)
         '''
-        assert app and name and batches and gitdeploys
+        assert app and name and batches and gitrepos
         assert elita.util.type_check.is_string(app)
         assert elita.util.type_check.is_seq(batches)
         assert all([elita.util.type_check.is_dictlike(b) for b in batches])
-        assert elita.util.type_check.is_seq(gitdeploys)  # list of all gitdeploys
+        assert elita.util.type_check.is_seq(gitrepos)  # list of all gitdeploys
 
-        for gd in gitdeploys:
+        for gr in gitrepos:
             doc = {
                 'progress': {
                     'phase1': {
-                        'gitdeploys': {
-                            gd: {
+                        'gitrepos': {
+                            gr: {
                                 'progress': 0,
                                 'step': 'not started',
                                 'changed_files': []
@@ -1259,8 +1258,6 @@ class DeploymentDataService(GenericChildDataService):
                 }
             }
             self.UpdateDeployment(app, name, doc)
-
-        gitdeploy_docs = {gd: self.deps['GitDataService'].GetGitDeploy(app, gd) for gd in gitdeploys}
 
         # at a low level, deployment operates in a gitdeploy-centric way
         # but on a human level, a server-centric view is more intuitive, so we generate a list of servers per batch,
@@ -1290,10 +1287,11 @@ class DeploymentDataService(GenericChildDataService):
             for server in batch['servers']:
                 doc['progress']['phase2'][batch_name][server] = {}
                 for gitdeploy in batch['gitdeploys']:
-                    if server in elita.deployment.deploy.determine_deployabe_servers(gitdeploy_docs[gitdeploy]['servers'], [server]):
+                    gddoc = self.deps['GitDataService'].GetGitDeploy(app, gitdeploy)
+                    if server in elita.deployment.deploy.determine_deployabe_servers(gddoc['servers'], [server]):
                         doc['progress']['phase2'][batch_name][server][gitdeploy] = {
-                            'path': gitdeploy_docs[gitdeploy]['location']['path'],
-                            'package': gitdeploy_docs[gitdeploy]['package'],
+                            'path': gddoc['location']['path'],
+                            'package': gddoc['package'],
                             'progress': 0,
                             'state': 'not started'
                         }
@@ -1639,7 +1637,6 @@ class GitDeploy(GenericDataModel):
     default_values = {
         'name': None,
         'application': None,
-        'server': bson.DBRef("", None),
         'package': 'master',
         'servers': list(),
         'attributes': dict(),
@@ -1933,8 +1930,11 @@ class RootTreeUpdater:
         self.db['root_tree'].update({"_id": root_tree['_id']}, self.tree)
 
 class DataValidator:
-    '''Independent class to migrate/validate the root tree and potentially all docs
-        Intended to run prior to main application, to migrate schema or fix problems
+    '''
+    Responsible for:
+        - Creating proper data model/root_tree on first run
+        - Validating that data isn't broken/inconsistent
+        - Running migrations between versions
     '''
     __metaclass__ = util.LoggingMetaClass
 
@@ -1951,15 +1951,16 @@ class DataValidator:
         self.db = db
 
     def run(self):
+        # order is very significant
         logging.debug("running")
         self.check_root()
+        self.check_toplevel()
+        self.check_global()
         self.check_root_references()
         self.check_users()
         self.check_user_permissions()
         self.check_doc_consistency()
-        self.check_toplevel()
         self.check_containers()
-        self.check_global()
         self.check_apps()
         self.check_jobs()
         self.check_deployments()
@@ -2078,7 +2079,7 @@ class DataValidator:
             if k == '_doc':
                 if not db.dereference(obj[k]):
                     logging.warning("Invalid dbref found! {}".format(obj[k].collection))
-            elif k[0] != '_':
+            elif k[0] != '_' and not isinstance(obj[k], bson.ObjectId):
                 DataValidator.check_root_refs(db, obj[k])
 
     def check_root_references(self):
@@ -2113,22 +2114,6 @@ class DataValidator:
                 self.root['global']['users'][DEFAULT_ADMIN_USERNAME] = {
                     '_doc': bson.DBRef('users', admin['_id'])
                 }
-            # uobj = User({
-            #     'username': DEFAULT_ADMIN_USERNAME,
-            #     'password': DEFAULT_ADMIN_PASSWORD,
-            #     'permissions': DEFAULT_ADMIN_PERMISSIONS
-            # })
-            # id = self.db['users'].insert({
-            # "_class": "User",
-            # "username": uobj.name,
-            # "hashed_pw": uobj.hashed_pw,
-            # "attributes": uobj.attributes,
-            # "salt": uobj.salt,
-            # "permissions": uobj.permissions
-            # })
-            # self.root['global']['users'][DEFAULT_ADMIN_USERNAME] = {
-            #     '_doc': bson.DBRef('users', id)
-            # }
 
     def check_users(self):
         for u in self.root['global']['users']:

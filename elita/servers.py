@@ -37,16 +37,16 @@ class ServerSetup:
         if os_type == "windows":
             # push git wrapper script. run it.
             # make sure git works
-            rc.push_files(name, {"salt://elita/files/git_wrapper_setup.ps1": 'C:\\git_wrapper_setup.ps1'})
-            rc.run_powershell_script(name, 'C:\\git_wrapper_setup.ps1')
-            if 'not recognized as an internal or external command' in rc.run_shell_command(name, 'git')[name]:
+            rc.push_files([name], {"salt://elita/files/win/git_wrapper_setup.ps1": 'C:/git_wrapper_setup.ps1'})
+            rc.run_powershell_script([name], 'C:/git_wrapper_setup.ps1')
+            if 'not recognized as an internal or external command' in rc.run_shell_command([name], 'git')[name]:
                 status = 'git not available'
             else:
                 status = 'ok, initialized'
             self.datasvc.serversvc.ChangeServer(name, {'status': status})
 
     def new(self, name):
-        sc = deployment.salt_control.SaltController(self.datasvc.settings, self.datasvc.job_id)
+        sc = deployment.salt_control.SaltController(self.datasvc)
         rc = deployment.salt_control.RemoteCommands(sc)
 
         ost = self.set_server_type(rc, name)

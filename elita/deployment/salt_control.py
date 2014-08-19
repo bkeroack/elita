@@ -109,7 +109,7 @@ class RemoteCommands:
         return self.sc.salt_command(server_list, 'file.mkdir', [path])
 
     def delete_directory_win(self, server_list, path):
-        return self.sc.salt_command(server_list, 'cmd.run', ["Remove-Item -Recurse -Force {}".format(path)],
+        return self.sc.salt_command(server_list, 'cmd.run', ["if (Test-Path {path}) {{ Remove-Item -Recurse -Force {path} }}".format(path=path)],
                                     opts={'shell': 'powershell'})
 
     def delete_directory_unix(self, server_list, path):

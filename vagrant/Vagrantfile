@@ -189,6 +189,90 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end 
 
   end
-  
+
+  config.vm.define "web01" do |web01|
+
+    web01.vm.box = "scorebig/windows-2012R2-SC"
+
+    web01.vm.provider "parallels" do |v, override|
+        v.memory = 1024
+        v.cpus = 2
+        v.name = "elita_web01"
+    end
+
+    web01.vm.network "private_network", ip: "10.37.129.105"
+
+    web01.vm.synced_folder "win-provision", "/win-provision"
+    web01.vm.synced_folder "salt/keys", "/salt-keys"
+
+    web01.vm.provision "shell", inline: "echo 10.37.129.105 > C:\\vagrant_ip.txt"
+    web01.vm.provision "shell", inline: "echo 10.37.129.100 > C:\\master_ip.txt"
+    web01.vm.provision "shell", inline: "echo web01 > C:\\minion_name.txt"
+    web01.vm.provision "shell", path: "win-provision/provision.ps1"
+
+  end
+
+  config.vm.define "web02" do |web02|
+
+    web02.vm.box = "scorebig/windows-2012R2-SC"
+
+    web02.vm.provider "parallels" do |v, override|
+        v.memory = 1024
+        v.cpus = 2
+        v.name = "elita_web02"
+    end
+
+    web02.vm.network "private_network", ip: "10.37.129.106"
+
+    web02.vm.synced_folder "win-provision", "/win-provision"
+
+    web02.vm.provision "shell", inline: "echo 10.37.129.106 > C:\\vagrant_ip.txt"
+    web02.vm.provision "shell", inline: "echo 10.37.129.100 > C:\\master_ip.txt"
+    web02.vm.provision "shell", inline: "echo web02 > C:\\minion_name.txt"
+    web02.vm.provision "shell", path: "win-provision/provision.ps1"
+
+  end
+
+  config.vm.define "bus01" do |bus01|
+
+    bus01.vm.box = "scorebig/windows-2012R2-SC"
+
+    bus01.vm.provider "parallels" do |v, override|
+        v.memory = 1024
+        v.cpus = 2
+        v.name = "elita_bus01"
+    end
+
+    bus01.vm.network "private_network", ip: "10.37.129.107"
+
+    bus01.vm.synced_folder "win-provision", "/win-provision"
+
+    bus01.vm.provision "shell", inline: "echo 10.37.129.107 > C:\\vagrant_ip.txt"
+    bus01.vm.provision "shell", inline: "echo 10.37.129.100 > C:\\master_ip.txt"
+    bus01.vm.provision "shell", inline: "echo bus01 > C:\\minion_name.txt"
+    bus01.vm.provision "shell", path: "win-provision/provision.ps1"
+
+  end
+
+  config.vm.define "bus02" do |bus02|
+
+    bus02.vm.box = "scorebig/windows-2012R2-SC"
+
+    bus02.vm.provider "parallels" do |v, override|
+        v.memory = 1024
+        v.cpus = 2
+        v.name = "elita_bus02"
+    end
+
+    bus02.vm.network "private_network", ip: "10.37.129.108"
+
+    bus02.vm.synced_folder "win-provision", "/win-provision"
+
+    bus02.vm.provision "shell", inline: "echo 10.37.129.108 > C:\\vagrant_ip.txt"
+    bus02.vm.provision "shell", inline: "echo 10.37.129.100 > C:\\master_ip.txt"
+    bus02.vm.provision "shell", inline: "echo bus02 > C:\\minion_name.txt"
+    bus02.vm.provision "shell", path: "win-provision/provision.ps1"
+
+  end
 
 end
