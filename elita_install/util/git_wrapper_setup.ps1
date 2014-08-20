@@ -3,7 +3,7 @@ param($cmd)
 #git will run this wrapper script instead of ssh directly
 $gitwrapper = @"
 @echo off
-ssh -F "C:\Program Files (x86)\Git\.ssh" -o StrictHostKeyChecking=no %*
+ssh -F "C:\Program Files (x86)\Git\.ssh\config" -o StrictHostKeyChecking=no %*
 "@
 
 #no spaces in path--screws up git

@@ -27,6 +27,15 @@ netsh advfirewall set allprofiles state off |Out-Null
 Write-Host "Setting private IP address"
 New-NetIPAddress -InterfaceAlias "Ethernet 3" -IPAddress $private_ip -PrefixLength 24
 
+Write-Host "Installing IIS"
+Install-WindowsFeature Web-Server
+
+Write-Host "Installing Chocolatey"
+iex ((new-object net.webclient).DownloadString('https://chocolatey.org/install.ps1'))
+
+Write-Host "Installing git"
+choco install git
+
 Write-Host "Downloading salt"
 $progressPreference = 'silentlyContinue'
 Invoke-WebRequest -UseBasicParsing -OutFile "C:\salt-minion.exe" "https://docs.saltstack.com/downloads/Salt-Minion-2014.1.10-AMD64-Setup.exe"

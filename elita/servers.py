@@ -1,6 +1,7 @@
 __author__ = 'bkeroack'
 
 import deployment.salt_control
+import deployment.sshconfig
 
 def setup_new_server(datasvc, name):
     '''
@@ -17,6 +18,9 @@ class ServerSetup:
     Initialization routines for new servers.
     '''
     def __init__(self, datasvc):
+        '''
+        @type datasvc: elita.models.DataService
+        '''
         self.datasvc = datasvc
 
     def set_server_type(self, rc, name):
@@ -34,16 +38,28 @@ class ServerSetup:
         return status == "ok"
 
     def do_server_setup(self, rc, name, os_type):
+        #create key/config dirs
+        sshc = deployment.sshconfig.SSHController()
+        sshc.create_key_dir(rc, [name])
+
         if os_type == "windows":
             # push git wrapper script. run it.
             # make sure git works
-            rc.push_files([name], {"salt://elita/files/win/git_wrapper_setup.ps1": 'C:/git_wrapper_setup.ps1'})
-            rc.run_powershell_script([name], 'C:/git_wrapper_setup.ps1')
+            wrapper_setup_path = "C:/git_wrapper_setup.ps1"
+            rc.rm_file_if_exists([name], wrapper_setup_path)
+            rc.push_files([name], {"salt://elita/files/win/git_wrapper_setup.ps1": wrapper_setup_path})
+            rc.run_powershell_script([name], wrapper_setup_path)
             if 'not recognized as an internal or external command' in rc.run_shell_command([name], 'git')[name]:
                 status = 'git not available'
             else:
+                self.datasvc.jobsvc.NewJobData({'note': 'IMPORTANT!! For the Windows git wrapper script to take effect '
+                                                        '(necessary for key/hostname management), you *must* either '
+                                                        'reboot or restart salt-minion at a minimum! Any git operation '
+                                                        'will fail until this happens.'})
                 status = 'ok, initialized'
-            self.datasvc.serversvc.ChangeServer(name, {'status': status})
+        else:
+            status = 'ok, initialized'
+        self.datasvc.serversvc.ChangeServer(name, {'status': status})
 
     def new(self, name):
         sc = deployment.salt_control.SaltController(self.datasvc)

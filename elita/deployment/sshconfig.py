@@ -6,7 +6,7 @@ import lockfile
 import tempfile
 
 import elita.util.type_check
-from salt_control import OSTypes
+from salt_control import OSTypes, RemoteCommands
 
 ELITA_USER = "elita"
 #remote key locations
@@ -34,7 +34,7 @@ Host {alias}
 \tUser {username}
 \tPreferredAuthentications publickey
 \tStrictHostKeyChecking no
-\tIdentityFile {key}
+\tIdentityFile "{key}"
 
 """.format(alias=alias_name, hostname=real_hostname, username=username, key=keyfile)
 
@@ -120,6 +120,24 @@ Host {alias}
                                            priv_key_name)
         self.add_local_alias(alias_block)
         return alias_name
+
+    def create_key_dir(self, remote_controller, server_list):
+        '''
+        Create platform-specific directory to hold ssh config and keys
+        @type remote_controller: RemoteCommands
+        '''
+        assert remote_controller and server_list
+        assert isinstance(remote_controller, RemoteCommands)
+        assert elita.util.type_check.is_seq(server_list)
+
+        servers_by_os = remote_controller.group_remote_servers_by_os(server_list)
+        results = {'windows': dict(), 'unix': dict()}
+        if len(servers_by_os['windows']) > 0:
+            results['windows'] = remote_controller.create_directory(servers_by_os['windows'], WINDOWS_KEY_LOCATION)
+        if len(servers_by_os['unix']) > 0:
+            results['unix'] = remote_controller.create_directory(servers_by_os['unix'], UNIX_KEY_LOCATION)
+        #merge results
+        return dict({s: results['windows'][s] for s in results['windows']}, **{s: results['unix'][s] for s in results['unix']})
 
     def push_remote_keys(self, remote_controller, server_list, application, gitrepo_name, gitrepo_type, privkey_data, pubkey_data):
         '''

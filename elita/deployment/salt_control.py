@@ -191,6 +191,19 @@ class RemoteCommands:
             os.unlink(tf)
         return rets
 
+    def rm_file_if_exists(self, target, path):
+        '''
+        Remove target directory if it exists
+        '''
+        assert target and path
+        assert elita.util.type_check.is_seq(target)
+        assert elita.util.type_check.is_string(path)
+        for server in target:
+            expanded_path = self.get_home_expanded_path([server], [path])[server] if '~' in path else path
+            file_exists = self.sc.salt_command([server], "file.file_exists", [expanded_path])
+            if file_exists[server]:
+                self.sc.salt_command([server], "file.remove", [expanded_path])
+
     def rm_dir_if_exists(self, target, path):
         '''
         Remove target directory if it exists
