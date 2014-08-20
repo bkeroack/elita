@@ -1487,7 +1487,7 @@ class DataService:
         self.usersvc = UserDataService(self.mongo_service, root, settings, job_id=job_id)
         self.appsvc = ApplicationDataService(self.mongo_service, root, settings, job_id=job_id)
         self.jobsvc = JobDataService(self.mongo_service, root, settings, job_id=job_id)
-        self.serversvc = ServerDataService(self.mongo_service, settings, root, job_id=job_id)
+        self.serversvc = ServerDataService(self.mongo_service, root, settings, job_id=job_id)
         self.gitsvc = GitDataService(self.mongo_service, root, settings, job_id=job_id)
         self.keysvc = KeyDataService(self.mongo_service, root, settings, job_id=job_id)
         self.deploysvc = DeploymentDataService(self.mongo_service, root, settings, job_id=job_id)
