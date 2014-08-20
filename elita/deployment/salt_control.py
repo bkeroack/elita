@@ -334,7 +334,7 @@ class SaltController:
         results = list()
         for retc in rets:
             for r in retc[1]:
-                callback(r, retc[0], **args)
+                callback(r, retc[0]['arguments'], **args)
                 results.append(r)
         return results
 

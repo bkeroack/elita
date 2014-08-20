@@ -1215,6 +1215,17 @@ class DeploymentDataService(GenericChildDataService):
 
         return [k for k in self.root['app'][app]['deployments'] if k[0] != '_']
 
+    def GetDeployment(self, app, name):
+        '''
+        Get a specific deployment document
+        '''
+        assert app and name
+        assert app in self.root['app']
+        assert name in self.root['app'][app]['deployments']
+
+        doc = self.mongo_service.get('deployments', {'application': app, 'name': name})
+        return {k: doc[k] for k in doc if k[0] != '_'}
+
     def UpdateDeployment(self, app, name, doc):
         '''
         Modify deployment object with the data in doc
@@ -1334,12 +1345,12 @@ class DeploymentDataService(GenericChildDataService):
 
         self.UpdateDeployment(app, name, {'progress': {'currently_on': 'completed'}})
 
-    def UpdateDeployment_Phase1(self, app, name, gitdeploy, progress=None, step=None, changed_files=None):
+    def UpdateDeployment_Phase1(self, app, name, gitrepo, progress=None, step=None, changed_files=None):
         '''
-        Phase 1 is gitdeploy processing: decompressing package to local gitrepo, computing changes, commiting/pushing
+        Phase 1 is gitrepo processing: decompressing package to local gitrepo, computing changes, commiting/pushing
         '''
-        assert app and name and gitdeploy
-        assert all([elita.util.type_check.is_string(p) for p in (app, name, gitdeploy)])
+        assert app and name and gitrepo
+        assert all([elita.util.type_check.is_string(p) for p in (app, name, gitrepo)])
         assert (isinstance(progress, int) and 0 <= progress <= 100) or not progress
         assert elita.util.type_check.is_string(step) or elita.util.type_check.is_seq(step) or not step
         assert elita.util.type_check.is_optional_seq(changed_files)
@@ -1354,7 +1365,7 @@ class DeploymentDataService(GenericChildDataService):
         if changed_files:
             progress_dict['changed_files'] = changed_files
 
-        self.UpdateDeployment(app, name, {'progress': {'phase1': {'gitdeploys': {gitdeploy: progress_dict}}}})
+        self.UpdateDeployment(app, name, {'progress': {'phase1': {'gitrepos': {gitrepo: progress_dict}}}})
 
     def UpdateDeployment_Phase2(self, app, name, gitdeploy, servers, batch, progress=None, state=None):
         '''
