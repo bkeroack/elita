@@ -336,7 +336,7 @@ class BuildDataService(GenericChildDataService):
         assert elita.util.type_check.is_string(build_name)
         assert app_name and build_name
 
-        app_doc = self.mongo_service.get('application', {'name': app_name})
+        app_doc = self.mongo_service.get('applications', {'name': app_name})
         assert app_doc
         build_doc = self.mongo_service.get('builds', {'app_name': app_name, 'build_name': build_name})
         assert build_doc
