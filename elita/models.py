@@ -181,10 +181,11 @@ class MongoService:
 class GenericChildDataService:
     __metaclass__ = elita.util.LoggingMetaClass
 
-    def __init__(self, mongo_service, root, job_id=None):
+    def __init__(self, mongo_service, root, settings, job_id=None):
         '''
         @type mongo_service: MongoService
         @type root: RootTree
+        @type settings: pyramid.registry.Registry
         @type job_id: None | str
         '''
         assert isinstance(mongo_service, MongoService)
@@ -192,6 +193,7 @@ class GenericChildDataService:
         assert elita.util.type_check.is_optional_str(job_id)
         self.mongo_service = mongo_service
         self.root = root
+        self.settings = settings
         self.job_id = job_id
 
     def populate_dependencies(self, dependency_objs):
@@ -338,8 +340,6 @@ class BuildDataService(GenericChildDataService):
 
         app_doc = self.mongo_service.get('applications', {'app_name': app_name})
         assert app_doc
-        build_doc = self.mongo_service.get('builds', {'app_name': app_name, 'build_name': build_name})
-        assert build_doc
 
         dir = self.settings['elita.builds.dir']
         path = "{root_dir}/{app}/{build}".format(root_dir=dir, app=app_name, build=build_name)
@@ -1483,16 +1483,16 @@ class DataService:
         self.root = root
         self.mongo_service = MongoService(db)
 
-        self.buildsvc = BuildDataService(self.mongo_service, root, job_id=job_id)
-        self.usersvc = UserDataService(self.mongo_service, root, job_id=job_id)
-        self.appsvc = ApplicationDataService(self.mongo_service, root, job_id=job_id)
-        self.jobsvc = JobDataService(self.mongo_service, root, job_id=job_id)
-        self.serversvc = ServerDataService(self.mongo_service, root, job_id=job_id)
-        self.gitsvc = GitDataService(self.mongo_service, root, job_id=job_id)
-        self.keysvc = KeyDataService(self.mongo_service, root, job_id=job_id)
-        self.deploysvc = DeploymentDataService(self.mongo_service, root, job_id=job_id)
+        self.buildsvc = BuildDataService(self.mongo_service, root, settings, job_id=job_id)
+        self.usersvc = UserDataService(self.mongo_service, root, settings, job_id=job_id)
+        self.appsvc = ApplicationDataService(self.mongo_service, root, settings, job_id=job_id)
+        self.jobsvc = JobDataService(self.mongo_service, root, settings, job_id=job_id)
+        self.serversvc = ServerDataService(self.mongo_service, settings, root, job_id=job_id)
+        self.gitsvc = GitDataService(self.mongo_service, root, settings, job_id=job_id)
+        self.keysvc = KeyDataService(self.mongo_service, root, settings, job_id=job_id)
+        self.deploysvc = DeploymentDataService(self.mongo_service, root, settings, job_id=job_id)
         self.actionsvc = ActionService(self)
-        self.groupsvc = GroupDataService(self.mongo_service, root, job_id=job_id)
+        self.groupsvc = GroupDataService(self.mongo_service, root, settings, job_id=job_id)
 
         #cross-dependencies between child dataservice objects above
         self.appsvc.populate_dependencies({
