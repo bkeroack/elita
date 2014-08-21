@@ -209,12 +209,15 @@ class RollingDeployController:
         nonrolling_groups = self.get_nonrolling_groups(rolling_groups, groups)
         nonrolling_group_docs = {g: self.datasvc.groupsvc.GetGroup(application, g) for g in nonrolling_groups}
 
+        gd_docs = [self.datasvc.gitsvc.GetGitDeploy(application, gd) for gd in target['gitdeploys']]
+        gitrepos = [gd['location']['gitrepo']['name'] for gd in gd_docs]
+
         if len(rolling_groups) > 0:
             batches = self.compute_batches(rolling_group_docs, nonrolling_group_docs, rolling_divisor)
 
             logging.debug("computed batches: {}".format(batches))
 
-            self.datasvc.deploysvc.InitializeDeploymentPlan(application, self.deployment_id, batches, target['gitdeploys'])
+            self.datasvc.deploysvc.InitializeDeploymentPlan(application, self.deployment_id, batches, gitrepos)
 
             self.datasvc.jobsvc.NewJobData({
                 "RollingDeployment": {
@@ -247,7 +250,7 @@ class RollingDeployController:
             #app, name, batches, gitdeploys):
             self.datasvc.deploysvc.InitializeDeploymentPlan(application, self.deployment_id,
                                         [{'gitdeploys': target['gitdeploys'], 'servers': target['servers']}],
-                                        target['gitdeploys'])
+                                        gitrepos)
 
             self.datasvc.jobsvc.NewJobData({
                 "RollingDeployment": {
@@ -416,7 +419,7 @@ def _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, settings, jo
     # this can happen if multiple gitdeploys share the same gitrepo
 
     #always pull for now
-    queue.put({gddoc['name']: determine_deployabe_servers(gddoc['servers'], servers)})
+    queue.put_nowait({gddoc['name']: determine_deployabe_servers(gddoc['servers'], servers)})
 
 def _threadsafe_pull_callback(results, tag, **kwargs):
     '''
@@ -582,11 +585,13 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
             }
         }
 
-        queue.put(deploy_results)
+        queue.put_nowait(deploy_results)
 
         datasvc.jobsvc.NewJobData({
             "DeployServers": deploy_results
         })
+
+        logging.debug("_threadsafe_pull_gitdeploy: finished ({})".format(gitdeploy_struct))
 
     except:
         exc_type, exc_obj, tb = sys.exc_info()
@@ -659,7 +664,7 @@ class DeployController:
             # no gitdeploys will actually be "changed". Force says to do a pull on the servers anyway.
             if force:
                 logging.debug("Force flag set, adding gitdeploy servers to deploy list: {}".format(gd))
-                queue.put({gd: determine_deployabe_servers(gddoc['servers'], servers)})
+                queue.put_nowait({gd: determine_deployabe_servers(gddoc['servers'], servers)})
 
         if parallel:
             for p in procs:
@@ -676,7 +681,7 @@ class DeployController:
 
 
         while not queue.empty():
-            gd = queue.get(block=False)
+            gd = queue.get_nowait()
             if gd:
                 for g in gd:
                     self.changed_gitdeploys[g] = gd[g]
@@ -712,7 +717,7 @@ class DeployController:
 
         results = list()
         while not queue.empty():
-            results.append(queue.get(block=False))
+            results.append(queue.get_nowait())
 
         if not results:
             return False, results
