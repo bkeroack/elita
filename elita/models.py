@@ -301,7 +301,7 @@ class BuildDataService(GenericChildDataService):
         assert elita.util.type_check.is_string(build)
         assert isinstance(packages, dict)
         assert app in self.root['app']
-        assert build in self.root['app']['builds']
+        assert build in self.root['app'][app]['builds']
 
         keys = {'app_name': app, 'build_name': build}
         for p in packages:
