@@ -224,16 +224,17 @@ class RollingDeployController:
             })
 
             for i, b in enumerate(batches):
-                deploy_doc = self.datasvc.deploysvc.GetDeployment(application, self.deployment_id)
-                assert deploy_doc
-                if deploy_doc['status'] == 'error':
-                    self.datasvc.jobsvc.NewJobData({"message": "detected failed deployment so aborting further batches"})
-                    return False
                 logging.debug("doing DeployController.run: deploy_gds: {}".format(b['gitdeploys']))
                 ok, results = self.dc.run(application, build_name, b['servers'], b['gitdeploys'], force=i > 0,
                                           parallel=parallel, batch_number=i)
                 if not ok:
                     self.datasvc.jobsvc.NewJobData({"RollingDeployment": "error"})
+                    return False
+
+                deploy_doc = self.datasvc.deploysvc.GetDeployment(application, self.deployment_id)
+                assert deploy_doc
+                if deploy_doc['status'] == 'error':
+                    self.datasvc.jobsvc.NewJobData({"message": "detected failed deployment so aborting further batches"})
                     return False
 
                 if i != (len(batches)-1):
@@ -424,6 +425,7 @@ def _threadsafe_pull_callback(results, tag, **kwargs):
     try:
         assert all([arg in kwargs for arg in ('datasvc', 'application', 'deployment_id', 'batch_number', 'gitdeploy')])
     except AssertionError:
+        #can't log anything to the job object because we may not have a valid DataService instance
         logging.error("***************** _threadsafe_pull_callback: AssertionError: incorrect kwargs ****************")
         return
 
@@ -446,17 +448,20 @@ def _threadsafe_pull_callback(results, tag, **kwargs):
                         stdout = this_result[state_res]["changes"]["stdout"] if 'changes' in this_result[state_res] and 'stdout' in this_result[state_res]['changes'] else "(none)"
                         stderr = this_result[state_res]["changes"]["stderr"] if 'changes' in this_result[state_res] and 'stderr' in this_result[state_res]['changes'] else "(none)"
                         if not this_result[state_res]["result"]:    #error
+                            logging.debug("_threadsafe_pull_callback: got error result ({}; {})".format(gitdeploy, r))
                             datasvc.jobsvc.NewJobData({'status': 'error', 'message': 'failing deployment due to detected error'})
                             datasvc.deploysvc.UpdateDeployment_Phase2(app, deployment_id, gitdeploy, [r], batch_number,
                                                                       state="FAILURE: {}; stderr: {}; stdout: {}".format(state_comment, stderr, stdout))
                             datasvc.deploysvc.FailDeployment(app, deployment_id)
                         else:
+                            logging.debug("_threadsafe_pull_callback: got successful result ({}; {}): {}".format(gitdeploy, r, state_comment))
                             datasvc.deploysvc.UpdateDeployment_Phase2(app, deployment_id, gitdeploy, [r], batch_number,
                                                           state=state_comment,
                                                           progress=66)
             else:   # simple result
+                logging.debug("_threadsafe_pull_callback: got simple return instead of results ({}; {})".format(gitdeploy, r))
                 datasvc.deploysvc.UpdateDeployment_Phase2(app, deployment_id, gitdeploy, [r], batch_number,
-                                                          state=results[r]['ret'])
+                                                          state="simple return: {}".format(results[r]['ret']))
     except:
         exc_type, exc_obj, tb = sys.exc_info()
         datasvc.jobsvc.NewJobData({"_threadsafe_pull_callback EXCEPTION": traceback.format_exception(exc_type, exc_obj, tb)})
@@ -584,8 +589,8 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
         })
 
     except:
-        exc_msg = str(sys.exc_info()[1]).split('\n')
-        exc_msg.insert(0, "ERROR: Exception in _threadsafe_pull_gitdeploy")
+        exc_type, exc_obj, tb = sys.exc_info()
+        exc_msg = "ERROR: Exception in _threadsafe_pull_gitdeploy: {}".format(traceback.format_exception(exc_type, exc_obj, tb))
         datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, servers, batch_number,
                                                   state=exc_msg)
         datasvc.deploysvc.FailDeployment(application, deployment_id)
