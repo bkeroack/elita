@@ -26,7 +26,10 @@ class LoggingMetaClass(type):
 
 
 def change_dict_keys(obj, char, rep):
-    '''Recursively replaces char in nested dict keys with rep'''
+    '''
+    Recursively replaces char in nested dict keys with rep (for sanitizing input to mongo, for example)
+    Modifies object in place! Returns None.
+    '''
     new_obj = obj
     for k in new_obj:
             if isinstance(k, list):

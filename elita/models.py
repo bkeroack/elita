@@ -721,6 +721,7 @@ class JobDataService(GenericChildDataService):
         assert data
         assert elita.util.type_check.is_serializable(data)
         assert self.job_id
+        elita.util.change_dict_keys(data, '.', '_')
         self.mongo_service.create_new('job_data', {}, None, {
             'job_id': self.job_id,
             'data': data

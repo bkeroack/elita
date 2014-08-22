@@ -555,11 +555,7 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
         if len(errors) > 0:
             for e in errors:
                 datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, [e], batch_number,
-                                                  state="ERROR: stderr: {}; stdout: {}; retcode: {}".format(
-                                                      errors[e]["changes"]["stderr"],
-                                                      errors[e]["changes"]["stdout"],
-                                                      errors[e]["changes"]["retcode"]
-                                                  ))
+                                                  state="ERROR: {}".format(errors[e]))
             logging.debug("_threadsafe_pull_gitdeploy: SLS error servers: {}".format(errors.keys()))
             logging.debug("_threadsafe_pull_gitdeploy: SLS error responses: {}".format(errors))
 
@@ -588,7 +584,7 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
         queue.put_nowait(deploy_results)
 
         datasvc.jobsvc.NewJobData({
-            "DeployServers": deploy_results
+            "DeployServers": elita.util.change_dict_keys(deploy_results, '.', '_')
         })
 
         logging.debug("_threadsafe_pull_gitdeploy: finished ({})".format(gitdeploy_struct))
