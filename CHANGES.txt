@@ -1,6 +1,4 @@
-0.79
+0.59
 ---
-
--  Rename to Elita
--  Eliminate cruft (static assets, etc)
+-  First public release!
 
