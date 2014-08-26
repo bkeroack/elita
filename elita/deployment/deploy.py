@@ -584,7 +584,7 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
         queue.put_nowait(deploy_results)
 
         datasvc.jobsvc.NewJobData({
-            "DeployServers": elita.util.change_dict_keys(deploy_results, '.', '_')
+            "DeployServers": deploy_results
         })
 
         logging.debug("_threadsafe_pull_gitdeploy: finished ({})".format(gitdeploy_struct))

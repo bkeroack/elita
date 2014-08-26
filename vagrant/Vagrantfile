@@ -201,9 +201,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
 
     web01.vm.network "private_network", ip: "10.37.129.105"
-
-    web01.vm.synced_folder "win-provision", "/win-provision"
     web01.vm.synced_folder "salt/keys", "/salt-keys"
+    web01.vm.synced_folder "win-provision", "/win-provision"
 
     web01.vm.provision "shell", inline: "echo 10.37.129.105 > C:\\vagrant_ip.txt"
     web01.vm.provision "shell", inline: "echo 10.37.129.100 > C:\\master_ip.txt"
@@ -223,7 +222,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
 
     web02.vm.network "private_network", ip: "10.37.129.106"
-
+    web02.vm.synced_folder "salt/keys", "/salt-keys"
     web02.vm.synced_folder "win-provision", "/win-provision"
 
     web02.vm.provision "shell", inline: "echo 10.37.129.106 > C:\\vagrant_ip.txt"
@@ -244,7 +243,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
 
     bus01.vm.network "private_network", ip: "10.37.129.107"
-
+    bus01.vm.synced_folder "salt/keys", "/salt-keys"
     bus01.vm.synced_folder "win-provision", "/win-provision"
 
     bus01.vm.provision "shell", inline: "echo 10.37.129.107 > C:\\vagrant_ip.txt"
@@ -265,7 +264,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
 
     bus02.vm.network "private_network", ip: "10.37.129.108"
-
+    bus02.vm.synced_folder "salt/keys", "/salt-keys"
     bus02.vm.synced_folder "win-provision", "/win-provision"
 
     bus02.vm.provision "shell", inline: "echo 10.37.129.108 > C:\\vagrant_ip.txt"

@@ -46,6 +46,8 @@ C:\salt-minion.exe /S /master=$master_ip /minion-name=$minion_name
 Write-Host "Waiting for install to finish"
 Start-Sleep -Seconds 15
 
+Stop-Service salt-minion
+
 Write-Host "Copying keys"
 Start-Process powershell -Verb runAs "Copy-Item C:\salt-keys\${minion_name}.pub C:\salt\conf\pki\minion\minion.pub"
 Start-Process powershell -Verb runAs "Copy-Item C:\salt-keys\${minion_name}.pem C:\salt\conf\pki\minion\minion.pem"
