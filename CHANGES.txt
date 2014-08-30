@@ -1,3 +1,6 @@
+0.59.2
+- Add documentation links to README
+
 0.59.1
 - Fix issue where gitdeploy ordering was not respected with deployments consisting only of nonrolling groups
 - Consolidate all nonrolling groups into first batch

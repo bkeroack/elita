@@ -1,11 +1,32 @@
 Elita
------
+=====
 
 Elita is an engine/framework for continuous deployment and API-driven infrastructure utilizing git
 and salt. Elita maps build packages to filesystem locations on an arbitrary number of remote servers and allows deployment
 (and more) via RESTful HTTP calls.
 
-It uses `salt <http://www.saltstack
-.org>`_ remote execution and a plugin architecture to allow custom actions and hook routines.
+(for more, see:  http://elita.readthedocs.org/en/latest/intro.html )
 
+Documentation
+=============
+
+*   http://elita.readthedocs.org/en/latest
+
+
+Installation
+============
+
+*   http://elita.readthedocs.org/en/latest/install.html
+
+
+Quickstart
+==========
+
+*   http://http://elita.readthedocs.org/en/latest/quickstart.html
+
+
+Source
+======
+
+*   https://bitbucket.org/elitaio/elita
 
