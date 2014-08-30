@@ -45,6 +45,10 @@ nginx:
   pkg:
     - installed
 
+httpie:
+  pkg:
+    - installed
+
 /etc/nginx/ssl:
   file.directory
     - require:

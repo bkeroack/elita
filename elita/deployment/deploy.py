@@ -68,16 +68,19 @@ class BatchCompute:
         Not written in a functional style because that was totally unreadable
         '''
         if nonrolling_docs and len(nonrolling_docs) > 0:
-            assert len(batches) > 0
-            assert all(map(lambda x: 'servers' in x and 'gitdeploys' in x, batches))
+            assert all(map(lambda x: 'servers' in x and 'gitdeploys' in x, batches)) or not batches
             assert all(map(lambda x: 'servers' in x[1] and 'gitdeploys' in x[1], nonrolling_docs.iteritems()))
             non_rolling_batches = list()
             for g in nonrolling_docs:
                 servers = nonrolling_docs[g]['servers']
                 gitdeploys = nonrolling_docs[g]['gitdeploys']
                 if isinstance(nonrolling_docs[g]['gitdeploys'][0], list):
-                    for gdb in nonrolling_docs[g]['gitdeploys']:
-                        non_rolling_batches.append({'gitdeploys': gdb, 'servers': servers})
+                    for i, gdb in enumerate(nonrolling_docs[g]['gitdeploys']):
+                        if i > len(non_rolling_batches)-1:
+                            non_rolling_batches.append({'gitdeploys': gdb, 'servers': servers})
+                        else:
+                            non_rolling_batches[i]['servers'] = list(set(servers + non_rolling_batches[i]['servers']))
+                            non_rolling_batches[i]['gitdeploys'] = list(set(gdb + non_rolling_batches[i]['gitdeploys']))
                 else:
                     non_rolling_batches.append({'gitdeploys': gitdeploys, 'servers': servers})
             for i, nrb in enumerate(non_rolling_batches):
@@ -126,8 +129,8 @@ class BatchCompute:
         Each nested list represents the computed batches for an individual group. All nested lists are expected to be
         the same length.
         '''
-        assert len(batches) > 0
-        #assert all(map(lambda x: len(x) == len(batches[0]), batches))  # all batches must be the same length
+        if not batches:
+            return list()
 
         return map(
             lambda batch_aggregate: reduce(
@@ -166,13 +169,12 @@ class BatchCompute:
     @staticmethod
     def compute_rolling_batches(divisor, rolling_group_docs, nonrolling_group_docs):
         assert isinstance(divisor, int)
-        assert len(rolling_group_docs) > 0
-        assert elita.util.type_check.is_dictlike(rolling_group_docs)
-        assert all(map(lambda x: 'servers' in x[1] and 'gitdeploys' in x[1], rolling_group_docs.iteritems()))
+        assert elita.util.type_check.is_optional_dict(rolling_group_docs)
+        assert not rolling_group_docs or all(map(lambda x: 'servers' in x[1] and 'gitdeploys' in x[1], rolling_group_docs.iteritems()))
         return BatchCompute.dedupe_batches(
             BatchCompute.add_nonrolling_groups(
                 BatchCompute.coalesce_batches(
-                    map(lambda x: BatchCompute.compute_group_batches(divisor, x), rolling_group_docs.iteritems())
+                    map(lambda x: BatchCompute.compute_group_batches(divisor, x), rolling_group_docs.iteritems() if rolling_group_docs else tuple())
                 ), nonrolling_group_docs
             )
         )
@@ -212,57 +214,38 @@ class RollingDeployController:
         gd_docs = [self.datasvc.gitsvc.GetGitDeploy(application, gd) for gd in target['gitdeploys']]
         gitrepos = [gd['location']['gitrepo']['name'] for gd in gd_docs]
 
-        if len(rolling_groups) > 0:
-            batches = self.compute_batches(rolling_group_docs, nonrolling_group_docs, rolling_divisor)
+        batches = self.compute_batches(rolling_group_docs, nonrolling_group_docs, rolling_divisor)
 
-            logging.debug("computed batches: {}".format(batches))
+        logging.debug("computed batches: {}".format(batches))
 
-            self.datasvc.deploysvc.InitializeDeploymentPlan(application, self.deployment_id, batches, gitrepos)
+        self.datasvc.deploysvc.InitializeDeploymentPlan(application, self.deployment_id, batches, gitrepos)
 
-            self.datasvc.jobsvc.NewJobData({
-                "RollingDeployment": {
-                    "batches": len(batches),
-                    "batch_data": batches
-                }
-            })
+        self.datasvc.jobsvc.NewJobData({
+            "RollingDeployment": {
+                "batches": len(batches),
+                "batch_data": batches
+            }
+        })
 
-            for i, b in enumerate(batches):
-                logging.debug("doing DeployController.run: deploy_gds: {}".format(b['gitdeploys']))
-                ok, results = self.dc.run(application, build_name, b['servers'], b['gitdeploys'], force=i > 0,
-                                          parallel=parallel, batch_number=i)
-                if not ok:
-                    self.datasvc.jobsvc.NewJobData({"RollingDeployment": "error"})
-                    return False
-
-                deploy_doc = self.datasvc.deploysvc.GetDeployment(application, self.deployment_id)
-                assert deploy_doc
-                if deploy_doc['status'] == 'error':
-                    self.datasvc.jobsvc.NewJobData({"message": "detected failed deployment so aborting further batches"})
-                    return False
-
-                if i != (len(batches)-1):
-                    msg = "pausing for {} seconds between batches".format(rolling_pause)
-                    self.datasvc.jobsvc.NewJobData({"RollingDeployment": msg})
-                    logging.debug("RollingDeployController: {}".format(msg))
-                    time.sleep(rolling_pause)
-
-        else:
-            #app, name, batches, gitdeploys):
-            self.datasvc.deploysvc.InitializeDeploymentPlan(application, self.deployment_id,
-                                        [{'gitdeploys': target['gitdeploys'], 'servers': target['servers']}],
-                                        gitrepos)
-
-            self.datasvc.jobsvc.NewJobData({
-                "RollingDeployment": {
-                    "batches": 1,
-                    "batch_data": [{"servers": target['servers'], "gitdeploys": target["gitdeploys"]}]
-                }
-            })
-
-            ok, results = self.dc.run(application, build_name, target['servers'], target['gitdeploys'], parallel=parallel)
+        for i, b in enumerate(batches):
+            logging.debug("doing DeployController.run: deploy_gds: {}".format(b['gitdeploys']))
+            ok, results = self.dc.run(application, build_name, b['servers'], b['gitdeploys'], force=i > 0,
+                                      parallel=parallel, batch_number=i)
             if not ok:
                 self.datasvc.jobsvc.NewJobData({"RollingDeployment": "error"})
                 return False
+
+            deploy_doc = self.datasvc.deploysvc.GetDeployment(application, self.deployment_id)
+            assert deploy_doc
+            if deploy_doc['status'] == 'error':
+                self.datasvc.jobsvc.NewJobData({"message": "detected failed deployment so aborting further batches"})
+                return False
+
+            if i != (len(batches)-1):
+                msg = "pausing for {} seconds between batches".format(rolling_pause)
+                self.datasvc.jobsvc.NewJobData({"RollingDeployment": msg})
+                logging.debug("RollingDeployController: {}".format(msg))
+                time.sleep(rolling_pause)
 
         return True
 
@@ -666,6 +649,7 @@ class DeployController:
             for p in procs:
                 p.join(300)
                 if p.is_alive():
+                    p.terminate()
                     logging.debug("ERROR: _threadsafe_process_gitdeploy: timeout waiting for child process ({})!".
                                   format(p.name))
                     self.datasvc.jobsvc.NewJobData({'status': 'error',
@@ -701,6 +685,7 @@ class DeployController:
             for p in procs:
                 p.join(300)
                 if p.is_alive():
+                    p.terminate()
                     logging.debug("ERROR: _threadsafe_pull_gitdeploy: timeout waiting for child process ({})!".
                                   format(p.name))
                     self.datasvc.jobsvc.NewJobData({'status': 'error',

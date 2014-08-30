@@ -43,8 +43,12 @@ ordered_groups = {
 
 simulated_scorebig_rolling_groups = {
     "ConsumerWebApp": {
-        "servers": ["web0", "web1"],
+        "servers": ["consumer0", "consumer1"],
         "gitdeploys": [["Configs"], ["Consumer"]]
+    },
+    "ExtranetWebApp": {
+        "servers": ["extranet0", "extranet1"],
+        "gitdeploys": [["Configs"], ["Extranet"]]
     }
 }
 
@@ -52,6 +56,10 @@ simulated_scorebig_nonrolling_groups = {
     "ServiceBusLowApplication": {
         "servers": ["sbl0", "sbl1"],
         "gitdeploys": [["Configs"], ["ServiceBusLow"]]
+    },
+    "ServiceBusHighApplication": {
+        "servers": ["sbh0", "sbh1"],
+        "gitdeploys": [["Configs"], ["ServiceBusHigh"]]
     }
 }
 
@@ -133,14 +141,13 @@ def test_ordered_and_unordered_rolling_batches():
         elif 'gd5' in server_batch_mapping[s]:
             assert server_batch_mapping[s]['gd9'] < server_batch_mapping[s]['gd5']
 
-def test_simulated_scorebig_ordered_groups():
+def test_simulated_scorebig_mixed_groups():
     '''
-    Test that ordered groups similar to ScoreBig setup are split into batches respecting ordering
+    Test that ordered and unordered groups similar to ScoreBig setup are split into batches respecting ordering
     '''
     batches = elita.deployment.deploy.BatchCompute.compute_rolling_batches(divisor, simulated_scorebig_rolling_groups,
                                                                            simulated_scorebig_nonrolling_groups)
 
-    print(pp.pformat(batches))
     assert len(batches) == 4
     assert all(["servers" in x and "gitdeploys" in x for x in batches])
 
@@ -150,6 +157,24 @@ def test_simulated_scorebig_ordered_groups():
             assert server_batch_mapping[s]['Configs'] < server_batch_mapping[s]['Consumer']
         elif 'ServiceBusLow' in server_batch_mapping[s]:
             assert server_batch_mapping[s]['Configs'] < server_batch_mapping[s]['ServiceBusLow']
+
+def test_simulated_scorebig_unordered_groups():
+    '''
+    Test that unordered groups similar to ScoreBig setup are split into batches respecting gitdeploy ordering
+    '''
+    batches = elita.deployment.deploy.BatchCompute.compute_rolling_batches(divisor, None,
+                                                                           simulated_scorebig_nonrolling_groups)
+
+    assert len(batches) == 2
+    assert all(["servers" in x and "gitdeploys" in x for x in batches])
+
+    server_batch_mapping = generate_server_batch_mapping(batches)
+    for s in server_batch_mapping:
+        if 'ServiceBusHigh' in server_batch_mapping[s]:
+            assert server_batch_mapping[s]['Configs'] < server_batch_mapping[s]['ServiceBusHigh']
+        elif 'ServiceBusLow' in server_batch_mapping[s]:
+            assert server_batch_mapping[s]['Configs'] < server_batch_mapping[s]['ServiceBusLow']
+
 
 
 if __name__ == '__main__':

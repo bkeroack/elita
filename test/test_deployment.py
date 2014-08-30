@@ -13,13 +13,13 @@ def return_gitdeploy(app, name):
         "name": name,
         "package": "master",
         "location": {
+            "gitrepo": {
+                "name": "gr0"
+            },
             "path": "/foo/bar",
             "default_branch": "master"
         },
-        "servers": ["server0", "server1"],
-        "gitrepo": {
-
-        }
+        "servers": ["server0", "server1"]
     }
 
 

@@ -21,7 +21,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     
     elita.vm.provider "parallels" do |v|
       v.name = "elita_vagrant"
-      v.memory = 1024
+      v.memory = 2048
       v.cpus = 2
     end
 

@@ -1,4 +1,8 @@
+0.59.1
+Fix issue where gitdeploy ordering was not respected with deployments consisting only of nonrolling groups
+Consolidate all nonrolling groups into first batch
+Fix minor bug with deployment result job logging
+
 0.59
----
--  First public release!
+First public release!
 
