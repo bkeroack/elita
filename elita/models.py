@@ -566,11 +566,10 @@ class ApplicationDataService(GenericChildDataService):
                     census[e][g][s] = dict()
                     group_doc = self.deps['GroupDataService'].GetGroup(app_name, g)
                     for gd in group_doc['gitdeploys']:
-                        if not isinstance(gd, list):
-                            gd = [gd]
-                        for g in gd:
-                            gd_doc = self.deps['GitDataService'].GetGitDeploy(app_name, g)
-                            census[e][g][s][g] = {
+                        gdl = gd if isinstance(gd, list) else [gd]
+                        for gd in gdl:
+                            gd_doc = self.deps['GitDataService'].GetGitDeploy(app_name, gd)
+                            census[e][g][s][gd] = {
                                 "committed": gd_doc['location']['gitrepo']['last_build'],
                                 "deployed": gd_doc['deployed_build']
                             }
