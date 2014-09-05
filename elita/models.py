@@ -1693,7 +1693,7 @@ class Deployment(GenericDataModel):
         'progress': {
             'currently_on': None,
             'phase1': {
-                'gitdeploys': dict()
+                'gitrepos': dict()
             },
             'phase2': dict()
         },
