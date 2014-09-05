@@ -576,7 +576,9 @@ Create Group
    :type rolling_deploy: boolean ("true"/"false")
    :jsonparam string body: JSON object containing list of gitdeploys
 
-   Create a group. You must supply a JSON-encoded list of gitdeploys in the body of the request.
+   Create a group. You must supply a JSON-encoded list of gitdeploys in the body of the request. The "gitdeploys" key
+   can either be a flat list of strings (unordered) or a list-of-lists (ordered). See :ref:`Group Explanation <group-explanation>`
+   for details.
 
    *Example JSON*:
 

@@ -25,8 +25,20 @@ Quickstart
 *   http://http://elita.readthedocs.org/en/latest/quickstart.html
 
 
-Source
-======
+Mailing List
+============
 
-*   https://bitbucket.org/elitaio/elita
+*   https://groups.google.com/d/forum/elita-users
+
+
+Issues/Bugs
+===========
+
+*   https://bitbucket.org/scorebig/elita/issues
+
+
+Source/Homepage
+===============
+
+*   https://bitbucket.org/scorebig/elita
 

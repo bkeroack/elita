@@ -261,8 +261,8 @@ class ApplicationView(GenericView):
         return {
             "application": self.context.app_name,
             "created": self.get_created_datetime_text(),
-            self.context.app_name: self.datasvc.GetAppKeys(self.context.app_name),
-            "census": self.datasvc.appsvc.GetApplicationCensus(self.context.app_name)
+            self.context.app_name: self.datasvc.GetAppKeys(self.context.app_name)
+            #"census": self.datasvc.appsvc.GetApplicationCensus(self.context.app_name)
         }
 
     def PATCH(self):

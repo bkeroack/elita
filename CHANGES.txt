@@ -1,3 +1,11 @@
+0.59.3
+- Fix exceptions in application census
+- Remove application census from top-level application view
+- Small fix to Deployment model
+- Add ordered gitdeploy information to documentation for groups
+- Change repo link, homepage in README
+- Fix docs version, copyright
+
 0.59.2
 - Add documentation links to README
 

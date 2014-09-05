@@ -42,7 +42,7 @@ requires = [
 ]
 
 setup(name='elita',
-      version="0.59.2",
+      version="0.59.3",
       description='Continuous deployment (continuous delivery) and infrastructure management REST framework',
       long_description=README + '\n\n' + CHANGES,
       license='Apache',
@@ -56,7 +56,7 @@ setup(name='elita',
         ],
       author='Benjamen Keroack',
       author_email='ben@elita.io',
-      url='https://elita.io/',
+      url='https://bitbucket.org/scorebig/elita',
       keywords='continuous deployment delivery REST automation devops',
       packages=find_packages(exclude=['test*']),
       package_data={

@@ -167,6 +167,8 @@ Follow is a list of the associated API objects (endpoints):
             }
        }
 
+.. _group-explanation:
+
 **group**
 
     A group (or application group) is a logical group of gitdeploys which make up a subapplication. For example a web
@@ -183,4 +185,39 @@ Follow is a list of the associated API objects (endpoints):
     membership is dynamically calculated. You don't 'add' a server to a group, you create the group and any servers with
     the relevant gitdeploys automatically are considered members.
 
+    Gitdeploys can optionally be ordered within a group. Ordered gitdeploys ensure that certain gitdeploys will always
+    be deployed to prior to others. Ordering is accomplished by specifying gitdeploys as a list-of-lists rather than a
+    flat list of strings.
 
+    For example, this is a normal *unordered* group. The gitdeploys it contains can be deployed in any order--functionally, it
+    means that the will be deployed to concurrently:
+
+    .. sourcecode:: json
+
+       {
+           "gitdeploys": [ "Configuration", "Binaries" ]
+       }
+
+    Conversely, this is an *ordered* group:
+
+    .. sourcecode:: json
+
+       {
+          "gitdeploys": [ [ "Configuration" ], [ "Binaries" ] ]
+       }
+
+    The above group with ordered gitdeploys would guarantee that "Configuration" would always be completely deployed
+    prior to deploying "Binaries".
+
+    The following would deploy "Configuration" and "Assets" together simultaneously (or in unspecified order), but would
+    guarantee that they both would be successfully deployed prior to attempting "Binaries":
+
+    .. sourcecode:: json
+
+       {
+          "gitdeploys": [ [ "Configuration", "Assets" ], [ "Binaries" ] ]
+       }
+
+
+    Keep in mind that only one level of list-nesting is allowed, and if the first item in the list is a list, *all* items
+    in the gitdeploy list must be lists.
