@@ -1,3 +1,9 @@
+0.60.0
+- Fix exceptions in application census.
+- Fix small error in Deployment model.
+- Remove census from application view
+- (internal) New decorator-based parameter validation
+
 0.59.2
 - Add documentation links to README
 

@@ -31,6 +31,55 @@ logger.setLevel(logging.DEBUG)
 AFFIRMATIVE_SYNONYMS = ("true", "True", "TRUE", "yup", "yep", "yut", "yes", "yea", "aye", "please", "si", "sim")
 
 
+def validate_parameters(required_params=None, optional_params=None, json_body=None):
+    '''
+    Decorator that validates endpoint parameters
+    '''
+    assert elita.util.type_check.is_optional_seq(required_params)
+    assert elita.util.type_check.is_optional_seq(optional_params)
+    assert elita.util.type_check.is_optional_dict(json_body)
+
+    def method_decorator(func):
+        def wrapped_method(self):
+            assert hasattr(self, 'req')
+
+            missing_required_arg = None
+            bad_json_body_msg = None
+
+            def error_response():
+                if missing_required_arg:
+                    return self.Error(400, 'missing required argument: {}'.format(missing_required_arg))
+                elif bad_json_body_msg:
+                    return self.Error(400, 'bad JSON body: {}'.format(bad_json_body_msg))
+                else:
+                    return self.Error(400, 'bad request')
+
+            if required_params:
+                for r in required_params:
+                    if r not in self.req.params:
+                        missing_required_arg = r
+                        return error_response()
+
+            if json_body:
+                try:
+                    self.body = self.req.json_body
+                except:
+                    bad_json_body_msg = "problem deserializing (invalid JSON?)"
+                    return error_response()
+                for k in json_body:
+                    if k not in self.body:
+                        bad_json_body_msg = "missing key: {}".format(k)
+                        return error_response()
+                    if not isinstance(self.body[k], json_body[k]):
+                        bad_json_body_msg = "invalid type for key {}: should be {} but is {}"\
+                            .format(k, json_body[k].__class__.__name__, self.body[k].__class__.__name__)
+                        return error_response()
+
+            return func(self)
+
+        return wrapped_method
+    return method_decorator
+
 
 class GenericView:
     #__metaclass__ = elita.util.LoggingMetaClass
@@ -261,8 +310,8 @@ class ApplicationView(GenericView):
         return {
             "application": self.context.app_name,
             "created": self.get_created_datetime_text(),
-            self.context.app_name: self.datasvc.GetAppKeys(self.context.app_name),
-            "census": self.datasvc.appsvc.GetApplicationCensus(self.context.app_name)
+            self.context.app_name: self.datasvc.GetAppKeys(self.context.app_name)
+            #"census": self.datasvc.appsvc.GetApplicationCensus(self.context.app_name)
         }
 
     def PATCH(self):
@@ -1234,6 +1283,79 @@ class GroupView(GenericView):
                 "application": self.context.application
             }
         })
+
+
+class PackageMapContainerView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request, app_name=context.parent)
+
+    def GET(self):
+        return {
+            'application': self.context.parent,
+            'packagemaps': self.datasvc.pmsvc.GetPackageMaps(self.context.parent)
+        }
+
+    @validate_parameters(required_params=['name'], json_body={'packages': dict})
+    def PUT(self):
+        attributes = self.body['attributes'] if 'attributes' in self.body else None
+        if not self.body['packages']:
+            return self.Error(400, 'invalid packages object: appears to be empty')
+        for pkg in self.body['packages']:
+            if not isinstance(self.body['packages'][pkg], list):
+                return self.Error(400, 'invalid packages object: every package must be a list: {}'.format(pkg))
+            if len(self.body['packages'][pkg]) == 0:
+                return self.Error(400, 'invalid packages object: each package needs at least one pattern: {}'.format(pkg))
+            for i, pattern in enumerate(self.body['packages'][pkg]):
+                if not isinstance(pattern, dict):
+                    return self.Error(400, '{}: invalid pattern: index {}: must be a dict'.format(pkg, i))
+                if 'pattern' not in pattern:
+                    return self.Error(400, '{}: invalid pattern: index {}: pattern key missing'.format(pkg, i))
+                if not elita.util.type_check.is_string(pattern['pattern']):
+                    return self.Error(400, '{}: invalid pattern: index {}: pattern must be a string'.format(pkg, i))
+                if not pattern['pattern']:
+                    return self.Error(400, '{}: invalid pattern: index {}: pattern appears to be empty'.format(pkg, i))
+                if 'dir_prefix' in pattern:
+                    if not elita.util.type_check.is_string(pattern['dir_prefix']):
+                        return self.Error(400, '{}: invalid pattern: index {}: dir_prefix must be a string'.format(pkg, i))
+                    if not pattern['dir_prefix']:
+                        return self.Error(400, '{}: invalid pattern: index {}: dir_prefix appears to be empty'.format(pkg, i))
+
+        self.datasvc.pmsvc.NewPackageMap(self.context.parent, self.req.params['name'], self.body['packages'], attributes)
+        return self.status_ok({
+            "New_PackageMap": {
+                "name": self.req.params['name'],
+                "application": self.context.parent,
+                "attributes": attributes,
+                "packages": self.body['packages']
+            }
+        })
+
+    @validate_parameters(required_params=['name'])
+    def DELETE(self):
+        name = self.req.params['name']
+        if name not in self.datasvc.pmsvc.GetPackageMaps(self.context.parent):
+            return self.Error(400, "unknown package map: {}".format(name))
+        self.datasvc.pmsvc.DeletePackageMap(self.context.parent, name)
+        return self.status_ok({
+            "Delete_PackageMap": {
+                "name": self.req.params['name'],
+                "application": self.context.parent
+            }
+        })
+
+class PackageMapView(GenericView):
+    def __init__(self, context, request):
+        GenericView.__init__(self, context, request, app_name=context.application)
+
+    def GET(self):
+         return {
+            'created': self.get_created_datetime_text(),
+            'application': self.context.application,
+            'name': self.context.name,
+            'attributes': self.context.attributes,
+            'packages': self.context.packages
+         }
+
 
 class UserContainerView(GenericView):
     def __init__(self, context, request):
