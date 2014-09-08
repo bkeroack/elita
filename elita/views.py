@@ -405,14 +405,14 @@ class BuildView(GenericView):
     def __init__(self, context, request):
         self.app_name = context.app_name
         GenericView.__init__(self, context, request, app_name=self.app_name)
-        self.set_params({"GET": [], "PUT": [], "POST": ["file_type"], "DELETE": ["file_name"]})
         self.build_name = None
 
     def run_build_storage(self, func, arg):
         base_args = {
             'app': self.app_name,
             'build': self.build_name,
-            'file_type': self.file_type
+            'file_type': self.file_type,
+            'package_map': self.package_map
         }
         args = dict(base_args.items() + arg.items())
         msg = self.run_async('store_build', 'async', args, func, args)
@@ -447,11 +447,16 @@ class BuildView(GenericView):
         verify = self.req.params.getone('verify') in AFFIRMATIVE_SYNONYMS if 'verify' in self.req.params else False
         return self.run_build_storage_indirect(self.req.params['indirect_url'], verify)
 
+    @validate_parameters(required_params=['file_type'], optional_params=['indirect_url', 'package_map'])
     def POST(self):
         self.build_name = self.context.build_name
         if self.req.params["file_type"] not in models.SupportedFileType.types:
             return self.Error(400, "file type not supported")
         self.file_type = self.req.params["file_type"]
+        package_map = self.req.params['package_map'] if 'package_map' in self.req.params else None
+        if package_map not in self.datasvc.pmsvc.GetPackageMaps(self.app_name):
+            return self.Error(400, "unknown package_map: {}".format(package_map))
+        self.package_map = self.datasvc.pmsvc.GetPackageMap(self.app_name, package_map)['packages']
 
         if "indirect_url" in self.req.params:
             return self.indirect_upload()
@@ -476,13 +481,13 @@ class BuildView(GenericView):
 class ServerContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request)
-        self.set_params({"GET": [], "PUT": ['name', 'environment', 'existing'], "POST": [], "DELETE": ['name']})
 
     def GET(self):
         return {
             'servers': self.datasvc.serversvc.GetServers()
         }
 
+    @validate_parameters(required_params=['name', 'environment', 'existing'])
     def PUT(self):
         name = self.req.params['name']
         environment = self.req.params['environment']
@@ -514,6 +519,7 @@ class ServerContainerView(GenericView):
         else:
             return self.Error(500, res)
 
+    @validate_parameters(required_params=['name'])
     def DELETE(self):
         name = self.req.params['name']
         self.datasvc.serversvc.DeleteServer(name)

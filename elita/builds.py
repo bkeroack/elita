@@ -7,6 +7,8 @@ import zipfile
 import tarfile
 import tempfile
 import logging
+import glob
+import billiard
 
 import elita.util
 
@@ -16,8 +18,11 @@ class SupportedFileType:
     Zip = 'zip'
     types = [TarBz2, TarGz, Zip]
 
+class UnsupportedFileType(Exception):
+    pass
+
 #async callables
-def store_indirect_build(datasvc, app, build, file_type, uri, verify):
+def store_indirect_build(datasvc, app, build, file_type, uri, verify, package_map):
     logging.debug("indirect_upload: downloading from {}".format(uri))
     datasvc.jobsvc.NewJobData({'status': 'Downloading build file from {}'.format(uri)})
     r = requests.get(uri, verify=verify)
@@ -26,9 +31,9 @@ def store_indirect_build(datasvc, app, build, file_type, uri, verify):
         f.write(r.content)
     logging.debug("download and file write complete")
     datasvc.jobsvc.NewJobData({'status': "download and file write complete"})
-    return store_uploaded_build(datasvc, app, build, file_type, temp_file)
+    return store_uploaded_build(datasvc, app, build, file_type, temp_file, package_map)
 
-def store_uploaded_build(datasvc, app, build, file_type, temp_file):
+def store_uploaded_build(datasvc, app, build, file_type, temp_file, package_map):
     builds_dir = datasvc.settings['elita.builds.dir']
     minimum_build_size = int(datasvc.settings['elita.builds.minimum_size'])
     bs_obj = BuildStorage(builds_dir, app, build, file_type=file_type, input_file=temp_file,
@@ -46,6 +51,15 @@ def store_uploaded_build(datasvc, app, build, file_type, temp_file):
     build_doc = datasvc.buildsvc.GetBuildDoc(app, build)
     build_doc['master_file'] = fname
     build_doc['packages']['master'] = {'filename': fname, 'file_type': file_type}
+
+    if package_map:
+        datasvc.jobsvc.NewJobData({'status': 'applying package map',
+                                   'package_map': package_map})
+        pm = PackageMapper(fname, file_type, file_type, os.path.dirname(fname), package_map)
+        packages = pm.apply()
+        pm.cleanup()
+        for pkg in packages:
+            build_doc['packages'][pkg] = packages[pkg]
 
     for k in build_doc['packages']:
         fname = build_doc['packages'][k]['filename']
@@ -189,3 +203,83 @@ class BuildFile:
 
 
 
+class PackageMapper:
+    '''
+    Applies supplied package map to the build. Assumes pre-validated package map and a build_dir that exists
+
+    This puts the generated package files directly in the build storage directory and returns a mapping of package
+    names to filenames/types (but doesn't update the build object)
+    '''
+    def __init__(self, master_package_filename, master_file_type, target_file_type, build_dir, package_map):
+        assert master_package_filename and master_file_type and target_file_type and build_dir and package_map
+        assert elita.util.type_check.is_string(master_package_filename)
+        assert elita.util.type_check.is_string(master_file_type)
+        assert elita.util.type_check.is_string(target_file_type)
+        assert elita.util.type_check.is_string(build_dir)
+        assert master_file_type in SupportedFileType.types and target_file_type in SupportedFileType.types
+        assert elita.util.type_check.is_dictlike(package_map)
+        self.master_pkg = master_package_filename
+        self.master_ftype = master_file_type
+        self.target_type = target_file_type
+        self.build_dir = build_dir
+        self.package_map = package_map
+        self.temp_dir = tempfile.mkdtemp()
+        self.old_cwd = os.getcwd()
+
+        self.package_fname = None  # container for filename
+        self.package_obj = None    # container for ZipFile/TarFile objs
+
+    def cleanup(self):
+        os.chdir(self.old_cwd)
+        shutil.rmtree(self.temp_dir)
+
+    def apply(self):
+        '''
+        Apply the package map and return a dict of package_names to { 'file_type', 'filename' }
+        '''
+        self.unpack_master_pkg()
+        self.old_cwd = os.getcwd()
+        os.chdir(self.temp_dir)
+        return {pkg: self.apply_pattern(pkg, self.package_map[pkg]) for pkg in self.package_map}
+
+    def unpack_master_pkg(self):
+        '''
+        Decompress master package filename to temp location
+        '''
+        bf = BuildFile({'filename': self.master_pkg, 'file_type': self.master_ftype})
+        bf.decompress(self.temp_dir)
+
+    def create_new_pkg(self, package_name):
+        assert package_name
+        if self.target_type == SupportedFileType.Zip:
+            self.package_fname = "{}.zip".format(package_name)
+            self.package_obj = zipfile.ZipFile("{}/{}".format(self.build_dir, self.package_fname), 'w')
+        elif self.target_type == SupportedFileType.TarBz2:
+            self.package_fname = "{}.tar.bz2".format(package_name)
+            self.package_obj = tarfile.open("{}/{}".format(self.build_dir, self.package_fname), mode='w:bz2')
+        elif self.target_type == SupportedFileType.TarGz:
+            self.package_fname = "{}.tar.gz".format(package_name)
+            self.package_obj = tarfile.open("{}/{}".format(self.build_dir, self.package_fname), mode='w:gz')
+        else:
+            raise UnsupportedFileType
+
+    def add_file_to_pkg(self, filename, dir_prefix):
+        assert filename
+        arcname = "{}/{}".format(dir_prefix, filename) if dir_prefix else filename
+        if self.target_type == SupportedFileType.Zip:
+            self.package_obj.write(filename, arcname, zipfile.ZIP_DEFLATED)
+        elif self.target_type == SupportedFileType.TarBz2 or self.target_type == SupportedFileType.TarGz:
+            self.package_obj.add(filename, arcname=arcname)
+        else:
+            raise UnsupportedFileType
+
+    def apply_pattern(self, name, pattern):
+        assert pattern
+        assert elita.util.type_check.is_dictlike(pattern)
+        prefix = pattern['dir_prefix'] if 'dir_prefix' in pattern else None
+        files = glob.glob(pattern['pattern'])
+        if files:
+            self.create_new_pkg(name)
+            for f in files:
+                self.add_file_to_pkg(f, prefix)
+            return {'file_type': self.target_type, 'filename': "{}/{}".format(self.build_dir, self.package_fname)}
