@@ -22,7 +22,7 @@ Installation
 Quickstart
 ==========
 
-*   http://http://elita.readthedocs.org/en/latest/quickstart.html
+*   http://elita.readthedocs.org/en/latest/quickstart.html
 
 
 Mailing List

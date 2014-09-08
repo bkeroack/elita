@@ -24,6 +24,14 @@ Due to technical constraints in salt, you *must* install Elita on the same machi
 system should be installed and running with your managed servers (minions) accessible to salt commands.
 
 
+Hardware
+--------
+
+Elita uses multiprocessing for concurrency (spawning a new Python process for each "thread"), so memory usage grows
+with, eg, the number of servers being controlled, etc. I've found it runs best with at least 4GB of RAM (on a headless
+Linux server) with at least two cores (preferably four).
+
+
 Ubuntu
 ------
 
