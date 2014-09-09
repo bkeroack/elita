@@ -1,6 +1,6 @@
 #!/bin/bash
 
-apt-get install -y mongodb rabbitmq-server python-pip python-dev libssl-dev swig git nginx curl jq
+apt-get install -y mongodb rabbitmq-server python-pip python-dev libssl-dev swig git nginx curl jq httpie
 cd /home/vagrant/elita
 python ./setup.py develop
 cd /home/vagrant/elita_scorebig

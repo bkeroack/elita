@@ -11,7 +11,7 @@ requires = [
     'pyramid',
     'gunicorn',
     'gevent',
-    'salt',
+    'salt==2014.1.10',
     'celery',
     'pymongo',
 
@@ -31,6 +31,9 @@ requires = [
 
     # we need to lock, eg, salt state files during modification
     'lockfile',
+
+    # package map globbing
+    'glob2',
 
     # for installation primarily
     'sh',

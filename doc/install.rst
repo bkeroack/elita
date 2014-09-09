@@ -24,6 +24,12 @@ Due to technical constraints in salt, you *must* install Elita on the same machi
 system should be installed and running with your managed servers (minions) accessible to salt commands.
 
 
+.. ATTENTION::
+
+   You must ensure that the elita user can run salt commands. The easiest way to do this is to run salt as user "elita"
+   and/or make sure that "elita" is in the ```client_acl``` setting in the master config.
+   
+
 Ubuntu
 ------
 
