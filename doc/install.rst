@@ -27,9 +27,10 @@ system should be installed and running with your managed servers (minions) acces
 Hardware
 --------
 
-Elita uses multiprocessing for concurrency (spawning a new Python process for each "thread"), so memory usage grows
-with, eg, the number of servers being controlled, etc. I've found it runs best with at least 4GB of RAM (on a headless
-Linux server) with at least two cores (preferably four).
+Elita make liberal use of the ```multiprocessing``` module for concurrency (spawning a new Python process for each "thread"),
+so memory usage can be substantial with (for example) a large number of servers being controlled, etc.
+
+I've found it runs best with at least 4GB of RAM (on a headless Linux server) with at least two cores (preferably four).
 
 
 Ubuntu
