@@ -1889,7 +1889,7 @@ class PackageMap(GenericDataModel):
     # packages = {
     #     'package_name': [{
     #             'pattern': "foo/bar/*",
-    #             'dir_prefix': "foobar/"
+    #             'prefix': "foobar/"
     #     }]
     # }
 

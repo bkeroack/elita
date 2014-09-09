@@ -1321,10 +1321,10 @@ class PackageMapContainerView(GenericView):
                 if not pattern['pattern']:
                     return self.Error(400, '{}: invalid pattern: index {}: pattern appears to be empty'.format(pkg, i))
                 if 'dir_prefix' in pattern:
-                    if not elita.util.type_check.is_string(pattern['dir_prefix']):
-                        return self.Error(400, '{}: invalid pattern: index {}: dir_prefix must be a string'.format(pkg, i))
-                    if not pattern['dir_prefix']:
-                        return self.Error(400, '{}: invalid pattern: index {}: dir_prefix appears to be empty'.format(pkg, i))
+                    if not elita.util.type_check.is_string(pattern['prefix']):
+                        return self.Error(400, '{}: invalid pattern: index {}: prefix must be a string'.format(pkg, i))
+                    if not pattern['prefix']:
+                        return self.Error(400, '{}: invalid pattern: index {}: prefix appears to be empty'.format(pkg, i))
 
         self.datasvc.pmsvc.NewPackageMap(self.context.parent, self.req.params['name'], self.body['packages'], attributes)
         return self.status_ok({

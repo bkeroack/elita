@@ -7,7 +7,7 @@ import zipfile
 import tarfile
 import tempfile
 import logging
-import glob
+import glob2
 import billiard
 
 import elita.util
@@ -251,15 +251,16 @@ class PackageMapper:
 
     def create_new_pkg(self, package_name):
         assert package_name
+        logging.debug("cwd: {}".format(os.getcwd()))
         if self.target_type == SupportedFileType.Zip:
             self.package_fname = "{}.zip".format(package_name)
-            self.package_obj = zipfile.ZipFile("{}/{}".format(self.build_dir, self.package_fname), 'w')
+            self.package_obj = zipfile.ZipFile(self.package_fname, 'w')
         elif self.target_type == SupportedFileType.TarBz2:
             self.package_fname = "{}.tar.bz2".format(package_name)
-            self.package_obj = tarfile.open("{}/{}".format(self.build_dir, self.package_fname), mode='w:bz2')
+            self.package_obj = tarfile.open(self.package_fname, mode='w:bz2')
         elif self.target_type == SupportedFileType.TarGz:
             self.package_fname = "{}.tar.gz".format(package_name)
-            self.package_obj = tarfile.open("{}/{}".format(self.build_dir, self.package_fname), mode='w:gz')
+            self.package_obj = tarfile.open(self.package_fname, mode='w:gz')
         else:
             raise UnsupportedFileType
 
@@ -276,10 +277,15 @@ class PackageMapper:
     def apply_pattern(self, name, pattern):
         assert pattern
         assert elita.util.type_check.is_dictlike(pattern)
-        prefix = pattern['dir_prefix'] if 'dir_prefix' in pattern else None
-        files = glob.glob(pattern['pattern'])
+        logging.debug("applying pattern: {} ({})".format(pattern, name))
+        prefix = pattern['prefix'] if 'prefix' in pattern else None
+        files = glob2.glob(pattern['pattern'])
         if files:
+            logging.debug("adding files")
             self.create_new_pkg(name)
             for f in files:
                 self.add_file_to_pkg(f, prefix)
+            self.package_obj.close()
+            shutil.move(self.package_fname, "{}/{}".format(self.build_dir, self.package_fname))
             return {'file_type': self.target_type, 'filename': "{}/{}".format(self.build_dir, self.package_fname)}
+        logging.debug("no files for pattern!")
