@@ -645,12 +645,19 @@ class DeployController:
                 logging.debug("Force flag set, adding gitdeploy servers to deploy list: {}".format(gd))
                 queue.put_nowait({gd: determine_deployabe_servers(gddoc['servers'], servers)})
 
+        # pull from queue prior to joining to avoid deadlock
+        while not queue.empty():
+            gd = queue.get(150)
+            if gd:
+                for g in gd:
+                    self.changed_gitdeploys[g] = gd[g]
+
         if parallel:
             for p in procs:
-                p.join(300)
+                p.join(150)
                 if p.is_alive():
                     p.terminate()
-                    logging.debug("ERROR: _threadsafe_process_gitdeploy: timeout waiting for child process ({})!".
+                    logging.error("ERROR: _threadsafe_process_gitdeploy: timeout waiting for child process ({})!".
                                   format(p.name))
                     self.datasvc.jobsvc.NewJobData({'status': 'error',
                                                     'message': 'timeout waiting for child process (process_gitdeploy: {}'.format(p.name)})
@@ -658,13 +665,17 @@ class DeployController:
                                                           step="ERROR: timed out waiting for child process")
                     self.datasvc.deploysvc.FailDeployment(app_name, self.deployment_id)
                     return False, None
-
-
-        while not queue.empty():
-            gd = queue.get_nowait()
-            if gd:
-                for g in gd:
-                    self.changed_gitdeploys[g] = gd[g]
+                if p.exitcode < 0 or p.exitcode > 0:
+                    msg = "process killed by signal {}!".format(abs(p.exitcode)) if p.exitcode < 0 \
+                        else "process died with exit code {}".format(p.exitcode)
+                    logging.error("_threadsafe_process_gitdeploy: {}".format(msg))
+                    self.datasvc.jobsvc.NewJobData({'status': 'error',
+                                                    'message': '{} (process_gitdeploy: {}'.format(msg, p.name)})
+                    self.datasvc.deploysvc.UpdateDeployment_Phase2(app_name, self.deployment_id, p.name,
+                                                                   self.changed_gitdeploys[p.name], batch_number,
+                                                                   state="ERROR: {}".format(msg))
+                    self.datasvc.deploysvc.FailDeployment(app_name, self.deployment_id)
+                    return False, None
 
         logging.debug("DeployController: run: post-phase1: changed_gitdeploys: {}".format(self.changed_gitdeploys))
 
@@ -681,12 +692,18 @@ class DeployController:
             else:
                 _threadsafe_pull_gitdeploy(app_name, {gd: self.changed_gitdeploys[gd]}, queue, self.datasvc.settings,
                                            self.datasvc.job_id, self.deployment_id, batch_number)
+
+        # pull from queue prior to joining to avoid deadlock
+        results = list()
+        while not queue.empty():
+            results.append(queue.get(150))
+
         if parallel:
             for p in procs:
-                p.join(300)
+                p.join(150)
                 if p.is_alive():
                     p.terminate()
-                    logging.debug("ERROR: _threadsafe_pull_gitdeploy: timeout waiting for child process ({})!".
+                    logging.error("_threadsafe_pull_gitdeploy: timeout waiting for child process ({})!".
                                   format(p.name))
                     self.datasvc.jobsvc.NewJobData({'status': 'error',
                                                     'message': 'timeout waiting for child process (pull_gitdeploy: {}'.format(p.name)})
@@ -695,10 +712,18 @@ class DeployController:
                                                                    state="ERROR: timeout waiting for child process")
                     self.datasvc.deploysvc.FailDeployment(app_name, self.deployment_id)
                     return False, None
+                if p.exitcode < 0 or p.exitcode > 0:
+                    msg = "process killed by signal {}!".format(abs(p.exitcode)) if p.exitcode < 0 \
+                        else "process died with exit code {}".format(p.exitcode)
+                    logging.error("_threadsafe_pull_gitdeploy: {}".format(msg))
+                    self.datasvc.jobsvc.NewJobData({'status': 'error',
+                                                    'message': '{} (pull_gitdeploy: {}'.format(msg, p.name)})
+                    self.datasvc.deploysvc.UpdateDeployment_Phase2(app_name, self.deployment_id, p.name,
+                                                                   self.changed_gitdeploys[p.name], batch_number,
+                                                                   state="ERROR: {}".format(msg))
+                    self.datasvc.deploysvc.FailDeployment(app_name, self.deployment_id)
+                    return False, None
 
-        results = list()
-        while not queue.empty():
-            results.append(queue.get_nowait())
 
         if not results:
             return False, results
