@@ -646,13 +646,16 @@ class DeployController:
                 queue.put_nowait({gd: determine_deployabe_servers(gddoc['servers'], servers)})
 
         # pull from queue prior to joining to avoid deadlock
-        while not queue.empty():
+        i = 0
+        while i < len(procs):
             gd = queue.get(150)
             if gd:
                 for g in gd:
                     self.changed_gitdeploys[g] = gd[g]
+            i += 1
 
         if parallel:
+            error = False
             for p in procs:
                 p.join(150)
                 if p.is_alive():
@@ -663,8 +666,7 @@ class DeployController:
                                                     'message': 'timeout waiting for child process (process_gitdeploy: {}'.format(p.name)})
                     self.datasvc.deploysvc.UpdateDeployment_Phase1(app_name, self.deployment_id, p.name,
                                                           step="ERROR: timed out waiting for child process")
-                    self.datasvc.deploysvc.FailDeployment(app_name, self.deployment_id)
-                    return False, None
+                    error = True
                 if p.exitcode < 0 or p.exitcode > 0:
                     msg = "process killed by signal {}!".format(abs(p.exitcode)) if p.exitcode < 0 \
                         else "process died with exit code {}".format(p.exitcode)
@@ -674,8 +676,10 @@ class DeployController:
                     self.datasvc.deploysvc.UpdateDeployment_Phase2(app_name, self.deployment_id, p.name,
                                                                    self.changed_gitdeploys[p.name], batch_number,
                                                                    state="ERROR: {}".format(msg))
-                    self.datasvc.deploysvc.FailDeployment(app_name, self.deployment_id)
-                    return False, None
+                    error = True
+            if error:
+                self.datasvc.deploysvc.FailDeployment(app_name, self.deployment_id)
+                return False, None
 
         logging.debug("DeployController: run: post-phase1: changed_gitdeploys: {}".format(self.changed_gitdeploys))
 
@@ -695,10 +699,13 @@ class DeployController:
 
         # pull from queue prior to joining to avoid deadlock
         results = list()
-        while not queue.empty():
+        i = 0
+        while i < len(procs):
             results.append(queue.get(150))
+            i += 1
 
         if parallel:
+            error = False
             for p in procs:
                 p.join(150)
                 if p.is_alive():
@@ -710,8 +717,7 @@ class DeployController:
                     self.datasvc.deploysvc.UpdateDeployment_Phase2(app_name, self.deployment_id, p.name,
                                                                    self.changed_gitdeploys[p.name], batch_number,
                                                                    state="ERROR: timeout waiting for child process")
-                    self.datasvc.deploysvc.FailDeployment(app_name, self.deployment_id)
-                    return False, None
+                    error = True
                 if p.exitcode < 0 or p.exitcode > 0:
                     msg = "process killed by signal {}!".format(abs(p.exitcode)) if p.exitcode < 0 \
                         else "process died with exit code {}".format(p.exitcode)
@@ -721,9 +727,10 @@ class DeployController:
                     self.datasvc.deploysvc.UpdateDeployment_Phase2(app_name, self.deployment_id, p.name,
                                                                    self.changed_gitdeploys[p.name], batch_number,
                                                                    state="ERROR: {}".format(msg))
-                    self.datasvc.deploysvc.FailDeployment(app_name, self.deployment_id)
-                    return False, None
-
+                    error = True
+            if error:
+                self.datasvc.deploysvc.FailDeployment(app_name, self.deployment_id)
+                return False, None
 
         if not results:
             return False, results
