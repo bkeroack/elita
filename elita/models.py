@@ -1888,7 +1888,7 @@ class PackageMap(GenericDataModel):
     # Example packages field:
     # packages = {
     #     'package_name': [{
-    #             'pattern': "foo/bar/*",
+    #             'patterns': ["foo/bar/*"],
     #             'prefix': "foobar/"
     #     }]
     # }

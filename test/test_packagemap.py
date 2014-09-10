@@ -10,16 +10,16 @@ BUILD_TBZ2 = "{}.tar.bz2".format(BUILD_BASENAME)
 
 package_map = {
     "configuration": {
-        "pattern": "build-123/config/**/*"
+        "patterns": ["build-123/config/**/*"]
     },
     "binaries": {
-        "pattern": "build-123/bin/**/*"
+        "patterns": ["build-123/bin/**/*"]
     },
     "libraries": {
-        "pattern": "build-123/bin/lib/**/*"
+        "patterns": ["build-123/bin/lib/**/*"]
     },
     "assets": {
-        "pattern": "build-123/assets/**/*",
+        "patterns": ["build-123/assets/**/*"],
         "prefix": "web/static"
     }
 }
@@ -37,7 +37,8 @@ def test_packagemap_creates_expected_packages_zip():
 
     expected_output = ['assets.zip', 'configuration.zip', 'binaries.zip', 'libraries.zip']
     files = os.listdir(output_dir)
-    assert set(expected_output) == set(files)
+    print("files: {}".format(files))
+    assert set(expected_output) == set([f for f in files if f[0] != '.'])   # filter out .keep
 
     packages = ['configuration.zip', 'binaries.zip', 'libraries.zip', 'assets.zip']
     expected_members = {
@@ -68,7 +69,7 @@ def test_packagemap_creates_expected_packages_tgz():
 
     expected_output = ['assets.tar.gz', 'configuration.tar.gz', 'binaries.tar.gz', 'libraries.tar.gz']
     files = os.listdir(output_dir)
-    assert set(expected_output) == set(files)
+    assert set(expected_output) == set([f for f in files if f[0] != '.'])   # filter out .keep
 
     packages = ['configuration.tar.gz', 'binaries.tar.gz', 'libraries.tar.gz', 'assets.tar.gz']
     # note trailing / removed from empty directories (per tarfile output)
@@ -102,7 +103,7 @@ def test_packagemap_creates_expected_packages_tbz2():
 
     expected_output = ['assets.tar.bz2', 'configuration.tar.bz2', 'binaries.tar.bz2', 'libraries.tar.bz2']
     files = os.listdir(output_dir)
-    assert set(expected_output) == set(files)
+    assert set(expected_output) == set([f for f in files if f[0] != '.'])   # filter out .keep
 
     packages = ['configuration.tar.bz2', 'binaries.tar.bz2', 'libraries.tar.bz2', 'assets.tar.bz2']
     # note trailing / removed from empty directories (per tarfile output)

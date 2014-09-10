@@ -1307,24 +1307,31 @@ class PackageMapContainerView(GenericView):
         if not self.body['packages']:
             return self.Error(400, 'invalid packages object: appears to be empty')
         for pkg in self.body['packages']:
-            if not isinstance(self.body['packages'][pkg], list):
-                return self.Error(400, 'invalid packages object: every package must be a list: {}'.format(pkg))
-            if len(self.body['packages'][pkg]) == 0:
-                return self.Error(400, 'invalid packages object: each package needs at least one pattern: {}'.format(pkg))
-            for i, pattern in enumerate(self.body['packages'][pkg]):
-                if not isinstance(pattern, dict):
-                    return self.Error(400, '{}: invalid pattern: index {}: must be a dict'.format(pkg, i))
-                if 'pattern' not in pattern:
-                    return self.Error(400, '{}: invalid pattern: index {}: pattern key missing'.format(pkg, i))
-                if not elita.util.type_check.is_string(pattern['pattern']):
-                    return self.Error(400, '{}: invalid pattern: index {}: pattern must be a string'.format(pkg, i))
-                if not pattern['pattern']:
-                    return self.Error(400, '{}: invalid pattern: index {}: pattern appears to be empty'.format(pkg, i))
-                if 'dir_prefix' in pattern:
-                    if not elita.util.type_check.is_string(pattern['prefix']):
-                        return self.Error(400, '{}: invalid pattern: index {}: prefix must be a string'.format(pkg, i))
-                    if not pattern['prefix']:
-                        return self.Error(400, '{}: invalid pattern: index {}: prefix appears to be empty'.format(pkg, i))
+            package = self.body['packages'][pkg]
+            if not package:
+                return self.Error(400, 'invalid packages object: empty')
+            if not set(package.keys()).issubset({'patterns', 'prefix'}):
+                return self.Error(400, "unknown keys in package {}: {}"
+                                  .format(pkg, list({'patterns', 'prefix'} - set(package.keys()))))
+            if 'patterns' not in package:
+                return self.Error(400, "{}: patterns missing".format(pkg))
+
+            if 'prefix' in package:
+                if not elita.util.type_check.is_string(package['prefix']):
+                    return self.Error(400, '{}: prefix must be a string'.format(pkg))
+                if not package['prefix']:
+                    return self.Error(400, '{}: prefix appears is empty'.format(pkg))
+
+            if not isinstance(package['patterns'], list):
+                return self.Error(400, '{}: patterns must be a list'.format(pkg))
+
+            for i, p in enumerate(package['patterns']):
+                pattern = package['patterns']
+                if not elita.util.type_check.is_string(pattern):
+                    return self.Error(400, '{}: patterns index {}: pattern must be a string'.format(pkg, i))
+                if not pattern:
+                    return self.Error(400, '{}: patterns index {}: pattern is empty'.format(pkg, i))
+
 
         self.datasvc.pmsvc.NewPackageMap(self.context.parent, self.req.params['name'], self.body['packages'], attributes)
         return self.status_ok({

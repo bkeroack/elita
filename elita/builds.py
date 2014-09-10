@@ -21,6 +21,9 @@ class SupportedFileType:
 class UnsupportedFileType(Exception):
     pass
 
+class PackagingError(Exception):
+    pass
+
 #async callables
 def store_indirect_build(datasvc, app, build, file_type, uri, verify, package_map):
     logging.debug("indirect_upload: downloading from {}".format(uri))
@@ -202,6 +205,65 @@ class BuildFile:
             zf.extractall(target_path)
 
 
+def _threadsafe_apply_package(output_dir, package_name, package, target_type, cwd, q):
+    '''
+    Executed concurrently in a separate process. Applies a set of patterns to an already-decompressed master package,
+    creates package and pushes to output directory
+
+    @type q: billiard.Queue
+    '''
+    assert elita.util.type_check.is_dictlike(package)
+    assert 'patterns' in package
+    assert elita.util.type_check.is_seq(package['patterns'])
+
+    patterns = package['patterns']
+    prefix = package['prefix'] if 'prefix' in package else None
+
+    def create_new_pkg():
+        logging.debug("cwd: {}".format(os.getcwd()))
+        if target_type == SupportedFileType.Zip:
+            package_fname = "{}.zip".format(package_name)
+            package_obj = zipfile.ZipFile(package_fname, 'w')
+        elif target_type == SupportedFileType.TarBz2:
+            package_fname = "{}.tar.bz2".format(package_name)
+            package_obj = tarfile.open(package_fname, mode='w:bz2')
+        elif target_type == SupportedFileType.TarGz:
+            package_fname = "{}.tar.gz".format(package_name)
+            package_obj = tarfile.open(package_fname, mode='w:gz')
+        else:
+            raise UnsupportedFileType
+        return package_obj, package_fname
+
+    def add_file_to_pkg(filename, package_obj):
+        assert filename
+        arcname = "{}/{}".format(prefix, filename) if prefix else filename
+        if target_type == SupportedFileType.Zip:
+            package_obj.write(filename, arcname, zipfile.ZIP_DEFLATED)
+        elif target_type == SupportedFileType.TarBz2 or target_type == SupportedFileType.TarGz:
+            package_obj.add(filename, arcname=arcname)
+        else:
+            raise UnsupportedFileType
+
+    def apply_pattern(pattern, package_obj):
+        assert pattern and package_obj
+        assert elita.util.type_check.is_string(pattern)
+        assert package_obj
+        logging.debug("applying pattern: {} ({})".format(pattern, package_name))
+        files = glob2.glob(pattern)
+        if files:
+            logging.debug("adding files")
+            for f in files:
+                add_file_to_pkg(f, package_obj)
+        logging.debug("no files for pattern!")
+
+    os.chdir(cwd)
+    po, pfn = create_new_pkg()
+    for p in patterns:
+        apply_pattern(p, po)
+    po.close()
+    shutil.move(pfn, "{}/{}".format(output_dir, pfn))
+    q.put({package_name: {'file_type': target_type, 'filename': "{}/{}".format(output_dir, pfn)}})
+
 
 class PackageMapper:
     '''
@@ -230,17 +292,7 @@ class PackageMapper:
         self.package_obj = None    # container for ZipFile/TarFile objs
 
     def cleanup(self):
-        os.chdir(self.old_cwd)
         shutil.rmtree(self.temp_dir)
-
-    def apply(self):
-        '''
-        Apply the package map and return a dict of package_names to { 'file_type', 'filename' }
-        '''
-        self.unpack_master_pkg()
-        self.old_cwd = os.getcwd()
-        os.chdir(self.temp_dir)
-        return {pkg: self.apply_pattern(pkg, self.package_map[pkg]) for pkg in self.package_map}
 
     def unpack_master_pkg(self):
         '''
@@ -249,43 +301,47 @@ class PackageMapper:
         bf = BuildFile({'filename': self.master_pkg, 'file_type': self.master_ftype})
         bf.decompress(self.temp_dir)
 
-    def create_new_pkg(self, package_name):
-        assert package_name
-        logging.debug("cwd: {}".format(os.getcwd()))
-        if self.target_type == SupportedFileType.Zip:
-            self.package_fname = "{}.zip".format(package_name)
-            self.package_obj = zipfile.ZipFile(self.package_fname, 'w')
-        elif self.target_type == SupportedFileType.TarBz2:
-            self.package_fname = "{}.tar.bz2".format(package_name)
-            self.package_obj = tarfile.open(self.package_fname, mode='w:bz2')
-        elif self.target_type == SupportedFileType.TarGz:
-            self.package_fname = "{}.tar.gz".format(package_name)
-            self.package_obj = tarfile.open(self.package_fname, mode='w:gz')
-        else:
-            raise UnsupportedFileType
+    def apply(self):
+        '''
+        Apply the package map and return a dict of package_names to { 'file_type', 'filename' }
+        '''
+        self.unpack_master_pkg()
 
-    def add_file_to_pkg(self, filename, dir_prefix):
-        assert filename
-        arcname = "{}/{}".format(dir_prefix, filename) if dir_prefix else filename
-        if self.target_type == SupportedFileType.Zip:
-            self.package_obj.write(filename, arcname, zipfile.ZIP_DEFLATED)
-        elif self.target_type == SupportedFileType.TarBz2 or self.target_type == SupportedFileType.TarGz:
-            self.package_obj.add(filename, arcname=arcname)
-        else:
-            raise UnsupportedFileType
+        q = billiard.Queue()
+        procs = list()
+        for pkg in self.package_map:
+            p = billiard.Process(target=_threadsafe_apply_package, name=pkg,
+                                 args=(self.build_dir, pkg, self.package_map[pkg], self.target_type, self.temp_dir, q))
+            p.start()
+            procs.append(p)
 
-    def apply_pattern(self, name, pattern):
-        assert pattern
-        assert elita.util.type_check.is_dictlike(pattern)
-        logging.debug("applying pattern: {} ({})".format(pattern, name))
-        prefix = pattern['prefix'] if 'prefix' in pattern else None
-        files = glob2.glob(pattern['pattern'])
-        if files:
-            logging.debug("adding files")
-            self.create_new_pkg(name)
-            for f in files:
-                self.add_file_to_pkg(f, prefix)
-            self.package_obj.close()
-            shutil.move(self.package_fname, "{}/{}".format(self.build_dir, self.package_fname))
-            return {'file_type': self.target_type, 'filename': "{}/{}".format(self.build_dir, self.package_fname)}
-        logging.debug("no files for pattern!")
+        i = 0
+        packages = dict()
+        while i < len(procs):
+            pkg = q.get(150)
+            assert pkg and len(pkg) == 1
+            pkg_name = pkg.keys()[0]
+            packages[pkg_name] = pkg[pkg_name]
+            i += 1
+
+        error = False
+        for p in procs:
+            p.join(150)
+            if p.is_alive():
+                logging.error("PackageMapper.apply(): timeout waiting for subprocess: {}".format(p.name))
+                p.terminate()
+                error = True
+            if p.exitcode < 0:
+                logging.error("PackageMapper.apply(): subprocess killed with signal {}".format(abs(p.exitcode)))
+                error = True
+            if p.exitcode > 0:
+                logging.error("PackageMapper.apply(): subprocess died with exit code {}".format(p.exitcode))
+                error = True
+        if error:
+            raise PackagingError
+
+        return packages
+
+
+
+
