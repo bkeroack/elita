@@ -491,13 +491,22 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
             datasvc.jobsvc.NewJobData({"DeployServers": {gd_name: "no servers"}})
             return True
 
+        gd_doc = datasvc.gitsvc.GetGitDeploy(application, gd_name)
+        branch = gd_doc['location']['default_branch']
+        path = gd_doc['location']['path']
+
+        #delete stale git index lock if it exists
+        datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, servers, batch_number,
+                                                  progress=25,
+                                                  state="Removing git index lock if it exists")
+        res = rc.rm_file_if_exists(servers, "{}/.git/index.lock".format(path))
+        logging.debug("_threadsafe_process_gitdeploy: delete git index lock results: {}".format(str(res)))
+
         #clear uncommitted changes on targets
         datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, servers, batch_number,
                                                   progress=33,
                                                   state="Clearing uncommitted changes")
-        gd_doc = datasvc.gitsvc.GetGitDeploy(application, gd_name)
-        branch = gd_doc['location']['default_branch']
-        path = gd_doc['location']['path']
+
         res = rc.discard_git_changes(servers, path)
         logging.debug("_threadsafe_process_gitdeploy: discard git changes result: {}".format(str(res)))
         res = rc.checkout_branch(servers, path, branch)
