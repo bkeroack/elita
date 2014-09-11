@@ -7,6 +7,7 @@ Elita - Continuous Deployment Framework
 =======================================
 
 Contents:
+^^^^^^^^^
 
 .. toctree::
    :maxdepth: 2
@@ -17,6 +18,16 @@ Contents:
    gitdeploy.rst
    endpoints.rst
    urlmap.rst
+
+
+Questions/Problems?
+^^^^^^^^^^^^^^^^^^^
+
+Feel free to contact me:
+
+* Email: ben@keroack.com
+* Google Hangouts: ben@keroack.com (usually available 9am-7pm Pacific)
+* Create/view open issues at the `issue tracker <https://bitbucket.org/scorebig/elita/issues>`_.
 
 
 Indices and tables

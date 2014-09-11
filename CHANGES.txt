@@ -3,6 +3,9 @@
 - Fix small error in Deployment model.
 - Remove census from application view
 - (internal) New decorator-based parameter validation
+- (internal) fix for potential deadlock and better queue usage
+- Delete stale git index locks (if present) during deployment
+- Package Map feature: Create build packages automatically on upload from a set of glob patterns (see docs)
 
 0.59.2
 - Add documentation links to README
