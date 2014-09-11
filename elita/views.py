@@ -453,10 +453,11 @@ class BuildView(GenericView):
         if self.req.params["file_type"] not in models.SupportedFileType.types:
             return self.Error(400, "file type not supported")
         self.file_type = self.req.params["file_type"]
-        package_map = self.req.params['package_map'] if 'package_map' in self.req.params else None
-        if package_map not in self.datasvc.pmsvc.GetPackageMaps(self.app_name):
-            return self.Error(400, "unknown package_map: {}".format(package_map))
-        self.package_map = self.datasvc.pmsvc.GetPackageMap(self.app_name, package_map)['packages']
+        self.package_map = self.req.params['package_map'] if 'package_map' in self.req.params else None
+        if self.package_map:
+            if self.package_map not in self.datasvc.pmsvc.GetPackageMaps(self.app_name):
+                return self.Error(400, "unknown package_map: {}".format(self.package_map))
+            self.package_map = self.datasvc.pmsvc.GetPackageMap(self.app_name, self.package_map)['packages']
 
         if "indirect_url" in self.req.params:
             return self.indirect_upload()

@@ -46,11 +46,42 @@ you may have a monolithic sourcecode tree that contains a number of individual a
 or you may want to repackage an application in different ways for different environments.
 
 The default package is called "master" and is present on every uploaded build--it is identical to the originally
-uploaded file. By default only the master package is present. Using plugin routines (via the BUILD_UPLOAD_SUCCESS
-hook) you can create any needed packages. Your hook routine would take a group of files from the uploaded master
-package, modify them in whatever way was desired, compress them into a new package file and return the
-information about the new packages when finished. These packages can then be deployed via different gitdeploys in
-whatever way is desired.
+uploaded file. By default only the master package is present. You create subpackages by creating and using a
+*package map* (see below).
+
+
+Package Maps
+------------
+
+A package map is a mapping of package names to one or more filename patterns. Patterns are interpreted as glob expressions
+including '**' syntax for recursive matching (similar to globstar option of the bash shell).
+
+Example:
+
+.. sourcecode:: json
+
+   {
+        "binaries": {
+            "patterns": [ "bin/**/*" ]
+        },
+        "configs": {
+            "patterns": [ "conf/**/*.xml" ],
+            "prefix": "app-config"
+        }
+   }
+
+The above package map creates two packages: "binaries" and "configs". The first ("binaries") contains all files in
+ the top-level "bin/" directory within the master package. The files are added recursively preserving directory structure.
+
+The second package ("configs") includes all XML files under the top-level "conf/" directory within the master package.
+Note that it also preserves the directory structure (but directories that do not contain matching files will not be included).
+
+Note also that the "configs" package contains a prefix field. The prefix will be prepended to the archive name of every
+file in the package. For example, if a file "conf/a/b/main.xml" is added to the package, the archive name (the name that
+the file will have when the package is unpacked) will be "app-config/conf/a/b/main.xml".
+
+Package maps support any number of package definitions, and each package can have any number of patterns associated with
+it (but must have at least one). Prefix is optional.
 
 
 Backend Mechanism
@@ -68,6 +99,7 @@ Elita performs the following steps when a deployment is triggered:
 
 .. NOTE::
    There are also various hook points during this process where custom routines from plugins can execute.
+
 
 Local Changes
 -------------
