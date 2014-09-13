@@ -21,7 +21,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     
     elita.vm.provider "parallels" do |v|
       v.name = "elita_vagrant"
-      v.memory = 2048
+      v.memory = 4096
       v.cpus = 2
     end
 
@@ -35,7 +35,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
     elita.vm.synced_folder "setup-data", "/home/vagrant/setup-data"
     
-    elita.vm.synced_folder "../../elita_scorebig", "/home/vagrant/elita_scorebig"
+    #elita.vm.synced_folder "../../elita_scorebig", "/home/vagrant/elita_scorebig"
   
     elita.vm.provision :salt do |salt|
 

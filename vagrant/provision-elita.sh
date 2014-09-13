@@ -1,13 +1,12 @@
 #!/bin/bash
 
-apt-get install -y mongodb rabbitmq-server python-pip python-dev libssl-dev swig git nginx curl jq httpie
+apt-get install -y mongodb rabbitmq-server python-pip python-dev libssl-dev swig git nginx curl jq httpie htop
 cd /home/vagrant/elita
 python ./setup.py develop
-cd /home/vagrant/elita_scorebig
-python ./setup.py develop
+#cd /home/vagrant/elita_scorebig
+#python ./setup.py develop
 cd /home/vagrant/elita
-# sometimes the elita_scorebig install will clobber the elita module with a really old version. no idea why.
-python ./setup.py develop
+#python ./setup.py develop
 elita_install
 
 [ -d "/etc/nginx/ssl" ] || mkdir /etc/nginx/ssl

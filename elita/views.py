@@ -1309,11 +1309,12 @@ class PackageMapContainerView(GenericView):
             return self.Error(400, 'invalid packages object: appears to be empty')
         for pkg in self.body['packages']:
             package = self.body['packages'][pkg]
+            supported_keys = {'patterns', 'prefix', 'remove_prefix'}
             if not package:
                 return self.Error(400, 'invalid packages object: empty')
-            if not set(package.keys()).issubset({'patterns', 'prefix'}):
+            if not set(package.keys()).issubset(supported_keys):
                 return self.Error(400, "unknown keys in package {}: {}"
-                                  .format(pkg, list({'patterns', 'prefix'} - set(package.keys()))))
+                                  .format(pkg, list(supported_keys - set(package.keys()))))
             if 'patterns' not in package:
                 return self.Error(400, "{}: patterns missing".format(pkg))
 
@@ -1323,16 +1324,20 @@ class PackageMapContainerView(GenericView):
                 if not package['prefix']:
                     return self.Error(400, '{}: prefix appears is empty'.format(pkg))
 
+            if 'remove_prefix' in package:
+                if not elita.util.type_check.is_string(package['remove_prefix']):
+                    return self.Error(400, '{}: remove_prefix must be a string'.format(pkg))
+                if not package['remove_prefix']:
+                    return self.Error(400, '{}: remove_prefix appears is empty'.format(pkg))
+
             if not isinstance(package['patterns'], list):
                 return self.Error(400, '{}: patterns must be a list'.format(pkg))
 
             for i, p in enumerate(package['patterns']):
-                pattern = package['patterns']
-                if not elita.util.type_check.is_string(pattern):
+                if not elita.util.type_check.is_string(p):
                     return self.Error(400, '{}: patterns index {}: pattern must be a string'.format(pkg, i))
-                if not pattern:
+                if not p:
                     return self.Error(400, '{}: patterns index {}: pattern is empty'.format(pkg, i))
-
 
         self.datasvc.pmsvc.NewPackageMap(self.context.parent, self.req.params['name'], self.body['packages'], attributes)
         return self.status_ok({

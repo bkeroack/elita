@@ -218,6 +218,7 @@ def _threadsafe_apply_package(output_dir, package_name, package, target_type, cw
 
     patterns = package['patterns']
     prefix = package['prefix'] if 'prefix' in package else None
+    remove_prefix = package['remove_prefix'] if 'remove_prefix' in package else None
 
     def create_new_pkg():
         logging.debug("cwd: {}".format(os.getcwd()))
@@ -236,7 +237,8 @@ def _threadsafe_apply_package(output_dir, package_name, package, target_type, cw
 
     def add_file_to_pkg(filename, package_obj):
         assert filename
-        arcname = "{}/{}".format(prefix, filename) if prefix else filename
+        arcname = str(filename).replace(remove_prefix, "", 1) if remove_prefix else filename
+        arcname = "{}/{}".format(prefix, arcname) if prefix else arcname
         if target_type == SupportedFileType.Zip:
             package_obj.write(filename, arcname, zipfile.ZIP_DEFLATED)
         elif target_type == SupportedFileType.TarBz2 or target_type == SupportedFileType.TarGz:

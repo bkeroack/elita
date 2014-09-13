@@ -59,7 +59,7 @@ Example:
         },
         "configs": {
             "patterns": [ "conf/**/*.xml" ],
-            "prefix": "app-config"
+            "prefix": "app-config/"
         }
    }
 
@@ -72,7 +72,9 @@ Note that it also preserves the directory structure (but directories that do not
 
 Note also that the "configs" package contains a prefix field. The prefix will be prepended to the archive name of every
 file in the package. For example, if a file "conf/a/b/main.xml" is added to the package, the archive name (the name that
-the file will have when the package is unpacked) will be "app-config/conf/a/b/main.xml".
+the file will have when the package is unpacked) will be "app-config/conf/a/b/main.xml". There is another optional field
+called "remove_prefix" which does the opposite: if that string is present in the filename, it will be removed a maximum
+of one time starting from the left.
 
 Package maps support any number of package definitions, and each package can have any number of patterns associated with
 it (but must have at least one). Prefix is optional.

@@ -1889,7 +1889,8 @@ class PackageMap(GenericDataModel):
     # packages = {
     #     'package_name': [{
     #             'patterns': ["foo/bar/*"],
-    #             'prefix': "foobar/"
+    #             'prefix': "foobar/",
+    #             'remove_prefix': "bar/"
     #     }]
     # }
 

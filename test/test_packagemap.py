@@ -10,7 +10,8 @@ BUILD_TBZ2 = "{}.tar.bz2".format(BUILD_BASENAME)
 
 package_map = {
     "configuration": {
-        "patterns": ["build-123/config/**/*"]
+        "patterns": ["build-123/config/**/*"],
+        "remove_prefix": "build-123/"
     },
     "binaries": {
         "patterns": ["build-123/bin/**/*"]
@@ -20,7 +21,7 @@ package_map = {
     },
     "assets": {
         "patterns": ["build-123/assets/**/*"],
-        "prefix": "web/static"
+        "prefix": "web/static/"
     }
 }
 
@@ -42,7 +43,7 @@ def test_packagemap_creates_expected_packages_zip():
 
     packages = ['configuration.zip', 'binaries.zip', 'libraries.zip', 'assets.zip']
     expected_members = {
-        'configuration.zip': ['build-123/config/file.yaml', 'build-123/config/file.xml', 'build-123/config/file.txt'],
+        'configuration.zip': ['config/file.yaml', 'config/file.xml', 'config/file.txt'],
         'binaries.zip': ['build-123/bin/lib/', 'build-123/bin/widgets', 'build-123/bin/lib/libfoo.so'],
         'libraries.zip': ['build-123/bin/lib/libfoo.so'],
         'assets.zip': ['web/static/build-123/assets/css/', 'web/static/build-123/assets/css/style.css',
@@ -74,7 +75,7 @@ def test_packagemap_creates_expected_packages_tgz():
     packages = ['configuration.tar.gz', 'binaries.tar.gz', 'libraries.tar.gz', 'assets.tar.gz']
     # note trailing / removed from empty directories (per tarfile output)
     expected_members = {
-        'configuration.tar.gz': ['build-123/config/file.yaml', 'build-123/config/file.xml', 'build-123/config/file.txt'],
+        'configuration.tar.gz': ['config/file.yaml', 'config/file.xml', 'config/file.txt'],
         'binaries.tar.gz': ['build-123/bin/lib', 'build-123/bin/widgets', 'build-123/bin/lib/libfoo.so'],
         'libraries.tar.gz': ['build-123/bin/lib/libfoo.so'],
         'assets.tar.gz': ['web/static/build-123/assets/css', 'web/static/build-123/assets/css/style.css',
@@ -108,7 +109,7 @@ def test_packagemap_creates_expected_packages_tbz2():
     packages = ['configuration.tar.bz2', 'binaries.tar.bz2', 'libraries.tar.bz2', 'assets.tar.bz2']
     # note trailing / removed from empty directories (per tarfile output)
     expected_members = {
-        'configuration.tar.bz2': ['build-123/config/file.yaml', 'build-123/config/file.xml', 'build-123/config/file.txt'],
+        'configuration.tar.bz2': ['config/file.yaml', 'config/file.xml', 'config/file.txt'],
         'binaries.tar.bz2': ['build-123/bin/lib', 'build-123/bin/widgets', 'build-123/bin/lib/libfoo.so'],
         'libraries.tar.bz2': ['build-123/bin/lib/libfoo.so'],
         'assets.tar.bz2': ['web/static/build-123/assets/css', 'web/static/build-123/assets/css/style.css',
