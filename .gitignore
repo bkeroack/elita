@@ -12,3 +12,4 @@ atlassian-ide-plugin.xml
 vagrant/setup-data/*.key
 vagrant/setup-data/*.txt
 vagrant/setup-data/setup_scorebig.sh
+vagrant/setup-data/sb_packagemap.json

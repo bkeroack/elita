@@ -42,3 +42,11 @@ Source/Homepage
 
 *   https://bitbucket.org/scorebig/elita
 
+
+Support
+=======
+
+Problems?
+
+Email: ben@keroack.com
+Google Hangouts: ben@keroack.com (usually available 9am-7pm Pacific)

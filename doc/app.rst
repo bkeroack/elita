@@ -159,12 +159,20 @@ Upload Build
 .. http:post::   /app/(string: app_name)/builds/(string: build_name)
 
    :param file_type: file type (either "zip", "tar.gz" or "tar.bz2")
+   :type file_type: string
    :param indirect_url: URL-encoded location to download the build from (optional, only for indirect uploads)
+   :type indirect_url: string
    :param verify: (optional) If doing indirect upload, verify SSL certificate on indirect_url if present (defaults to True)
+   :type verify: string (boolean)
+   :param package_map: (optional) name of package map to apply to the build (if not specified, only the master package will be created)
+   :type package_map: string
    :formparameter build: File data (optional, only if indirect_url isn't specified)
 
    Upload a build. This can be done either directly by including file data in a form post,
    or indirectly by providing a URL-encoded location that elita can download the build from.
+
+   Optionally, the name of a package map can be supplied in the package_map parameter. After upload is successful, the
+   package map will be applied to the build, creating all packages specified in the map.
 
    .. ATTENTION::
       The build object must created first (via PUT; see above) before data can be uploaded to it.
@@ -199,6 +207,120 @@ Delete Build
    .. sourcecode:: bash
 
       $ curl -XDELETE '/app/widgetmakers/builds/1-master'
+
+
+Packagemaps
+-----------
+
+View Package Maps
+^^^^^^^^^^^^^^^^^
+
+.. http:get::       /app/(string: app_name)/packagemaps
+
+   View all package maps associated with the application.
+
+   **Example request**:
+
+   .. sourcecode:: bash
+
+      $ http GET '/app/widgetmakers/packagemaps'
+
+
+View Package Map
+^^^^^^^^^^^^^^^^
+
+.. http:get::       /app/(string: app_name)/packagemaps/(string: packagemap_name)
+
+   View individual package map.
+
+   **Example request**:
+
+   .. sourcecode:: bash
+
+      $ http GET '/app/widgetmakers/packagemaps/my_package_map'
+
+
+Create Package Map
+^^^^^^^^^^^^^^^^^^
+
+.. http:put::   /app/(string: app_name)/packagemaps
+
+   :param name: package map name
+   :type name: string
+   :jsonparam string body: JSON object containing package map
+
+   Create a new package map.
+
+   A package map is a mapping of package names to one or more filename patterns. Patterns are interpreted as glob expressions
+   including '**' syntax for recursive matching (similar to globstar option of the bash shell). Each package must have a
+   "patterns" key consisting of a list of one or more pattern strings.
+
+   There can be any number of packages within the package map, and there must be at least one pattern associated with each package.
+
+   **Package Map Format**
+
+   A package map is a mapping of package name (which can be an arbitrary string) to a JSON object consisting of the
+   following fields:
+
+   - *patterns* (required, list of strings): a list of glob-style patterns which will be matched against
+     filenames (including paths) in the master package. Matching files will be included in the package. "**" (double
+     star) may be used for recursive matching.
+   - *prefix* (optional, string): this string will be prepended to the archive name of each file in the package. Path
+     separators can be used to create a directory hierarchy. This is performed after remove_prefix is processed (if
+     present).
+   - *remove_prefix* (optional, string): if this string is present in the filename (including path), it will be removed
+     exactly once beginning from the left. Prefix removal always occurs prior to prefix prepending via the "prefix" field.
+
+
+   **Example JSON body**
+
+   .. sourcecode:: json
+
+      {
+        "packages": {
+
+           "binaries": {
+               "patterns": [ "bin/**/*" ]
+           },
+           "configs": {
+               "patterns": [ "conf/**/*.xml" ],
+               "prefix": "app-config/"
+           }
+
+        }
+      }
+
+   The above package map creates two packages: "binaries" and "configs". The first ("binaries") contains all files in
+   the top-level "bin/" directory within the master package. The files are added recursively preserving directory structure.
+
+   The second package ("configs") includes all XML files under the top-level "conf/" directory within the master package.
+   Note that it also preserves the directory structure (but directories that do not contain matching files will not be included).
+
+   Note also that the "configs" package contains a prefix field. The prefix will be prepended to the archive name of every
+   file in the package. For example, if a file "conf/a/b/main.xml" is added to the package, the archive name (the name that
+   the file will have when the package is unpacked) will be "app-config/conf/a/b/main.xml". There is another optional field
+   called "remove_prefix" which does the opposite: if that string is present in the filename, it will be removed a maximum
+   of one time starting from the left.
+
+   **Example request**:
+
+   .. sourcecode:: bash
+
+      $ echo '{ "packages": { "binaries": { "patterns": [ "bin/**/*" ] } } }' |http PUT '/app/widgetmakers/packagemaps?name=example_map'
+
+
+Delete Package Map
+^^^^^^^^^^^^^^^^^^
+
+.. http:delete::   /app/(string: app_name)/packagemaps/(string: map_name)
+
+   Remove a package map.
+
+   **Example request**:
+
+   .. sourcecode:: bash
+
+      $ http DELETE '/app/widgetmakers/packagemaps/example_map'
 
 
 Gitrepos

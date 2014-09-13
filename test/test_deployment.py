@@ -71,7 +71,7 @@ def test_simple_deployment(mockRD, mockGitDeployManager, mockRemoteCommands, moc
 
     dc = elita.deployment.deploy.DeployController(mock_datasvc, 'mock_id')
 
-    ok, results = dc.run("example_app", "example_build", servers, gitdeploys, parallel=True)
+    ok, results = dc.run("example_app", "example_build", servers, gitdeploys, parallel=False)
 
     #TODO: implement real checks that mock objs are called how we expect
 
@@ -117,7 +117,7 @@ def test_rolling_deployment(mockRD, mockGitDeployManager, mockRemoteCommands, mo
                 "environments": ["testing"],
                 "gitdeploys": list(set(gp0['gitdeploys'] + gp1['gitdeploys'])),
                 "servers": list(set(gp0['servers'] + gp1['servers']))
-            }, 2, 0, parallel=True)
+            }, 2, 0, parallel=False)
 
     #assert False
 

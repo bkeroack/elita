@@ -11,7 +11,7 @@ requires = [
     'pyramid',
     'gunicorn',
     'gevent',
-    'salt',
+    'salt<=2014.1.10',     # temp fix since SaltStack, Inc. likes to push broken pre-release software to PyPI
     'celery',
     'pymongo',
 
@@ -42,7 +42,7 @@ requires = [
 ]
 
 setup(name='elita',
-      version="0.59.3",
+      version="0.60.0",
       description='Continuous deployment (continuous delivery) and infrastructure management REST framework',
       long_description=README + '\n\n' + CHANGES,
       license='Apache',

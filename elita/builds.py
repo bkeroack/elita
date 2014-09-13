@@ -7,6 +7,8 @@ import zipfile
 import tarfile
 import tempfile
 import logging
+import glob2
+import billiard
 
 import elita.util
 
@@ -16,8 +18,14 @@ class SupportedFileType:
     Zip = 'zip'
     types = [TarBz2, TarGz, Zip]
 
+class UnsupportedFileType(Exception):
+    pass
+
+class PackagingError(Exception):
+    pass
+
 #async callables
-def store_indirect_build(datasvc, app, build, file_type, uri, verify):
+def store_indirect_build(datasvc, app, build, file_type, uri, verify, package_map):
     logging.debug("indirect_upload: downloading from {}".format(uri))
     datasvc.jobsvc.NewJobData({'status': 'Downloading build file from {}'.format(uri)})
     r = requests.get(uri, verify=verify)
@@ -26,9 +34,9 @@ def store_indirect_build(datasvc, app, build, file_type, uri, verify):
         f.write(r.content)
     logging.debug("download and file write complete")
     datasvc.jobsvc.NewJobData({'status': "download and file write complete"})
-    return store_uploaded_build(datasvc, app, build, file_type, temp_file)
+    return store_uploaded_build(datasvc, app, build, file_type, temp_file, package_map)
 
-def store_uploaded_build(datasvc, app, build, file_type, temp_file):
+def store_uploaded_build(datasvc, app, build, file_type, temp_file, package_map):
     builds_dir = datasvc.settings['elita.builds.dir']
     minimum_build_size = int(datasvc.settings['elita.builds.minimum_size'])
     bs_obj = BuildStorage(builds_dir, app, build, file_type=file_type, input_file=temp_file,
@@ -46,6 +54,15 @@ def store_uploaded_build(datasvc, app, build, file_type, temp_file):
     build_doc = datasvc.buildsvc.GetBuildDoc(app, build)
     build_doc['master_file'] = fname
     build_doc['packages']['master'] = {'filename': fname, 'file_type': file_type}
+
+    if package_map:
+        datasvc.jobsvc.NewJobData({'status': 'applying package map',
+                                   'package_map': package_map})
+        pm = PackageMapper(fname, file_type, file_type, os.path.dirname(fname), package_map)
+        packages = pm.apply()
+        pm.cleanup()
+        for pkg in packages:
+            build_doc['packages'][pkg] = packages[pkg]
 
     for k in build_doc['packages']:
         fname = build_doc['packages'][k]['filename']
@@ -186,6 +203,147 @@ class BuildFile:
     def decompress_zip(self, target_path):
         with zipfile.ZipFile(self.filename, 'r') as zf:
             zf.extractall(target_path)
+
+
+def _threadsafe_apply_package(output_dir, package_name, package, target_type, cwd, q):
+    '''
+    Executed concurrently in a separate process. Applies a set of patterns to an already-decompressed master package,
+    creates package and pushes to output directory
+
+    @type q: billiard.Queue
+    '''
+    assert elita.util.type_check.is_dictlike(package)
+    assert 'patterns' in package
+    assert elita.util.type_check.is_seq(package['patterns'])
+
+    patterns = package['patterns']
+    prefix = package['prefix'] if 'prefix' in package else None
+    remove_prefix = package['remove_prefix'] if 'remove_prefix' in package else None
+
+    def create_new_pkg():
+        logging.debug("cwd: {}".format(os.getcwd()))
+        if target_type == SupportedFileType.Zip:
+            package_fname = "{}.zip".format(package_name)
+            package_obj = zipfile.ZipFile(package_fname, 'w')
+        elif target_type == SupportedFileType.TarBz2:
+            package_fname = "{}.tar.bz2".format(package_name)
+            package_obj = tarfile.open(package_fname, mode='w:bz2')
+        elif target_type == SupportedFileType.TarGz:
+            package_fname = "{}.tar.gz".format(package_name)
+            package_obj = tarfile.open(package_fname, mode='w:gz')
+        else:
+            raise UnsupportedFileType
+        return package_obj, package_fname
+
+    def add_file_to_pkg(filename, package_obj):
+        assert filename
+        arcname = str(filename).replace(remove_prefix, "", 1) if remove_prefix else filename
+        arcname = "{}/{}".format(prefix, arcname) if prefix else arcname
+        if target_type == SupportedFileType.Zip:
+            package_obj.write(filename, arcname, zipfile.ZIP_DEFLATED)
+        elif target_type == SupportedFileType.TarBz2 or target_type == SupportedFileType.TarGz:
+            package_obj.add(filename, arcname=arcname)
+        else:
+            raise UnsupportedFileType
+
+    def apply_pattern(pattern, package_obj):
+        assert pattern and package_obj
+        assert elita.util.type_check.is_string(pattern)
+        assert package_obj
+        logging.debug("applying pattern: {} ({})".format(pattern, package_name))
+        files = glob2.glob(pattern)
+        if files:
+            logging.debug("adding files")
+            for f in files:
+                add_file_to_pkg(f, package_obj)
+        logging.debug("no files for pattern!")
+
+    os.chdir(cwd)
+    po, pfn = create_new_pkg()
+    for p in patterns:
+        apply_pattern(p, po)
+    po.close()
+    shutil.move(pfn, "{}/{}".format(output_dir, pfn))
+    q.put({package_name: {'file_type': target_type, 'filename': "{}/{}".format(output_dir, pfn)}})
+
+
+class PackageMapper:
+    '''
+    Applies supplied package map to the build. Assumes pre-validated package map and a build_dir that exists
+
+    This puts the generated package files directly in the build storage directory and returns a mapping of package
+    names to filenames/types (but doesn't update the build object)
+    '''
+    def __init__(self, master_package_filename, master_file_type, target_file_type, build_dir, package_map):
+        assert master_package_filename and master_file_type and target_file_type and build_dir and package_map
+        assert elita.util.type_check.is_string(master_package_filename)
+        assert elita.util.type_check.is_string(master_file_type)
+        assert elita.util.type_check.is_string(target_file_type)
+        assert elita.util.type_check.is_string(build_dir)
+        assert master_file_type in SupportedFileType.types and target_file_type in SupportedFileType.types
+        assert elita.util.type_check.is_dictlike(package_map)
+        self.master_pkg = master_package_filename
+        self.master_ftype = master_file_type
+        self.target_type = target_file_type
+        self.build_dir = build_dir
+        self.package_map = package_map
+        self.temp_dir = tempfile.mkdtemp()
+        self.old_cwd = os.getcwd()
+
+        self.package_fname = None  # container for filename
+        self.package_obj = None    # container for ZipFile/TarFile objs
+
+    def cleanup(self):
+        shutil.rmtree(self.temp_dir)
+
+    def unpack_master_pkg(self):
+        '''
+        Decompress master package filename to temp location
+        '''
+        bf = BuildFile({'filename': self.master_pkg, 'file_type': self.master_ftype})
+        bf.decompress(self.temp_dir)
+
+    def apply(self):
+        '''
+        Apply the package map and return a dict of package_names to { 'file_type', 'filename' }
+        '''
+        self.unpack_master_pkg()
+
+        q = billiard.Queue()
+        procs = list()
+        for pkg in self.package_map:
+            p = billiard.Process(target=_threadsafe_apply_package, name=pkg,
+                                 args=(self.build_dir, pkg, self.package_map[pkg], self.target_type, self.temp_dir, q))
+            p.start()
+            procs.append(p)
+
+        i = 0
+        packages = dict()
+        while i < len(procs):
+            pkg = q.get(150)
+            assert pkg and len(pkg) == 1
+            pkg_name = pkg.keys()[0]
+            packages[pkg_name] = pkg[pkg_name]
+            i += 1
+
+        error = False
+        for p in procs:
+            p.join(150)
+            if p.is_alive():
+                logging.error("PackageMapper.apply(): timeout waiting for subprocess: {}".format(p.name))
+                p.terminate()
+                error = True
+            if p.exitcode < 0:
+                logging.error("PackageMapper.apply(): subprocess killed with signal {}".format(abs(p.exitcode)))
+                error = True
+            if p.exitcode > 0:
+                logging.error("PackageMapper.apply(): subprocess died with exit code {}".format(p.exitcode))
+                error = True
+        if error:
+            raise PackagingError
+
+        return packages
+
 
 
 

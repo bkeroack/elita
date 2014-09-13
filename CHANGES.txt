@@ -1,3 +1,9 @@
+0.60.0
+- Package Map feature: Create build packages automatically on upload from a set of glob patterns (see docs)
+- Delete stale git index locks (if present) during deployment
+- (internal) fix for potential multiprocessing deadlock and better queue usage
+- (internal) New decorator-based parameter validation
+
 0.59.3
 - Fix exceptions in application census
 - Remove application census from top-level application view

@@ -12,45 +12,72 @@ For associated API endpoints, see: :ref:`Gitdeploy Endpoints <gitdeploy-endpoint
 Introduction
 ------------
 
-elita uses a mechanism based on git to push code and resources to servers called "gitdeploy".
+Elita uses a mechanism based on git to push code and resources to servers called "gitdeploy". It's an automated process
+where build packages are applied to repositories, the changes are detected and pushed upstream to the gitprovider. Git
+pulls are then performed on the remote servers to pull the changes in.
 
-This mechanism allows fast delta deployments. Only changed files are transmitted to servers,
-and in fact only the deltas of changed files are transmitted, including for binary files. Git-based deployments are
-suitable
-and efficient both for textual applications (interpreted languages like Python) and compiled languages (native code
-or bytecode applications like Java or .NET). The greatest efficiency gains tend to be with compiled applications,
-since they often do not compress as well as text and have relatively small changes per revision (in terms of
-bytes changed per binary file) and therefore can be transmitted very quickly.
+Gitdeploy allows the git deployment workflow to be used for binary applications--not just textual interpreted applications.
+JVM or native binaries work just fine with Elita and with gitdeploy you get faster delta deployments. Git by default
+stores binary file changes as deltas, so when you do a gitdeploy of binaries you are only transferring the changes in the
+underlying files, which typically is much less than the total application size.
 
 As far as the API is concerned, a *gitdeploy* is an object (an API endpoint) which associates a git repository with a
 location on one or more servers along with associated configuration options and attributes.
 
 gitdeploy objects are created and then applied (initialized) to individual servers,
 which creates the target directories and initializes the repositories. They can also be deinitialized
-(deleted).
-
-Deployments are executed in parallel across all target servers via salt.
-
-.. NOTE::
-   git can be inefficient for large binary files, typically over 150MB. If you have an application with
-   individual files that exceed this approximate threshold, expect increased git metadata size or
-   consider other deployment methodologies.
+(deleted) from the remote servers.
 
 
 Build Packages
 --------------
 
-Elita allows for a build to have an arbitrary number of *packages* associated with it. A package is a way for you to
-repackage or post-process the initial build artifacts into whatever form you need. For example,
-you may have a monolithic sourcecode tree that contains a number of individual applications within it,
+Elita allows for a build to have an arbitrary number of *packages* associated with it. A package is a way to
+repackage or post-process the initial build artifacts into whatever form is needed.
+
+You might have a source code tree that contains a number of individual applications within it,
 or you may want to repackage an application in different ways for different environments.
 
 The default package is called "master" and is present on every uploaded build--it is identical to the originally
-uploaded file. By default only the master package is present. Using plugin routines (via the BUILD_UPLOAD_SUCCESS
-hook) you can create any needed packages. Your hook routine would take a group of files from the uploaded master
-package, modify them in whatever way was desired, compress them into a new package file and return the
-information about the new packages when finished. These packages can then be deployed via different gitdeploys in
-whatever way is desired.
+uploaded file. By default only the master package is present. You create subpackages by creating and using a
+*package map* (see below).
+
+
+Package Maps
+------------
+
+A package map is a mapping of package names to one or more filename patterns. Patterns are interpreted as glob expressions
+including '**' syntax for recursive matching (similar to globstar option of the bash shell).
+
+Example:
+
+.. sourcecode:: json
+
+   {
+        "binaries": {
+            "patterns": [ "bin/**/*" ]
+        },
+        "configs": {
+            "patterns": [ "conf/**/*.xml" ],
+            "prefix": "app-config/"
+        }
+   }
+
+
+The above package map creates two packages: "binaries" and "configs". The first ("binaries") contains all files in
+the top-level "bin/" directory within the master package. The files are added recursively preserving directory structure.
+
+The second package ("configs") includes all XML files under the top-level "conf/" directory within the master package.
+Note that it also preserves the directory structure (but directories that do not contain matching files will not be included).
+
+Note also that the "configs" package contains a prefix field. The prefix will be prepended to the archive name of every
+file in the package. For example, if a file "conf/a/b/main.xml" is added to the package, the archive name (the name that
+the file will have when the package is unpacked) will be "app-config/conf/a/b/main.xml". There is another optional field
+called "remove_prefix" which does the opposite: if that string is present in the filename, it will be removed a maximum
+of one time starting from the left.
+
+Package maps support any number of package definitions, and each package can have any number of patterns associated with
+it (but must have at least one). Prefix is optional.
 
 
 Backend Mechanism
@@ -66,15 +93,13 @@ Elita performs the following steps when a deployment is triggered:
    #.   A git pull is performed (along with any options) on the gitdeploy location on the target server(s).
    #.   Any specified post-pull salt states are executed on the target server(s).
 
-.. NOTE::
-   There are also various hook points during this process where custom routines from plugins can execute.
 
 Local Changes
 -------------
 
-Gitdeploy allows for persistent local changes on end servers.
+Gitdeploy also allows for persistent local changes on end servers that will not be overwritten by subsequent deployments.
 
-If you need to modify a file within a gitdeploy on a server (for example, if you need to change a configuration file
+If you need to modify a file within a gitdeploy on a server (eg, you might need to change a configuration file
 only on one server in a farm), this can be done by editing the file and then committing locally on that repository.
 These changes will then persist with future deployments, as new code will be automatically merged into the existing
 repository without overwriting local changes.
@@ -83,13 +108,11 @@ Any *uncommitted* changes will be lost with the next deployment to prevent pull 
 
 .. CAUTION::
    Any time you modify a gitdeploy locally it creates a chance that future deployments could result in a merge error
-   and failed deployment. Elita uses git options to minimize the changes of merge errors by default,
+   and failed deployment. Elita uses git options to minimize the changes of merge errors by default (preferring local
+   changes to remote changes),
    but they can never be fully eliminated. Even when successful, any time an automatic merge happens there is a chance
-   that the application could be changed in some undesired way.
-
-.. WARNING::
-   Do not push changes from end servers to the upstream gitprovider. By default, elita puts an invalid upstream URL
-   to prevent accidental pushes.
+   that the application could be changed in some undesired way. So it's usually best to keep local changes to a minimum,
+   and avoid having local changes on files that will receive frequent incoming changes.
 
 
 API Objects
@@ -106,7 +129,7 @@ Follow is a list of the associated API objects (endpoints):
     Gitdeploys are initialized on servers, which pushes the appropriate SSH keys and clones the gitrepo at the
     configured path.
 
-    Each server is associated with exactly one environment, which is a logical grouping of servers. A dynamically
+    Each server is associated with exactly one environment, which is a tag used to logically group servers. A dynamically
     calculated environment roster can be obtained via GET on the /server/environments endpoint.
 
     .. NOTE::

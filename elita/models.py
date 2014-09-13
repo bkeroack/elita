@@ -517,7 +517,8 @@ class ApplicationDataService(GenericChildDataService):
             "gitrepos": {"_doc": bson.DBRef('containers', self.NewContainer("GitRepoContainer", "gitrepos", app_name))},
             "gitdeploys": {"_doc": bson.DBRef('containers', self.NewContainer("GitDeployContainer", "gitdeploys", app_name))},
             "deployments": {"_doc": bson.DBRef('containers', self.NewContainer("DeploymentContainer", "deployments", app_name))},
-            "groups": {"_doc": bson.DBRef('containers', self.NewContainer("GroupContainer", "groups", app_name))}
+            "groups": {"_doc": bson.DBRef('containers', self.NewContainer("GroupContainer", "groups", app_name))},
+            "packagemaps": {"_doc": bson.DBRef('containers', self.NewContainer("PackageMapContainer", "packagemaps", app_name))}
         }
         res = self.mongo_service.update_roottree(('app', app_name), 'applications', aid, doc=root_doc)
         self.AddThreadLocalRootTree(('app', app_name))
@@ -536,6 +537,7 @@ class ApplicationDataService(GenericChildDataService):
         self.mongo_service.delete('gitdeploys', {'application': app_name})
         self.mongo_service.delete('deployments', {'application': app_name})
         self.mongo_service.delete('groups', {'application': app_name})
+        self.mongo_service.delete('packagemaps', {'application': app_name})
         self.RmThreadLocalRootTree(('app', app_name))
 
     def GetApplicationCensus(self, app_name):
@@ -580,6 +582,62 @@ class ApplicationDataService(GenericChildDataService):
             if len(census[e]) == 0:
                 del census[e]
         return census
+
+class PackageMapDataService(GenericChildDataService):
+    def GetPackageMaps(self, app):
+        '''
+        Get all packagemaps for application
+        '''
+        assert app
+        assert elita.util.type_check.is_string(app)
+        assert app in self.root['app']
+        return [pm for pm in self.root['app'][app]['packagemaps'] if pm[0] != '_']
+
+    def GetPackageMap(self, app, name):
+        '''
+        Get document for packagemap
+        '''
+        assert app and name
+        assert elita.util.type_check.is_string(app)
+        assert elita.util.type_check.is_string(name)
+        doc = self.mongo_service.get('packagemaps', {'application': app, 'name': name})
+        return {k: doc[k] for k in doc if k[0] != '_'}
+
+    def NewPackageMap(self, app, name, packages, attributes=None):
+        '''
+        Create new packagemap
+
+        @type app: str
+        @type name: str
+        @type packages: dict
+        @type attributes: dict | None
+        '''
+        assert app and name and packages
+        assert elita.util.type_check.is_string(app)
+        assert elita.util.type_check.is_string(name)
+        assert elita.util.type_check.is_dictlike(packages)
+        assert elita.util.type_check.is_optional_dict(attributes)
+        attributes = attributes if attributes else {}
+        pm = PackageMap({
+            'application': app,
+            'name': name,
+            'packages': packages,
+            'attributes': attributes
+        })
+        pmid = self.mongo_service.create_new('packagemaps', {'application': app, 'name': name}, 'PackageMap', pm.get_doc())
+        self.mongo_service.update_roottree(('app', app, 'packagemaps', name), 'packagemaps', pmid)
+        self.AddThreadLocalRootTree(('app', app, 'packagemaps', name))
+
+    def DeletePackageMap(self, app, name):
+        '''
+        Delete a packagemap object and root_tree reference
+        '''
+        assert app and name
+        assert elita.util.type_check.is_string(app)
+        assert elita.util.type_check.is_string(name)
+        self.mongo_service.rm_roottree(('app', app, 'packagemaps', name))
+        self.RmThreadLocalRootTree(('app', app, 'packagemaps', name))
+        self.mongo_service.delete('packagemaps', {'application': app, 'name': name})
 
 class GroupDataService(GenericChildDataService):
     def GetGroups(self, app):
@@ -1507,6 +1565,7 @@ class DataService:
         self.deploysvc = DeploymentDataService(self.mongo_service, root, settings, job_id=job_id)
         self.actionsvc = ActionService(self)
         self.groupsvc = GroupDataService(self.mongo_service, root, settings, job_id=job_id)
+        self.pmsvc = PackageMapDataService(self.mongo_service, root, settings, job_id=job_id)
 
         #cross-dependencies between child dataservice objects above
         self.appsvc.populate_dependencies({
@@ -1819,6 +1878,22 @@ class Group(GenericDataModel):
         'rolling_deploy': False
     }
 
+class PackageMap(GenericDataModel):
+    default_values = {
+        'application': None,
+        'name': None,
+        'attributes': dict(),
+        'packages': dict()
+    }
+    # Example packages field:
+    # packages = {
+    #     'package_name': [{
+    #             'patterns': ["foo/bar/*"],
+    #             'prefix': "foobar/",
+    #             'remove_prefix': "bar/"
+    #     }]
+    # }
+
 class GenericContainer:
     __metaclass__ = elita.util.LoggingMetaClass
 
@@ -1868,6 +1943,9 @@ class KeyPairContainer(GenericContainer):
     pass
 
 class GroupContainer(GenericContainer):
+    pass
+
+class PackageMapContainer(GenericContainer):
     pass
 
 class Root(GenericContainer):
@@ -2006,7 +2084,8 @@ class DataValidator:
             'tokens',
             'users',
             'servers',
-            'groups'
+            'groups',
+            'packagemaps'
         ]
         for c in collects:
             rm_docs = list()
@@ -2084,11 +2163,21 @@ class DataValidator:
                     if self.root['app'][d['application']]['groups'][d['name']]['_doc'].id != d['_id']:
                         logging.warning("unlinked group document found ({}), deleting".format(d['name']))
                         rm_docs.append(d['_id'])
+                if c == 'packagemaps':
+                    if d['name'] not in self.root['app'][d['application']]['packagemaps']:
+                        logging.warning("orphan packagemap object: '{}', adding to root tree".format(d['name']))
+                        self.root['app'][d['application']]['packagemaps'][d['name']] = {'_doc': bson.DBRef('packagemaps', d['_id'])}
+                    if self.root['app'][d['application']]['packagemaps'][d['name']]['_doc'].id != d['_id']:
+                        logging.warning("unlinked packagemap document found ({}), deleting".format(d['name']))
+                        rm_docs.append(d['_id'])
             for id in rm_docs:
                 self.db[c].remove({'_id': id})
 
     @staticmethod
     def check_root_refs(db, obj):
+        '''
+        Recurse into obj, find DBRefs, check if they are valid
+        '''
         for k in obj:
             if k == '_doc':
                 if not db.dereference(obj[k]):
@@ -2097,6 +2186,9 @@ class DataValidator:
                 DataValidator.check_root_refs(db, obj[k])
 
     def check_root_references(self):
+        '''
+        Check that every DBRef in the root tree points to a valid document
+        '''
         DataValidator.check_root_refs(self.db, self.root)
 
     def check_global(self):
@@ -2246,6 +2338,9 @@ class DataValidator:
             },
             'groups': {
                 'class': "GroupContainer"
+            },
+            'packagemaps': {
+                'class': "PackageMapContainer"
             }
         }
         for a in self.root['app']:

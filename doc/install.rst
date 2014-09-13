@@ -23,14 +23,24 @@ Salt
 Due to technical constraints in salt, you *must* install Elita on the same machine running salt-master. The salt
 system should be installed and running with your managed servers (minions) accessible to salt commands.
 
+.. ATTENTION::
+
+   You must ensure that the elita user can run salt commands. The easiest way to do this is to run salt-master as user "elita"
+   and/or make sure that "elita" is in the ```client_acl``` setting in the master config. 
+   
+   You may also need to fix permissions on salt folders:
+   
+   chown -R elita /etc/salt /var/cache/salt /var/log/salt /var/run/salt
+   chmod 755 /var/cache/salt /var/cache/salt/jobs /var/run/salt
+
 
 Hardware
 --------
 
-Elita make liberal use of the ```multiprocessing``` module for concurrency (spawning a new Python process for each "thread"),
+Elita makes liberal use of the ```multiprocessing``` module for concurrency (spawning a new Python process for each "thread"),
 so memory usage can be substantial with (for example) a large number of servers being controlled, etc.
 
-I've found it runs best with at least 4GB of RAM (on a headless Linux server) with at least two cores (preferably four).
+I've found it runs best with at least 4GB of RAM (on a headless Linux server) with at least two CPU cores (preferably four).
 
 
 Ubuntu

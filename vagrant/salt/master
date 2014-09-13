@@ -2,4 +2,8 @@ client_acl:
    elita:
       - .*
 
+user: elita
+
+worker_threads: 5
+
 log_level_logfile: DEBUG
