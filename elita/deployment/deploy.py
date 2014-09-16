@@ -495,6 +495,29 @@ def _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, j
         branch = gd_doc['location']['default_branch']
         path = gd_doc['location']['path']
 
+        #verify that we have salt connectivity to the target. Do three consecutive test.pings with 10 second timeouts
+        #if all target servers don't respond by the last attempt, fail deployment
+        i = 1
+        while True:
+            datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, servers, batch_number,
+                                                      progress=15,
+                                                      state="Verifying salt connectivity (try: {})".format(i))
+            res = rc.ping(servers)
+            if all([s in res for s in servers]):
+                logging.debug("_threadsafe_process_gitdeploy: verify salt: all servers returned (try: {})".format(i))
+                break
+            else:
+                missing_servers = list(set(servers) - set(res.keys()))
+                logging.debug("_threadsafe_process_gitdeploy: verify salt: error: servers missing: {} (try {})".format(missing_servers, i))
+            if i >= 3:
+                datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, missing_servers, batch_number,
+                                                      progress=15,
+                                                      state="ERROR: no salt connectivity!".format(i))
+                datasvc.deploysvc.FailDeployment(application, deployment_id)
+                logging.error("No salt connectivity to servers: {} (after {} tries)".format(missing_servers, i))
+                return False
+            i += 1
+
         #delete stale git index lock if it exists
         datasvc.deploysvc.UpdateDeployment_Phase2(application, deployment_id, gd_name, servers, batch_number,
                                                   progress=25,

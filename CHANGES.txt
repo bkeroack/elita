@@ -1,3 +1,10 @@
+0.60.1
+- Add glob2 to install dependencies (fixes pip install)
+- Fix exception when not all servers return for git index removal
+- Add salt connectivity check to deployment procedure
+- Execute gunicorn instead of pserve in start script
+- Fix erroneous 'no files' message in PackageMapper
+
 0.60.0
 - Package Map feature: Create build packages automatically on upload from a set of glob patterns (see docs)
 - Delete stale git index locks (if present) during deployment

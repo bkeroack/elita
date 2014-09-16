@@ -25,22 +25,34 @@ system should be installed and running with your managed servers (minions) acces
 
 .. ATTENTION::
 
-   You must ensure that the elita user can run salt commands. The easiest way to do this is to run salt-master as user "elita"
-   and/or make sure that "elita" is in the ```client_acl``` setting in the master config. 
+   You must ensure that the elita user can run salt commands (the user is created by the installation script).
+   The easiest way to do this is to run salt-master as user "elita" and make sure that "elita" is in the
+   ```client_acl``` setting in the master config.
    
    You may also need to fix permissions on salt folders:
-   
-   chown -R elita /etc/salt /var/cache/salt /var/log/salt /var/run/salt
-   chmod 755 /var/cache/salt /var/cache/salt/jobs /var/run/salt
+
+   .. sourcecode:: bash
+
+      # chown -R elita /etc/salt /var/cache/salt /var/log/salt /var/run/salt
+      # chmod 755 /var/cache/salt /var/cache/salt/jobs /var/run/salt
+
+   To test, open a Python interpreter as user elita (or add your user account to group elita, log out and back in) and
+   execute the following:
+
+   .. sourcecode:: python
+
+      >>> import salt.client
+      >>> sc = salt.client.LocalClient()
+      >>> sc.cmd('server01', 'test.ping', [])   # replace 'server01' with a valid minion name
 
 
 Hardware
 --------
 
-Elita makes liberal use of the ```multiprocessing``` module for concurrency (spawning a new Python process for each "thread"),
-so memory usage can be substantial with (for example) a large number of servers being controlled, etc.
+Elita makes extensive use of the ```multiprocessing``` module for concurrency (spawning a new Python process for each "thread"),
+so memory usage can be substantial with (for example) a large number of servers being controlled, lots of packages, etc.
 
-I've found it runs best with at least 4GB of RAM (on a headless Linux server) with at least two CPU cores (preferably four).
+I've found it runs best with at least 4GB of RAM (on a headless Linux server) with at least two CPU cores.
 
 
 Ubuntu
@@ -57,7 +69,7 @@ Installing the non-salt prerequistes on an Ubuntu system:
 CentOS
 ------
 
-In general installing on CentOS will be somewhat painful compared to Ubuntu, since very few of the dependencies
+In general installing on CentOS will be rather painful compared to Ubuntu since very few of the dependencies
 are available in the standard yum repositories. You'll need to install them each individually.
 
 First, CentOS 6.x ships with Python 2.6 by default, so you have to `compile and install Python 2.7.x
@@ -76,8 +88,8 @@ After you have all the prerequisites installed and running, do:
    $ sudo pip install elita
    $ sudo elita_install
 
-The first step may take a little while. The script 'elita_install' will move
-configuration files into their proper places, create the service user/group, install the init.d script and start Elita.
+The script 'elita_install' will move configuration files into their proper places, create the service user/group,
+install the init.d script and start Elita.
 
 
 Testing your Installation
@@ -131,3 +143,20 @@ File                     Purpose
 /etc/default/elita       Startup options (logs, number of workers, PID files)
 /etc/logrotate.d/elita   (optional) Logrotate script
 =======================  ==================================================================
+
+
+Directories
+-----------
+
+=====================================================   ================================================================
+Path                                                    Purpose
+=====================================================   ================================================================
+/var/lib/elita                                          Data directory
+/var/lib/elita/builds/{app name}                        Builds for an application
+/var/lib/elita/builds/{app name}/{build name}           Packages within a build
+/var/lib/elita/gitdeploys                               Local working copies of deployment repositories
+/var/lib/elita/gitdeploys/{app name}                    Repositories for an application
+/var/lib/elita/gitdeploys/{app name}/{gitdeploy name}   Individual repository
+/var/log/elita                                          Logs
+=====================================================   ================================================================
+

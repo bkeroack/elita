@@ -201,7 +201,7 @@ class RemoteCommands:
         for server in target:
             expanded_path = self.get_home_expanded_path([server], [path])[server] if '~' in path else path
             file_exists = self.sc.salt_command([server], "file.file_exists", [expanded_path])
-            if file_exists[server]:
+            if server in file_exists and file_exists[server]:
                 self.sc.salt_command([server], "file.remove", [expanded_path])
 
     def rm_dir_if_exists(self, target, path):
@@ -239,6 +239,9 @@ class RemoteCommands:
         #hack: assuming all servers in server_list have the same ~ path expansion
         expanded_path = self.get_home_expanded_path(server_list, [remote_path])[server_list[0]] if '~' in remote_path else remote_path
         return self.sc.salt_command(server_list, 'file.touch', [expanded_path])
+
+    def ping(self, server_list, timeout=10):
+        return self.sc.salt_command(server_list, 'test.ping', arg=[], timeout=timeout)
 
     def append_to_file(self, server_list, remote_path, text_block):
         #hack: assuming all servers in server_list have the same ~ path expansion

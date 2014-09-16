@@ -256,7 +256,8 @@ def _threadsafe_apply_package(output_dir, package_name, package, target_type, cw
             logging.debug("adding files")
             for f in files:
                 add_file_to_pkg(f, package_obj)
-        logging.debug("no files for pattern!")
+        else:
+            logging.debug("no files for pattern!")
 
     os.chdir(cwd)
     po, pfn = create_new_pkg()

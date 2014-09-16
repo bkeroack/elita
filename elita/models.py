@@ -72,6 +72,7 @@ class MongoService:
         id = self.db[collection].save(doc, fsync=True)
         logging.debug("new id: {}".format(id))
         if existing and remove_existing:
+            logging.warning("create_new found existing docs! deleting...(collection: {}, keys: {})".format(collection, keys))
             keys['_id'] = {'$ne': id}
             self.db[collection].remove(keys)
         return id
