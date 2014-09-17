@@ -229,7 +229,7 @@ class RollingDeployController:
 
         for i, b in enumerate(batches):
             logging.debug("doing DeployController.run: deploy_gds: {}".format(b['gitdeploys']))
-            ok, results = self.dc.run(application, build_name, b['servers'], b['gitdeploys'], force=i > 0,
+            ok, results = self.dc.run(application, build_name, b['servers'], b['gitdeploys'],
                                       parallel=parallel, batch_number=i)
             if not ok:
                 self.datasvc.jobsvc.NewJobData({"RollingDeployment": "error"})
@@ -252,11 +252,10 @@ class RollingDeployController:
 def determine_deployabe_servers(all_gd_servers, specified_servers):
     return list(set(all_gd_servers).intersection(set(specified_servers)))
 
-def _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, settings, job_id, deployment_id):
+def _threadsafe_process_gitdeploy(gddoc, build_doc, settings, job_id, deployment_id):
     '''
     Threadsafe function for processing a single gitdeploy during a deployment.
     Creates own instance of datasvc, etc.
-    Pushes changed gitdeploys to a shared queue
     '''
 
     package = gddoc['package']
@@ -397,12 +396,6 @@ def _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, settings, jo
             datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gitrepo_name,
                                                       step=exc_msg)
             return
-    # in the event that the gitrepo hasn't changed, but the gitdeploy indicates that we haven't successfully
-    # deployed to all servers, we want to force git pull
-    # this can happen if multiple gitdeploys share the same gitrepo
-
-    #always pull for now
-    queue.put_nowait({gddoc['name']: determine_deployabe_servers(gddoc['servers'], servers)})
 
 def _threadsafe_pull_callback(results, tag, **kwargs):
     '''
@@ -623,9 +616,8 @@ class DeployController:
     def __init__(self, datasvc, deployment_id):
         self.deployment_id = deployment_id
         self.datasvc = datasvc
-        self.changed_gitdeploys = dict()
 
-    def run(self, app_name, build_name, servers, gitdeploys, force=False, parallel=True, batch_number=0):
+    def run(self, app_name, build_name, servers, gitdeploys, parallel=True, batch_number=0):
         '''
         1. Decompress build to gitdeploy dir and push
             a. Attempts to optimize by determining if build has already been decompressed to gitdeploy and skips if so
@@ -647,8 +639,6 @@ class DeployController:
 
         build_doc = self.datasvc.buildsvc.GetBuildDoc(app_name, build_name)
         gitdeploy_docs = {gd: self.datasvc.gitsvc.GetGitDeploy(app_name, gd) for gd in gitdeploys}
-        #reset changed gitdeploys
-        self.changed_gitdeploys = dict()
 
         queue = billiard.Queue()
         procs = list()
@@ -662,29 +652,14 @@ class DeployController:
             gddoc = gitdeploy_docs[gd]
             if parallel:
                 p = billiard.Process(target=_threadsafe_process_gitdeploy, name=gd,
-                                     args=(gddoc, build_doc, servers, queue, self.datasvc.settings,
+                                     args=(gddoc, build_doc, self.datasvc.settings,
                                      self.datasvc.job_id, self.deployment_id))
                 p.start()
                 procs.append(p)
 
             else:
-                _threadsafe_process_gitdeploy(gddoc, build_doc, servers, queue, self.datasvc.settings,
+                _threadsafe_process_gitdeploy(gddoc, build_doc, self.datasvc.settings,
                                               self.datasvc.job_id, self.deployment_id)
-
-            # if this is part of a rolling deployment and is anything other than the first batch,
-            # no gitdeploys will actually be "changed". Force says to do a pull on the servers anyway.
-            if force:
-                logging.debug("Force flag set, adding gitdeploy servers to deploy list: {}".format(gd))
-                queue.put_nowait({gd: determine_deployabe_servers(gddoc['servers'], servers)})
-
-        # pull from queue prior to joining to avoid deadlock
-        i = 0
-        while i < len(procs):
-            gd = queue.get(150)
-            if gd:
-                for g in gd:
-                    self.changed_gitdeploys[g] = gd[g]
-            i += 1
 
         if parallel:
             error = False
@@ -705,28 +680,27 @@ class DeployController:
                     logging.error("_threadsafe_process_gitdeploy: {}".format(msg))
                     self.datasvc.jobsvc.NewJobData({'status': 'error',
                                                     'message': '{} (process_gitdeploy: {}'.format(msg, p.name)})
-                    self.datasvc.deploysvc.UpdateDeployment_Phase2(app_name, self.deployment_id, p.name,
-                                                                   self.changed_gitdeploys[p.name], batch_number,
-                                                                   state="ERROR: {}".format(msg))
+                    self.datasvc.deploysvc.UpdateDeployment_Phase1(app_name, self.deployment_id, p.name,
+                                                                   step="ERROR: {}".format(msg))
                     error = True
             if error:
                 self.datasvc.deploysvc.FailDeployment(app_name, self.deployment_id)
                 return False, None
 
-        logging.debug("DeployController: run: post-phase1: changed_gitdeploys: {}".format(self.changed_gitdeploys))
+        servers_by_gitdeploy = {gd: determine_deployabe_servers(gitdeploy_docs[gd]['servers'], servers) for gd in gitdeploy_docs}
 
         queue = billiard.Queue()
         procs = list()
         self.datasvc.deploysvc.StartDeployment_Phase(app_name, self.deployment_id, 2)
-        for gd in self.changed_gitdeploys:
+        for gd in servers_by_gitdeploy:
             if parallel:
                 p = billiard.Process(target=_threadsafe_pull_gitdeploy, name=gd,
-                                            args=(app_name, {gd: self.changed_gitdeploys[gd]}, queue, self.datasvc.settings,
+                                            args=(app_name, {gd: servers_by_gitdeploy[gd]}, queue, self.datasvc.settings,
                                                   self.datasvc.job_id, self.deployment_id, batch_number))
                 p.start()
                 procs.append(p)
             else:
-                _threadsafe_pull_gitdeploy(app_name, {gd: self.changed_gitdeploys[gd]}, queue, self.datasvc.settings,
+                _threadsafe_pull_gitdeploy(app_name, {gd: servers_by_gitdeploy[gd]}, queue, self.datasvc.settings,
                                            self.datasvc.job_id, self.deployment_id, batch_number)
 
         # pull from queue prior to joining to avoid deadlock
@@ -747,7 +721,7 @@ class DeployController:
                     self.datasvc.jobsvc.NewJobData({'status': 'error',
                                                     'message': 'timeout waiting for child process (pull_gitdeploy: {}'.format(p.name)})
                     self.datasvc.deploysvc.UpdateDeployment_Phase2(app_name, self.deployment_id, p.name,
-                                                                   self.changed_gitdeploys[p.name], batch_number,
+                                                                   servers_by_gitdeploy[p.name], batch_number,
                                                                    state="ERROR: timeout waiting for child process")
                     error = True
                 if p.exitcode < 0 or p.exitcode > 0:
@@ -757,7 +731,7 @@ class DeployController:
                     self.datasvc.jobsvc.NewJobData({'status': 'error',
                                                     'message': '{} (pull_gitdeploy: {}'.format(msg, p.name)})
                     self.datasvc.deploysvc.UpdateDeployment_Phase2(app_name, self.deployment_id, p.name,
-                                                                   self.changed_gitdeploys[p.name], batch_number,
+                                                                   servers_by_gitdeploy[p.name], batch_number,
                                                                    state="ERROR: {}".format(msg))
                     error = True
             if error:

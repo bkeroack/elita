@@ -238,7 +238,7 @@ def _threadsafe_apply_package(output_dir, package_name, package, target_type, cw
     def add_file_to_pkg(filename, package_obj):
         assert filename
         arcname = str(filename).replace(remove_prefix, "", 1) if remove_prefix else filename
-        arcname = "{}/{}".format(prefix, arcname) if prefix else arcname
+        arcname = "{}{}".format(prefix, arcname) if prefix else arcname
         if target_type == SupportedFileType.Zip:
             package_obj.write(filename, arcname, zipfile.ZIP_DEFLATED)
         elif target_type == SupportedFileType.TarBz2 or target_type == SupportedFileType.TarGz:

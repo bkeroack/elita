@@ -38,7 +38,6 @@ def test_packagemap_creates_expected_packages_zip():
 
     expected_output = ['assets.zip', 'configuration.zip', 'binaries.zip', 'libraries.zip']
     files = os.listdir(output_dir)
-    print("files: {}".format(files))
     assert set(expected_output) == set([f for f in files if f[0] != '.'])   # filter out .keep
 
     packages = ['configuration.zip', 'binaries.zip', 'libraries.zip', 'assets.zip']
@@ -86,7 +85,6 @@ def test_packagemap_creates_expected_packages_tgz():
     for p in packages:
         pname = "{}/{}".format(output_dir, p)
         with tarfile.open(pname, 'r:gz') as tf:
-            print(tf.getnames())
             assert set(tf.getnames()) == set(expected_members[p])
         os.unlink(pname)
 

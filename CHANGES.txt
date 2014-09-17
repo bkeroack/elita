@@ -3,7 +3,8 @@
 - Fix exception when not all servers return for git index removal
 - Add salt connectivity check to deployment procedure
 - Execute gunicorn instead of pserve in start script
-- Fix erroneous 'no files' message in PackageMapper
+- Fix erroneous 'no files' log message in PackageMapper
+- (internal) clean up deployment code a bit
 
 0.60.0
 - Package Map feature: Create build packages automatically on upload from a set of glob patterns (see docs)

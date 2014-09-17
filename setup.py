@@ -14,7 +14,7 @@ requires = [
     'salt<=2014.1.10',     # temp fix since SaltStack, Inc. likes to push broken pre-release software to PyPI
     'celery',
     'pymongo',
-    'glob2'
+    'glob2',
 
     # direct git integration
     'gitpython>=0.3.2.RC1',
