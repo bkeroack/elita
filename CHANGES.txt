@@ -1,3 +1,6 @@
+0.60.2
+- Fix startup script
+
 0.60.1
 - Add glob2 to install dependencies (fixes pip install)
 - Fix exception when not all servers return for git index removal
