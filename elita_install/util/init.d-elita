@@ -38,7 +38,7 @@ ELITA_UID=$(id elita |cut -d" " -f 1 |cut -d= -f2 |cut -d'(' -f1)
 ELITA_GID=$(id elita |cut -d" " -f 2 |cut -d= -f2 |cut -d'(' -f1)
 
 CELERY_OPTIONS="-D -B --uid=${ELITA_UID} --gid=${ELITA_GID} -A elita.celeryinit worker -l DEBUG -c ${ASYNC_WORKERS} -f ${ASYNC_LOG} --workdir=${HOME_DIR}"
-PSERVE_OPTIONS="--paste --daemon --pid-file=${HOME_DIR}/pyramid.pid --log-file=${SYNC_LOG} --group=elita --user=elita ${INI_FILE} start"
+PSERVE_OPTIONS="--daemon --pid=${HOME_DIR}/pyramid.pid --log-file=${SYNC_LOG} --group=elita --user=elita --paster ${INI_FILE}"
 
 case "$1" in
   start)
