@@ -16,6 +16,7 @@ Contents:
    install.rst
    quickstart.rst
    gitdeploy.rst
+   plugin.rst
    endpoints.rst
    urlmap.rst
 
