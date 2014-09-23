@@ -25,7 +25,7 @@ class ServerSetup:
 
     def set_server_type(self, rc, name):
         os_type = rc.get_os_text(name)
-        self.datasvc.serversvc.ChangeServer(name, {'server_type': os_type})
+        self.datasvc.serversvc.UpdateServer(name, {'server_type': os_type})
         return os_type
 
     def set_server_status(self, rc, name):
@@ -34,7 +34,7 @@ class ServerSetup:
         else:
             status = "not connectable (check salt)"
 
-        self.datasvc.serversvc.ChangeServer(name, {'status': status})
+        self.datasvc.serversvc.UpdateServer(name, {'status': status})
         return status == "ok"
 
     def do_server_setup(self, rc, name, os_type):
@@ -59,7 +59,7 @@ class ServerSetup:
                 status = 'ok, initialized'
         else:
             status = 'ok, initialized'
-        self.datasvc.serversvc.ChangeServer(name, {'status': status})
+        self.datasvc.serversvc.UpdateServer(name, {'status': status})
 
     def new(self, name):
         sc = deployment.salt_control.SaltController(self.datasvc)

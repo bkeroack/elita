@@ -318,9 +318,7 @@ class BuildDataService(GenericChildDataService):
 
     def UpdateBuild(self, app, name, doc):
         '''
-        Legacy method.
-
-        Update build with keys in doc. Overwrite existing contents (ie, the document is not recursed into)
+        Update build with keys in doc.
         '''
         assert elita.util.type_check.is_string(app)
         assert elita.util.type_check.is_string(name)
@@ -488,6 +486,17 @@ class UserDataService(GenericChildDataService):
         self.RmThreadLocalRootTree(('global', 'tokens', token))
         self.mongo_service.delete('tokens', {'token': token})
 
+    def UpdateUser(self, name, doc):
+        '''
+        Update user with keys in doc
+        '''
+        assert name and doc
+        assert elita.util.type_check.is_string(name)
+        assert elita.util.type_check.is_dictlike(doc)
+        assert name in self.root['global']['users']
+
+        self.UpdateObject('users', {'username': name}, doc)
+
 
 class ApplicationDataService(GenericChildDataService):
     def GetApplications(self):
@@ -584,6 +593,17 @@ class ApplicationDataService(GenericChildDataService):
                 del census[e]
         return census
 
+    def UpdateApplication(self, app, doc):
+        '''
+        Update application with keys in doc
+        '''
+        assert app and doc
+        assert elita.util.type_check.is_string(app)
+        assert elita.util.type_check.is_dictlike(doc)
+        assert app in self.root['app']
+
+        self.UpdateObject('applications', {'app_name': app}, doc)
+
 class PackageMapDataService(GenericChildDataService):
     def GetPackageMaps(self, app):
         '''
@@ -639,6 +659,19 @@ class PackageMapDataService(GenericChildDataService):
         self.mongo_service.rm_roottree(('app', app, 'packagemaps', name))
         self.RmThreadLocalRootTree(('app', app, 'packagemaps', name))
         self.mongo_service.delete('packagemaps', {'application': app, 'name': name})
+
+    def UpdatePackageMap(self, app, name, doc):
+        '''
+        Update packagemap with keys in doc
+        '''
+        assert app and name and doc
+        assert elita.util.type_check.is_string(app)
+        assert elita.util.type_check.is_string(name)
+        assert elita.util.type_check.is_dictlike(doc)
+        assert app in self.root['app']
+        assert name in self.root['app'][app]['packagemaps']
+
+        self.UpdateObject('packagemaps', {'application': app, 'name': name}, doc)
 
 class GroupDataService(GenericChildDataService):
     def GetGroups(self, app):
@@ -728,6 +761,19 @@ class GroupDataService(GenericChildDataService):
                 assert e in envs
                 server_sets.append(set(envs[e]))
         return list(set.intersection(*server_sets))
+
+    def UpdateGroup(self, app, name, doc):
+        '''
+        Update group with keys in doc
+        '''
+        assert app and name and doc
+        assert elita.util.type_check.is_string(app)
+        assert elita.util.type_check.is_string(name)
+        assert elita.util.type_check.is_dictlike(doc)
+        assert app in self.root['app']
+        assert name in self.root['app'][app]['groups']
+
+        self.UpdateObject('groups', {'application': app, 'name': name}, doc)
 
 class JobDataService(GenericChildDataService):
     def GetAllActions(self, app_name):
@@ -885,7 +931,7 @@ class ServerDataService(GenericChildDataService):
             }
         }
 
-    def ChangeServer(self, name, doc):
+    def UpdateServer(self, name, doc):
         '''
         Change existing server object with data in doc
         '''
