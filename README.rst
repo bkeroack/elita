@@ -1,7 +1,7 @@
 Elita
 =====
 
-Elita is an engine/framework for continuous deployment and API-driven infrastructure utilizing git
+Elita is an engine/framework for continuous deployment (Deployment as a Service) and API-driven infrastructure utilizing git
 and salt. Elita maps build packages to filesystem locations on an arbitrary number of remote servers and allows deployment
 (and more) via RESTful HTTP calls.
 

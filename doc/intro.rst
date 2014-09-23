@@ -2,31 +2,24 @@
 Introduction
 ============
 
-Elita is a RESTful framework for continuous deployment (aka continuous delivery) and API-driven infrastructure.
+Elita is a RESTful deployment engine (Deployment as a Service) for continuous deployment (aka continuous delivery) and
+API-driven infrastructure.
 
 At the most basic level, Elita allows you to push build artifacts from a CI server to a specified filesystem location
 on end servers. It does this via git and salt, so the deployments are delta compressed and done in parallel across all
 the machines.
 
-Motivation
-----------
 
-When faced with the task of getting a web application from a CI server to production servers--and doing so in an
-automated and repeatable way--instead of writing YASDS (Yet Another Set of Deployment Scripts) I decided to try to
-design a general framework that would only have to be written once. If the deployment methodology or server
-layout changed it wouldn't have to be thrown out but could be reconfigured or modified instead.
+Why?
+----
 
-Elita is intended to be as flexible and composable as possible so it can be adapted to the various server topologies,
-deployment styles and application frameworks that are out there. The API primitives are chosen in the UNIX philosophy of
-simple objects that can be combined in novel ways. In case that isn't enough, Elita also supports plugins
-(written according to PyPI conventions) that can hook into various parts of Elita's execution flow or supply complete
-custom actions triggered by REST endpoints.
+Deployment scripts are brittle, hard to maintain and difficult to automate. Elita provides generic Deployment as a
+Service, allowing deployment to be fully automated behind whatever interface you wish (web application, etc) and without
+hard-coding any details regarding infrastructure layout or service providers.
 
-Elita can be thought of as
-middleware between a continuous integration server (Jenkins, Teamcity, Bamboo) and the infrastructure that
-runs the code (production and QA/staging servers, supporting machines, etc.). Elita allows programmatic code
-deployment, build (re-)packaging and custom actions triggered by REST endpoints.
-
+Elita also allows you to create custom endpoints that (when triggered) execute arbitrary Python code. This can be used
+to automate any part of infrastructure management (clearing cache, adding/removing servers, etc). Access to endpoints
+is controlled by per-user security permissions (same as deployment endpoints).
 
 Technology
 ----------
