@@ -27,7 +27,7 @@ system should be installed and running with your managed servers (minions) acces
 
    You must ensure that the elita user can run salt commands (the user is created by the installation script).
    The easiest way to do this is to run salt-master as user "elita" and make sure that "elita" is in the
-   ```client_acl``` setting in the master config.
+   ``client_acl`` setting in the master config.
    
    You may also need to fix permissions on salt folders:
 
@@ -49,7 +49,7 @@ system should be installed and running with your managed servers (minions) acces
 Hardware
 --------
 
-Elita makes extensive use of the ```multiprocessing``` module for concurrency (spawning a new Python process for each "thread"),
+Elita makes extensive use of the ``multiprocessing`` module for concurrency (spawning a new Python process for each "thread"),
 so memory usage can be substantial with (for example) a large number of servers being controlled, lots of packages, etc.
 
 I've found it runs best with at least 4GB of RAM (on a headless Linux server) with at least two CPU cores.

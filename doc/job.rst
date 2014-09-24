@@ -1,3 +1,5 @@
+.. _job-endpoints:
+
 =============
 Job Endpoints
 =============
