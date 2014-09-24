@@ -229,14 +229,14 @@ Some examples:
    # build_doc is a dictionary like: { "app_name": "my_application", "build_name": "123-master" }
 
    builds = datasvc.buildsvc.GetBuilds('my_application')
-   # builds is a list of build documents associated with my_application
+   # builds is a list of build names associated with my_application
 
    datasvc.buildsvc.DeleteBuild('my_application', '123-master')
    datasvc.buildsvc.NewBuild('my_application', '124-master', {})    # empty attributes field
    datasvc.buildsvc.UpdateBuild('my_application', '124-master', {'attributes': { 'foo': 'bar'}})  #change attributes field
 
-All data layer objects share a naming convention for methods. "Get{Object}" gets one specific instance of the object,
-"Get{Object}s" gets a collection of all objects of that type, "New{Object}" creates a new object, "Delete{Object}" deletes
+All data layer objects share a naming convention for methods. "Get{Object}" gets one specific instance (document) of the object,
+"Get{Object}s" gets a list of all object names of that type, "New{Object}" creates a new object, "Delete{Object}" deletes
 an object and "Update{Object}" will modify an existing object.
 
 ``datasvc`` also contains objects for interacting with salt and doing remote commands on servers.

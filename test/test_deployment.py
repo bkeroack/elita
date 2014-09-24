@@ -44,7 +44,7 @@ def setup_mock_datasvc():
     mock_datasvc.attach_mock(mock.Mock(spec=DeploymentDataService), "deploysvc")
     mock_datasvc.job_id = "fake_job_id"
     mock_datasvc.gitsvc.GetGitDeploy = return_gitdeploy
-    mock_datasvc.buildsvc.GetBuildDoc = return_build
+    mock_datasvc.buildsvc.GetBuild = return_build
     mock_datasvc.settings = {
         'elita.mongo.host': 'localhost',
         'elita.mongo.port': 0,

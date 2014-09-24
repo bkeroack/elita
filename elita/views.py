@@ -60,7 +60,7 @@ def validate_parameters(required_params=None, optional_params=None, json_body=No
                         missing_required_arg = r
                         return error_response()
 
-            if json_body:
+            if isinstance(json_body, dict):
                 try:
                     self.body = self.req.json_body
                 except:
@@ -172,6 +172,9 @@ class GenericView:
         elif self.req.method == 'PUT' and not self.is_action:
             if 'write' in self.permissions:
                 return self.PUT()
+        elif self.req.method == 'PATCH' and not self.is_action:
+            if 'write' in self.permissions:
+                return self.PATCH()
         elif self.req.method == 'DELETE' and not self.is_action:
             if 'write' in self.permissions:
                 return self.DELETE()
@@ -516,7 +519,7 @@ class BuildView(GenericView):
             return err
         self.datasvc.buildsvc.UpdateBuild(self.context.app_name, self.context.build_name, self.body)
         return {
-            'modifed_build': self.datasvc.appsvc.GetBuild(self.context.app_name, self.context.build_name)
+            'modifed_build': self.datasvc.buildsvc.GetBuild(self.context.app_name, self.context.build_name)
         }
 
     def DELETE(self):
@@ -637,7 +640,8 @@ class DeploymentContainerView(GenericView):
         build_name = self.req.params['build_name']
         if build_name not in self.datasvc.buildsvc.GetBuilds(app):
             return self.Error(400, "unknown build '{}'".format(build_name))
-        build_obj = self.datasvc.buildsvc.GetBuild(app, build_name)
+        build_doc = self.datasvc.buildsvc.GetBuild(app, build_name)
+        build_obj = models.Build(build_doc)
         if not build_obj.stored:
             return self.Error(400, "no stored data for build: {} (stored == false)".format(build_name))
         try:

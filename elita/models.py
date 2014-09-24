@@ -363,23 +363,16 @@ class BuildDataService(GenericChildDataService):
 
     def GetBuild(self, app_name, build_name):
         '''
-        Legacy API. Get build OBJECT (not document). Uses overly-clever method of letting RootTree class
-        dereference the DBRef, rather than pulling from mongo directly.
+        Get build document
         '''
         assert elita.util.type_check.is_string(app_name)
         assert elita.util.type_check.is_string(build_name)
         assert app_name and build_name
-        return Build(self.root['app'][app_name]['builds'][build_name].doc)
+        assert app_name in self.root['app']
+        assert build_name in self.root['app'][app_name]['builds']
+        doc = self.mongo_service.get('builds', {'app_name': app_name, 'build_name': build_name})
+        return {k: doc[k] for k in doc if k[0] != '_'}
 
-    def GetBuildDoc(self, app_name, build_name):
-        '''
-        Legacy API to get document associated with build.
-        '''
-        assert elita.util.type_check.is_string(app_name)
-        assert elita.util.type_check.is_string(build_name)
-        assert app_name and build_name
-        bobj = self.GetBuild(app_name, build_name)
-        return bobj.get_doc()
 
 class UserDataService(GenericChildDataService):
 
@@ -459,12 +452,12 @@ class UserDataService(GenericChildDataService):
 
     def GetUser(self, username):
         '''
-        Legacy API to get user OBJECT (not document)
+        Get user document
         '''
         assert elita.util.type_check.is_string(username)
         assert username
         doc = self.mongo_service.get('users', {'username': username})
-        return User(doc)
+        return {k: doc[k] for k in doc if k[0] != '_'}
 
     def DeleteUser(self, name):
         '''
