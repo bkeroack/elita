@@ -20,12 +20,12 @@
       
     </div>
     <div class="docstring">
-      <div class="undocumented">Undocumented</div>
+      <div class="undocumented">No class docstring</div>
     </div>
 
     
     <div id="splitTables">
-      <table class="children sortable" id="id51">
+      <table class="children sortable" id="id55">
   
   
   <tr class="method">
@@ -33,26 +33,72 @@
     
     <td>Method</td>
     <td><a href="elita.models.DeploymentDataService.html#NewDeployment">NewDeployment</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span>Create new deployment object</span></td>
   </tr><tr class="method">
     
     
     <td>Method</td>
     <td><a href="elita.models.DeploymentDataService.html#GetDeployments">GetDeployments</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span>Get a list of all deployments for application</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.DeploymentDataService.html#GetDeployment">GetDeployment</a></td>
+    <td><span>Get a specific deployment document</span></td>
   </tr><tr class="method">
     
     
     <td>Method</td>
     <td><a href="elita.models.DeploymentDataService.html#UpdateDeployment">UpdateDeployment</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span>Modify deployment object with the data in doc</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.DeploymentDataService.html#InitializeDeploymentPlan">InitializeDeploymentPlan</a></td>
+    <td><span>Create the appropriate structure in the "progress" field of 
+the deployment.</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.DeploymentDataService.html#StartDeployment_Phase">StartDeployment_Phase</a></td>
+    <td><span>Mark the progress field currently_on as phaseN</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.DeploymentDataService.html#FailDeployment">FailDeployment</a></td>
+    <td><span>Mark deployment as failed in event of errors</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.DeploymentDataService.html#CompleteDeployment">CompleteDeployment</a></td>
+    <td><span>Mark deployment as done</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.DeploymentDataService.html#UpdateDeployment_Phase1">UpdateDeployment_Phase1</a></td>
+    <td><span>Phase 1 is gitrepo processing: decompressing package to local gitrepo, 
+computing changes, commiting/pushing</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.DeploymentDataService.html#UpdateDeployment_Phase2">UpdateDeployment_Phase2</a></td>
+    <td><span>Phase 2 is performing git pulls across all remote servers. Progress is 
+presented per server, but the backend deployment is done per gitdeploy (to 
+multiple servers)</span></td>
   </tr>
 </table>
       <invisible>
         <p>
           Inherited from <a href="elita.models.GenericChildDataService.html">GenericChildDataService</a>:
         </p>
-        <table class="children sortable" id="id52">
+        <table class="children sortable" id="id56">
   
   
   <tr class="basemethod">
@@ -60,7 +106,40 @@
     
     <td>Method</td>
     <td><a href="elita.models.GenericChildDataService.html#__init__">__init__</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span class="undocumented">No summary</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#populate_dependencies">populate_dependencies</a></td>
+    <td><span>Child dataservice classes may need to access methods of siblings. This 
+allows parent dataservice to inject cross dependencies as needed without 
+generating a big reference cycle.</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#NewContainer">NewContainer</a></td>
+    <td><span>Create new container object suitable for a root_tree reference</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#UpdateObject">UpdateObject</a></td>
+    <td><span>Generic method to update a particular object (document) with the data in
+doc</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#AddThreadLocalRootTree">AddThreadLocalRootTree</a></td>
+    <td><span>Add new node to thread-local root_tree (copy from mongo's root_tree)</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#RmThreadLocalRootTree">RmThreadLocalRootTree</a></td>
+    <td><span>Remove deleted node from thread-local root_tree</span></td>
   </tr>
 </table>
       </invisible>
@@ -83,7 +162,7 @@
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
+    <div><p>Create new deployment object</p><table class="fieldTable"><tr class="fieldStart"><td class="fieldName">Returns</td><td colspan="2"> (type: dict)</td></tr></table></div>
   </div>
 </div><div class="function">
   <a name="elita.models.DeploymentDataService.GetDeployments">
@@ -100,7 +179,24 @@
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
+    <div><p>Get a list of all deployments for application</p><table class="fieldTable"><tr class="fieldStart"><td class="fieldName">Returns</td><td colspan="2"> (type: list(str))</td></tr></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.DeploymentDataService.GetDeployment">
+    
+  </a>
+  <a name="GetDeployment">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetDeployment(self, app, name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get a specific deployment document</p><table class="fieldTable"></table></div>
   </div>
 </div><div class="function">
   <a name="elita.models.DeploymentDataService.UpdateDeployment">
@@ -117,11 +213,117 @@
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
+    <div><p>Modify deployment object with the data in doc</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.DeploymentDataService.InitializeDeploymentPlan">
+    
+  </a>
+  <a name="InitializeDeploymentPlan">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    InitializeDeploymentPlan(self, app, name, batches, gitrepos):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Create the appropriate structure in the "progress" field of 
+the deployment.</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.DeploymentDataService.StartDeployment_Phase">
+    
+  </a>
+  <a name="StartDeployment_Phase">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    StartDeployment_Phase(self, app, name, phase):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Mark the progress field currently_on as phaseN</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.DeploymentDataService.FailDeployment">
+    
+  </a>
+  <a name="FailDeployment">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    FailDeployment(self, app, name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Mark deployment as failed in event of errors</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.DeploymentDataService.CompleteDeployment">
+    
+  </a>
+  <a name="CompleteDeployment">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    CompleteDeployment(self, app, name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Mark deployment as done</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.DeploymentDataService.UpdateDeployment_Phase1">
+    
+  </a>
+  <a name="UpdateDeployment_Phase1">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    UpdateDeployment_Phase1(self, app, name, gitrepo, progress=None, step=None, changed_files=None):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Phase 1 is gitrepo processing: decompressing package to local gitrepo, 
+computing changes, commiting/pushing</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.DeploymentDataService.UpdateDeployment_Phase2">
+    
+  </a>
+  <a name="UpdateDeployment_Phase2">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    UpdateDeployment_Phase2(self, app, name, gitdeploy, servers, batch, progress=None, state=None):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Phase 2 is performing git pulls across all remote servers. Progress is 
+presented per server, but the backend deployment is done per gitdeploy (to 
+multiple servers)</p><table class="fieldTable"></table></div>
   </div>
 </div>
     <address>
-      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-05-15 18:24:09.
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-09-24 11:37:00.
     </address>
   </body>
 </html>

@@ -20,12 +20,12 @@
       
     </div>
     <div class="docstring">
-      <div class="undocumented">Undocumented</div>
+      <div class="undocumented">No class docstring</div>
     </div>
 
     
     <div id="splitTables">
-      <table class="children sortable" id="id39">
+      <table class="children sortable" id="id41">
   
   
   <tr class="method">
@@ -33,68 +33,71 @@
     
     <td>Method</td>
     <td><a href="elita.models.UserDataService.html#NewUser">NewUser</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
-  </tr><tr class="method">
-    
-    
-    <td>Method</td>
-    <td><a href="elita.models.UserDataService.html#SaveUser">SaveUser</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span>Create a new user object and insert root_tree references for both the 
+user and the computed permissions endpoint. Pipe parameters into User 
+object to get the pw hashed, etc.</span></td>
   </tr><tr class="method">
     
     
     <td>Method</td>
     <td><a href="elita.models.UserDataService.html#GetUserTokens">GetUserTokens</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span>Get all auth tokens associated with user</span></td>
   </tr><tr class="method">
     
     
     <td>Method</td>
     <td><a href="elita.models.UserDataService.html#GetUserFromToken">GetUserFromToken</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span>Get username associated with token</span></td>
   </tr><tr class="method">
     
     
     <td>Method</td>
     <td><a href="elita.models.UserDataService.html#GetAllTokens">GetAllTokens</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span>Get all valid tokens</span></td>
   </tr><tr class="method">
     
     
     <td>Method</td>
     <td><a href="elita.models.UserDataService.html#NewToken">NewToken</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span>Create new auth token associated with username and insert reference into
+root_tree</span></td>
   </tr><tr class="method">
     
     
     <td>Method</td>
     <td><a href="elita.models.UserDataService.html#GetUsers">GetUsers</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span>Get all valid users</span></td>
   </tr><tr class="method">
     
     
     <td>Method</td>
     <td><a href="elita.models.UserDataService.html#GetUser">GetUser</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span>Legacy API to get user OBJECT (not document)</span></td>
   </tr><tr class="method">
     
     
     <td>Method</td>
     <td><a href="elita.models.UserDataService.html#DeleteUser">DeleteUser</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span>Delete a single user and root_tree reference</span></td>
   </tr><tr class="method">
     
     
     <td>Method</td>
     <td><a href="elita.models.UserDataService.html#DeleteToken">DeleteToken</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span>Delete a token and root_tree reference</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.UserDataService.html#UpdateUser">UpdateUser</a></td>
+    <td><span>Update user with keys in doc</span></td>
   </tr>
 </table>
       <invisible>
         <p>
           Inherited from <a href="elita.models.GenericChildDataService.html">GenericChildDataService</a>:
         </p>
-        <table class="children sortable" id="id40">
+        <table class="children sortable" id="id42">
   
   
   <tr class="basemethod">
@@ -102,7 +105,40 @@
     
     <td>Method</td>
     <td><a href="elita.models.GenericChildDataService.html#__init__">__init__</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span class="undocumented">No summary</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#populate_dependencies">populate_dependencies</a></td>
+    <td><span>Child dataservice classes may need to access methods of siblings. This 
+allows parent dataservice to inject cross dependencies as needed without 
+generating a big reference cycle.</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#NewContainer">NewContainer</a></td>
+    <td><span>Create new container object suitable for a root_tree reference</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#UpdateObject">UpdateObject</a></td>
+    <td><span>Generic method to update a particular object (document) with the data in
+doc</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#AddThreadLocalRootTree">AddThreadLocalRootTree</a></td>
+    <td><span>Add new node to thread-local root_tree (copy from mongo's root_tree)</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#RmThreadLocalRootTree">RmThreadLocalRootTree</a></td>
+    <td><span>Remove deleted node from thread-local root_tree</span></td>
   </tr>
 </table>
       </invisible>
@@ -125,24 +161,9 @@
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
-  </div>
-</div><div class="function">
-  <a name="elita.models.UserDataService.SaveUser">
-    
-  </a>
-  <a name="SaveUser">
-    
-  </a>
-  <div class="functionHeader">
-    
-    def
-    SaveUser(self, userobj):
-    
-  </div>
-  <div class="docstring functionBody">
-    
-    <div class="undocumented">Undocumented</div>
+    <div><p>Create a new user object and insert root_tree references for both the 
+user and the computed permissions endpoint. Pipe parameters into User 
+object to get the pw hashed, etc.</p><table class="fieldTable"></table></div>
   </div>
 </div><div class="function">
   <a name="elita.models.UserDataService.GetUserTokens">
@@ -159,7 +180,7 @@
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
+    <div><p>Get all auth tokens associated with user</p><table class="fieldTable"></table></div>
   </div>
 </div><div class="function">
   <a name="elita.models.UserDataService.GetUserFromToken">
@@ -176,7 +197,7 @@
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
+    <div><p>Get username associated with token</p><table class="fieldTable"></table></div>
   </div>
 </div><div class="function">
   <a name="elita.models.UserDataService.GetAllTokens">
@@ -193,7 +214,7 @@
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
+    <div><p>Get all valid tokens</p><table class="fieldTable"></table></div>
   </div>
 </div><div class="function">
   <a name="elita.models.UserDataService.NewToken">
@@ -210,7 +231,8 @@
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
+    <div><p>Create new auth token associated with username and insert reference into
+root_tree</p><table class="fieldTable"></table></div>
   </div>
 </div><div class="function">
   <a name="elita.models.UserDataService.GetUsers">
@@ -227,7 +249,7 @@
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
+    <div><p>Get all valid users</p><table class="fieldTable"></table></div>
   </div>
 </div><div class="function">
   <a name="elita.models.UserDataService.GetUser">
@@ -244,7 +266,7 @@
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
+    <div><p>Legacy API to get user OBJECT (not document)</p><table class="fieldTable"></table></div>
   </div>
 </div><div class="function">
   <a name="elita.models.UserDataService.DeleteUser">
@@ -261,7 +283,7 @@
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
+    <div><p>Delete a single user and root_tree reference</p><table class="fieldTable"></table></div>
   </div>
 </div><div class="function">
   <a name="elita.models.UserDataService.DeleteToken">
@@ -278,11 +300,28 @@
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
+    <div><p>Delete a token and root_tree reference</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.UserDataService.UpdateUser">
+    
+  </a>
+  <a name="UpdateUser">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    UpdateUser(self, name, doc):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Update user with keys in doc</p><table class="fieldTable"></table></div>
   </div>
 </div>
     <address>
-      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-05-15 18:24:09.
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-09-24 11:37:00.
     </address>
   </body>
 </html>

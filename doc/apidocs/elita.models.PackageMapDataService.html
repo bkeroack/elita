@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+          "DTD/xhtml1-strict.dtd">
+<html>
+  <head>
+    <title>elita.models.PackageMapDataService : API documentation</title>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+    <link href="apidocs.css" type="text/css" rel="stylesheet" />
+    
+    
+  </head>
+  <body>
+    <h1 class="class">e.m.PackageMapDataService(<a href="elita.models.GenericChildDataService.html">GenericChildDataService</a>) : class documentation</h1>
+    <p>
+      <span id="part">Part of <a href="elita.html">elita</a>.<a href="elita.models.html">models</a></span>
+      
+      <a href="classIndex.html#elita.models.PackageMapDataService">View In Hierarchy</a>
+    </p>
+    <div>
+      
+    </div>
+    <div class="docstring">
+      <div class="undocumented">No class docstring</div>
+    </div>
+
+    
+    <div id="splitTables">
+      <table class="children sortable" id="id45">
+  
+  
+  <tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.PackageMapDataService.html#GetPackageMaps">GetPackageMaps</a></td>
+    <td><span>Get all packagemaps for application</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.PackageMapDataService.html#GetPackageMap">GetPackageMap</a></td>
+    <td><span>Get document for packagemap</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.PackageMapDataService.html#NewPackageMap">NewPackageMap</a></td>
+    <td><span>Create new packagemap</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.PackageMapDataService.html#DeletePackageMap">DeletePackageMap</a></td>
+    <td><span>Delete a packagemap object and root_tree reference</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.PackageMapDataService.html#UpdatePackageMap">UpdatePackageMap</a></td>
+    <td><span>Update packagemap with keys in doc</span></td>
+  </tr>
+</table>
+      <invisible>
+        <p>
+          Inherited from <a href="elita.models.GenericChildDataService.html">GenericChildDataService</a>:
+        </p>
+        <table class="children sortable" id="id46">
+  
+  
+  <tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#__init__">__init__</a></td>
+    <td><span class="undocumented">No summary</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#populate_dependencies">populate_dependencies</a></td>
+    <td><span>Child dataservice classes may need to access methods of siblings. This 
+allows parent dataservice to inject cross dependencies as needed without 
+generating a big reference cycle.</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#NewContainer">NewContainer</a></td>
+    <td><span>Create new container object suitable for a root_tree reference</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#UpdateObject">UpdateObject</a></td>
+    <td><span>Generic method to update a particular object (document) with the data in
+doc</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#AddThreadLocalRootTree">AddThreadLocalRootTree</a></td>
+    <td><span>Add new node to thread-local root_tree (copy from mongo's root_tree)</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#RmThreadLocalRootTree">RmThreadLocalRootTree</a></td>
+    <td><span>Remove deleted node from thread-local root_tree</span></td>
+  </tr>
+</table>
+      </invisible>
+    </div>
+    
+    
+
+    <div class="function">
+  <a name="elita.models.PackageMapDataService.GetPackageMaps">
+    
+  </a>
+  <a name="GetPackageMaps">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetPackageMaps(self, app):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get all packagemaps for application</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.PackageMapDataService.GetPackageMap">
+    
+  </a>
+  <a name="GetPackageMap">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetPackageMap(self, app, name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get document for packagemap</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.PackageMapDataService.NewPackageMap">
+    
+  </a>
+  <a name="NewPackageMap">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    NewPackageMap(self, app, name, packages, attributes=None):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Create new packagemap</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.PackageMapDataService.DeletePackageMap">
+    
+  </a>
+  <a name="DeletePackageMap">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    DeletePackageMap(self, app, name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Delete a packagemap object and root_tree reference</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.PackageMapDataService.UpdatePackageMap">
+    
+  </a>
+  <a name="UpdatePackageMap">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    UpdatePackageMap(self, app, name, doc):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Update packagemap with keys in doc</p><table class="fieldTable"></table></div>
+  </div>
+</div>
+    <address>
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-09-24 11:37:00.
+    </address>
+  </body>
+</html>

@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+          "DTD/xhtml1-strict.dtd">
+<html>
+  <head>
+    <title>elita.deployment.deploy.BatchCompute : API documentation</title>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+    <link href="apidocs.css" type="text/css" rel="stylesheet" />
+    
+    
+  </head>
+  <body>
+    <h1 class="class">e.d.d.BatchCompute : class documentation</h1>
+    <p>
+      <span id="part">Part of <a href="elita.html">elita</a>.<a href="elita.deployment.html">deployment</a>.<a href="elita.deployment.deploy.html">deploy</a></span>
+      
+      <a href="classIndex.html#elita.deployment.deploy.BatchCompute">View In Hierarchy</a>
+    </p>
+    <div>
+      
+    </div>
+    <div class="docstring">
+      <div><p>Given a list of application groups that require rolling deployment and 
+an (optional) list that do not, compute the optimal batches of 
+server/gitdeploy pairs. All non-rolling groups are added to the first 
+batch. Splitting algorithm is tolerant of outrageously large 
+rolling_divisors.</p>
+<p>Written in a functional style to facilitate testing.</p><table class="fieldTable"></table></div>
+    </div>
+
+    
+    <div id="splitTables">
+      <table class="children sortable" id="id21">
+  
+  
+  <tr class="staticmethod">
+    
+    
+    <td>Static Method</td>
+    <td><a href="elita.deployment.deploy.BatchCompute.html#add_nonrolling_groups">add_nonrolling_groups</a></td>
+    <td><span>Add servers and gitdeploys from nonrolling groups to the first batch Not
+written in a functional style because that was totally unreadable</span></td>
+  </tr><tr class="staticmethod">
+    
+    
+    <td>Static Method</td>
+    <td><a href="elita.deployment.deploy.BatchCompute.html#dedupe_batches">dedupe_batches</a></td>
+    <td><span class="undocumented">No summary</span></td>
+  </tr><tr class="staticmethod">
+    
+    
+    <td>Static Method</td>
+    <td><a href="elita.deployment.deploy.BatchCompute.html#reduce_group_batches">reduce_group_batches</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="staticmethod">
+    
+    
+    <td>Static Method</td>
+    <td><a href="elita.deployment.deploy.BatchCompute.html#coalesce_batches">coalesce_batches</a></td>
+    <td><span>Combine the big list of batches into a single list.</span></td>
+  </tr><tr class="staticmethod">
+    
+    
+    <td>Static Method</td>
+    <td><a href="elita.deployment.deploy.BatchCompute.html#compute_group_batches">compute_group_batches</a></td>
+    <td><span>Compute batches for group. Group is iteritems() result from group dict. 
+group[0] is key (name), group[1] is dict of servers/gitdeploys</span></td>
+  </tr><tr class="staticmethod">
+    
+    
+    <td>Static Method</td>
+    <td><a href="elita.deployment.deploy.BatchCompute.html#compute_rolling_batches">compute_rolling_batches</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr>
+</table>
+      
+    </div>
+    
+    
+
+    <div class="function">
+  <a name="elita.deployment.deploy.BatchCompute.add_nonrolling_groups">
+    
+  </a>
+  <a name="add_nonrolling_groups">
+    
+  </a>
+  <div class="functionHeader">
+    @staticmethod<br />
+    def
+    add_nonrolling_groups(batches, nonrolling_docs):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Add servers and gitdeploys from nonrolling groups to the first batch Not
+written in a functional style because that was totally unreadable</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.deploy.BatchCompute.dedupe_batches">
+    
+  </a>
+  <a name="dedupe_batches">
+    
+  </a>
+  <div class="functionHeader">
+    @staticmethod<br />
+    def
+    dedupe_batches(batches):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <pre>Dedupe servers and gitdeploys list in the combined batches list:
+[
+    { "servers": [ "server1", "server1", ...], "gitdeploys": [ "gd1", "gd1", ...] },  #batch 0 (all groups)
+    { "servers": [ "server1", "server1", ...], "gitdeploys": [ "gd1", "gd1", ...] },  #batch 1 (all groups)
+    ...
+]</pre>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.deploy.BatchCompute.reduce_group_batches">
+    
+  </a>
+  <a name="reduce_group_batches">
+    
+  </a>
+  <div class="functionHeader">
+    @staticmethod<br />
+    def
+    reduce_group_batches(accumulated, update):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.deploy.BatchCompute.coalesce_batches">
+    
+  </a>
+  <a name="coalesce_batches">
+    
+  </a>
+  <div class="functionHeader">
+    @staticmethod<br />
+    def
+    coalesce_batches(batches):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <pre>Combine the big list of batches into a single list.
+
+Function is passed a list of lists:
+[
+    [ { "servers": [...], "gitdeploys": [...] }, ... ],     # batches 0-n for group A
+    [ { "servers": [...], "gitdeploys": [...] }, ... ],     # batches 0-n for broup B
+    ...
+]
+
+Each nested list represents the computed batches for an individual group. All nested lists are expected to be
+the same length.</pre>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.deploy.BatchCompute.compute_group_batches">
+    
+  </a>
+  <a name="compute_group_batches">
+    
+  </a>
+  <div class="functionHeader">
+    @staticmethod<br />
+    def
+    compute_group_batches(divisor, group):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Compute batches for group. Group is iteritems() result from group dict. 
+group[0] is key (name), group[1] is dict of servers/gitdeploys</p>
+<p>return list of dicts: [ { 'servers': [...], 'gitdeploys': [...] }, ... 
+]</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.deploy.BatchCompute.compute_rolling_batches">
+    
+  </a>
+  <a name="compute_rolling_batches">
+    
+  </a>
+  <div class="functionHeader">
+    @staticmethod<br />
+    def
+    compute_rolling_batches(divisor, rolling_group_docs, nonrolling_group_docs):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div>
+    <address>
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-09-24 11:37:00.
+    </address>
+  </body>
+</html>

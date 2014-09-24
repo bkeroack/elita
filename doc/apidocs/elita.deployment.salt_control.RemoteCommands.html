@@ -25,7 +25,7 @@
 
     
     <div id="splitTables">
-      <table class="children sortable" id="id32">
+      <table class="children sortable" id="id31">
   
   
   <tr class="method">
@@ -33,13 +33,40 @@
     
     <td>Method</td>
     <td><a href="elita.deployment.salt_control.RemoteCommands.html#__init__">__init__</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td></td>
   </tr><tr class="method">
     
     
     <td>Method</td>
     <td><a href="elita.deployment.salt_control.RemoteCommands.html#get_os">get_os</a></td>
     <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.salt_control.RemoteCommands.html#get_os_text">get_os_text</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.salt_control.RemoteCommands.html#group_remote_servers_by_os">group_remote_servers_by_os</a></td>
+    <td><span>Determine which servers are Windows and which are Unix-like, so we know 
+where to push keys, etc to.</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.salt_control.RemoteCommands.html#get_remote_home">get_remote_home</a></td>
+    <td><span>Get shell expansion of ~ on remote servers (home of user salt-minion is 
+running as)</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.salt_control.RemoteCommands.html#get_home_expanded_path">get_home_expanded_path</a></td>
+    <td><span>Given a list of servers and a list of paths with '~' in them, return 
+absolute paths</span></td>
   </tr><tr class="method">
     
     
@@ -68,13 +95,50 @@
     
     
     <td>Method</td>
-    <td><a href="elita.deployment.salt_control.RemoteCommands.html#push_file">push_file</a></td>
+    <td><a href="elita.deployment.salt_control.RemoteCommands.html#push_files">push_files</a></td>
+    <td><span>Push a list of files to corresponding remote paths. Make sure each 
+remote path exists first. Do all pushes in a single salt call (faster).</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.salt_control.RemoteCommands.html#rm_file_if_exists">rm_file_if_exists</a></td>
+    <td><span>Remove target directory if it exists</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.salt_control.RemoteCommands.html#rm_dir_if_exists">rm_dir_if_exists</a></td>
+    <td><span>Remove target directory if it exists</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.salt_control.RemoteCommands.html#run_powershell_script">run_powershell_script</a></td>
     <td><span class="undocumented">Undocumented</span></td>
   </tr><tr class="method">
     
     
     <td>Method</td>
-    <td><a href="elita.deployment.salt_control.RemoteCommands.html#push_key">push_key</a></td>
+    <td><a href="elita.deployment.salt_control.RemoteCommands.html#run_shell_command">run_shell_command</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.salt_control.RemoteCommands.html#touch">touch</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.salt_control.RemoteCommands.html#ping">ping</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.salt_control.RemoteCommands.html#append_to_file">append_to_file</a></td>
     <td><span class="undocumented">Undocumented</span></td>
   </tr><tr class="method">
     
@@ -143,6 +207,14 @@
     <td><a href="elita.deployment.salt_control.RemoteCommands.html#run_slses_async">run_slses_async</a></td>
     <td><span>sls_map: { 'sls_name': [ list_of_servers ] } Runs all listed SLSes 
 asynchronously</span></td>
+  </tr><tr class="method private">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.salt_control.RemoteCommands.html#_get_salt_uri">_get_salt_uri</a></td>
+    <td><span>For pushing local files to remote servers, need to copy it to a random 
+location in salt tree so we can push via cp.get_file. This file should be 
+deleted after that call returns.</span></td>
   </tr>
 </table>
       
@@ -165,7 +237,7 @@ asynchronously</span></td>
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
+    <div><table class="fieldTable"></table></div>
   </div>
 </div><div class="function">
   <a name="elita.deployment.salt_control.RemoteCommands.get_os">
@@ -183,6 +255,77 @@ asynchronously</span></td>
   <div class="docstring functionBody">
     
     <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.salt_control.RemoteCommands.get_os_text">
+    
+  </a>
+  <a name="get_os_text">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    get_os_text(self, server):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.salt_control.RemoteCommands.group_remote_servers_by_os">
+    
+  </a>
+  <a name="group_remote_servers_by_os">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    group_remote_servers_by_os(self, server_list):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Determine which servers are Windows and which are Unix-like, so we know 
+where to push keys, etc to.</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.salt_control.RemoteCommands.get_remote_home">
+    
+  </a>
+  <a name="get_remote_home">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    get_remote_home(self, server_list):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get shell expansion of ~ on remote servers (home of user salt-minion is 
+running as)</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.salt_control.RemoteCommands.get_home_expanded_path">
+    
+  </a>
+  <a name="get_home_expanded_path">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    get_home_expanded_path(self, server_list, path_list):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Given a list of servers and a list of paths with '~' in them, return 
+absolute paths</p><table class="fieldTable"></table></div>
   </div>
 </div><div class="function">
   <a name="elita.deployment.salt_control.RemoteCommands.create_directory">
@@ -253,16 +396,89 @@ asynchronously</span></td>
     <div class="undocumented">Undocumented</div>
   </div>
 </div><div class="function">
-  <a name="elita.deployment.salt_control.RemoteCommands.push_file">
+  <a name="elita.deployment.salt_control.RemoteCommands._get_salt_uri">
     
   </a>
-  <a name="push_file">
+  <a name="_get_salt_uri">
     
   </a>
   <div class="functionHeader">
     
     def
-    push_file(self, target, local_path, remote_path):
+    _get_salt_uri(self, local_path):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>For pushing local files to remote servers, need to copy it to a random 
+location in salt tree so we can push via cp.get_file. This file should be 
+deleted after that call returns.</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.salt_control.RemoteCommands.push_files">
+    
+  </a>
+  <a name="push_files">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    push_files(self, target, local_remote_path_mapping, mode=None):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Push a list of files to corresponding remote paths. Make sure each 
+remote path exists first. Do all pushes in a single salt call (faster).</p>
+<p>Note that these must be files, not directories.</p>
+<p>local_remote_path_mapping = { 'local_path': 'remote_path' }</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.salt_control.RemoteCommands.rm_file_if_exists">
+    
+  </a>
+  <a name="rm_file_if_exists">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    rm_file_if_exists(self, target, path):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Remove target directory if it exists</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.salt_control.RemoteCommands.rm_dir_if_exists">
+    
+  </a>
+  <a name="rm_dir_if_exists">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    rm_dir_if_exists(self, target, path):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Remove target directory if it exists</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.salt_control.RemoteCommands.run_powershell_script">
+    
+  </a>
+  <a name="run_powershell_script">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    run_powershell_script(self, server_list, script_path):
     
   </div>
   <div class="docstring functionBody">
@@ -270,16 +486,67 @@ asynchronously</span></td>
     <div class="undocumented">Undocumented</div>
   </div>
 </div><div class="function">
-  <a name="elita.deployment.salt_control.RemoteCommands.push_key">
+  <a name="elita.deployment.salt_control.RemoteCommands.run_shell_command">
     
   </a>
-  <a name="push_key">
+  <a name="run_shell_command">
     
   </a>
   <div class="functionHeader">
     
     def
-    push_key(self, server_list, file, name, ext):
+    run_shell_command(self, server_list, cmd):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.salt_control.RemoteCommands.touch">
+    
+  </a>
+  <a name="touch">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    touch(self, server_list, remote_path):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.salt_control.RemoteCommands.ping">
+    
+  </a>
+  <a name="ping">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    ping(self, server_list, timeout=10):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.salt_control.RemoteCommands.append_to_file">
+    
+  </a>
+  <a name="append_to_file">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    append_to_file(self, server_list, remote_path, text_block):
     
   </div>
   <div class="docstring functionBody">
@@ -466,7 +733,7 @@ asynchronously</span></td>
   <div class="functionHeader">
     
     def
-    run_slses_async(self, callback, sls_map):
+    run_slses_async(self, callback, sls_map, args=None):
     
   </div>
   <div class="docstring functionBody">
@@ -476,7 +743,7 @@ asynchronously</p><table class="fieldTable"></table></div>
   </div>
 </div>
     <address>
-      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-05-15 18:24:09.
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-09-24 11:37:00.
     </address>
   </body>
 </html>
