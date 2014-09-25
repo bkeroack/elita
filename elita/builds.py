@@ -51,7 +51,7 @@ def store_uploaded_build(datasvc, app, build, file_type, temp_file, package_map)
     logging.debug("bs_results: {}".format(fname))
 
     datasvc.jobsvc.NewJobData({'status': 'updating build packages'})
-    build_doc = datasvc.buildsvc.GetBuildDoc(app, build)
+    build_doc = datasvc.buildsvc.GetBuild(app, build)
     build_doc['master_file'] = fname
     build_doc['packages']['master'] = {'filename': fname, 'file_type': file_type}
 

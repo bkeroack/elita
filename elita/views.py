@@ -33,7 +33,7 @@ AFFIRMATIVE_SYNONYMS = ("true", "True", "TRUE", "yup", "yep", "yut", "yes", "yea
 
 def validate_parameters(required_params=None, optional_params=None, json_body=None):
     '''
-    Decorator that validates endpoint parameters
+    Decorator that validates endpoint parameters and validates/deserializes JSON body
     '''
     assert elita.util.type_check.is_optional_seq(required_params)
     assert elita.util.type_check.is_optional_seq(optional_params)
@@ -60,7 +60,7 @@ def validate_parameters(required_params=None, optional_params=None, json_body=No
                         missing_required_arg = r
                         return error_response()
 
-            if json_body:
+            if isinstance(json_body, dict):
                 try:
                     self.body = self.req.json_body
                 except:
@@ -127,6 +127,25 @@ class GenericView:
     def get_unknown(self, existing, submitted):
         return list(set(submitted) - set(existing))
 
+    def check_patch_keys(self):
+        '''
+        Verify that the keys in the provided JSON body are a strict subset of the keys in the context object.
+        For PATCH calls, we want to make sure that the user is only trying to modify keys that actually exist in the
+        data model. PATCH should only ever be called on object endpoints (not containers) so the context object will be
+        the corresponding data model object.
+        '''
+        assert hasattr(self.context, 'get_doc')
+        assert self.body
+        assert elita.util.type_check.is_dictlike(self.body)
+        context_doc = self.context.get_doc()
+        #don't let user change any part of composite key for the object
+        for n in ('name', 'app_name', 'build_name', 'application', 'username'):
+            if n in context_doc and n in self.body:
+                return False, self.Error(400, "cannot change key value: {}".format(n))
+        if not set(context_doc.keys()).issuperset(set(self.body.keys())):
+            return False, self.Error(400, "unknown keys: {}".format(list(set(self.body.keys()) - set(context_doc.keys()))))
+        return True, None
+
     def call_action(self):
         g, p = self.check_params()
         if not g:
@@ -153,6 +172,9 @@ class GenericView:
         elif self.req.method == 'PUT' and not self.is_action:
             if 'write' in self.permissions:
                 return self.PUT()
+        elif self.req.method == 'PATCH' and not self.is_action:
+            if 'write' in self.permissions:
+                return self.PATCH()
         elif self.req.method == 'DELETE' and not self.is_action:
             if 'write' in self.permissions:
                 return self.DELETE()
@@ -279,17 +301,17 @@ def ExceptionView(exc, request):
 class ApplicationContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request)
-        param = ["app_name"]
-        self.set_params({"GET": [], "PUT": param, "POST": param, "DELETE": param})
 
     def validate_app_name(self, name):
         return name in self.datasvc.appsvc.GetApplications()
 
+    @validate_parameters(required_params=["app_name"])
     def PUT(self):
         app_name = self.req.params["app_name"]
         self.datasvc.appsvc.NewApplication(app_name)
         return self.return_action_status({"new_application": {"name": app_name}})
 
+    @validate_parameters(required_params=["app_name"])
     def DELETE(self):
         app_name = self.req.params["app_name"]
         if not self.validate_app_name(app_name):
@@ -304,7 +326,6 @@ class ApplicationContainerView(GenericView):
 class ApplicationView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, app_name=context.app_name)
-        self.set_params({"GET": [], "PUT": [], "POST": ["app_name"], "DELETE": []})
 
     def GET(self):
         return {
@@ -314,8 +335,19 @@ class ApplicationView(GenericView):
             #"census": self.datasvc.appsvc.GetApplicationCensus(self.context.app_name)
         }
 
+    def DELETE(self):
+        self.datasvc.appsvc.DeleteApplication(self.context.app_name)
+        return self.return_action_status({"delete_application": self.context.app_name})
+
+    @validate_parameters(json_body={})
     def PATCH(self):
-        pass
+        ok, err = self.check_patch_keys()
+        if not ok:
+            return err
+        self.datasvc.appsvc.UpdateApplication(self.context.app_name, self.body)
+        return {
+            'modified_application': self.datasvc.appsvc.GetApplication(self.context.app_name)
+        }
 
 class ActionContainerView(GenericView):
     def __init__(self, context, request):
@@ -345,6 +377,7 @@ class ActionView(GenericView):
             }
         }
 
+    #cannot use decorator here since required parameters are dynamic
     def POST(self):
         return self.execute()
 
@@ -352,8 +385,6 @@ class BuildContainerView(GenericView):
     def __init__(self, context, request):
         self.app_name = context.parent
         GenericView.__init__(self, context, request, app_name=self.app_name)
-        self.set_params({"GET": [], "PUT": ["build_name"], "POST": ["build_name"], "DELETE": ["build_name"]})
-
 
     def validate_build_name(self, build_name):
         return build_name in self.datasvc.buildsvc.GetBuilds(self.app_name)
@@ -362,6 +393,7 @@ class BuildContainerView(GenericView):
         return {"application": self.app_name,
                 "builds": self.datasvc.buildsvc.GetBuilds(self.app_name)}
 
+    @validate_parameters(required_params=["build_name"])
     def PUT(self):
         msg = list()
         build_name = self.req.params["build_name"]
@@ -385,6 +417,7 @@ class BuildContainerView(GenericView):
             }
         })
 
+    @validate_parameters(required_params=["build_name"])
     def POST(self):
         build_name = self.req.params["build_name"]
         ok, err = self.validate_build_name(build_name)
@@ -392,6 +425,7 @@ class BuildContainerView(GenericView):
             return err
         return BuildView(self.context[build_name], self.req).POST()
 
+    @validate_parameters(required_params=["build_name"])
     def DELETE(self):
         build_name = self.req.params["build_name"]
         if not self.validate_build_name(build_name):
@@ -478,6 +512,21 @@ class BuildView(GenericView):
                 'created_datetime': self.get_created_datetime_text(),
                 'attributes': self.context.attributes}
 
+    @validate_parameters(json_body={})
+    def PATCH(self):
+        ok, err = self.check_patch_keys()
+        if not ok:
+            return err
+        self.datasvc.buildsvc.UpdateBuild(self.context.app_name, self.context.build_name, self.body)
+        return {
+            'modifed_build': self.datasvc.buildsvc.GetBuild(self.context.app_name, self.context.build_name)
+        }
+
+    def DELETE(self):
+        self.datasvc.buildsvc.DeleteBuild(self.context.app_name, self.context.build_name)
+        return self.return_action_status({"delete_build": {"application": self.context.app_name,
+                                                           "build_name": self.context.build_name}})
+
 
 class ServerContainerView(GenericView):
     def __init__(self, context, request):
@@ -533,7 +582,6 @@ class ServerContainerView(GenericView):
 class ServerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request)
-        self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
 
     def GET(self):
         return {
@@ -544,6 +592,16 @@ class ServerView(GenericView):
             'environment': self.context.environment,
             'attributes': self.context.attributes,
             'gitdeploys': self.datasvc.serversvc.GetGitDeploys(self.context.name)
+        }
+
+    @validate_parameters(json_body={})
+    def PATCH(self):
+        ok, err = self.check_patch_keys()
+        if not ok:
+            return err
+        self.datasvc.serversvc.UpdateServer(self.context.name, self.body)
+        return {
+            'modified_server': self.datasvc.serversvc.GetServer(self.context.name)
         }
 
     def DELETE(self):
@@ -557,7 +615,6 @@ class ServerView(GenericView):
 class EnvironmentView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request)
-        self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
 
     def GET(self):
         return {
@@ -567,7 +624,6 @@ class EnvironmentView(GenericView):
 class DeploymentContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, app_name=context.parent)
-        self.set_params({"GET": [], "PUT": [], "POST": ['build_name'], "DELETE": []})
 
     def GET(self):
         return {
@@ -575,12 +631,17 @@ class DeploymentContainerView(GenericView):
             'deployments': self.datasvc.deploysvc.GetDeployments(self.context.parent)
         }
 
+    @validate_parameters(required_params=['build_name'])
     def POST(self):
+        # yeah so this is a big ugly method...
+        # we support two different 'styles' of deployment (manual/group) so this has to handle both and do all possible
+        # input validation before returning. Prob should consider breaking this logic out into two separate endpoints.
         app = self.context.parent
         build_name = self.req.params['build_name']
         if build_name not in self.datasvc.buildsvc.GetBuilds(app):
             return self.Error(400, "unknown build '{}'".format(build_name))
-        build_obj = self.datasvc.buildsvc.GetBuild(app, build_name)
+        build_doc = self.datasvc.buildsvc.GetBuild(app, build_name)
+        build_obj = models.Build(build_doc)
         if not build_obj.stored:
             return self.Error(400, "no stored data for build: {} (stored == false)".format(build_name))
         try:
@@ -720,7 +781,6 @@ class DeploymentContainerView(GenericView):
 class DeploymentView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, app_name=context.application)
-        self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
 
     def GET(self):
         return {
@@ -744,7 +804,6 @@ class DeploymentView(GenericView):
 class KeyPairContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, app_name='_global')
-        self.set_params({"GET": [], "PUT": ['name', 'key_type', 'from'], "POST": ['name', 'key_type', 'from'], "DELETE": ['name']})
 
     def GET(self):
         return {
@@ -758,6 +817,7 @@ class KeyPairContainerView(GenericView):
         else:
             return self.Error(500, ret)
 
+    @validate_parameters(required_params=['name', 'key_type', 'from'])
     def PUT(self):
         name = self.req.params['name']
         key_type = self.req.params['key_type']
@@ -778,6 +838,7 @@ class KeyPairContainerView(GenericView):
             public_key = info['public_key']
         return self.new_keypair(name, private_key, public_key, attributes, key_type)
 
+    @validate_parameters(required_params=['name', 'key_type', 'from'])
     def POST(self):
         name = self.req.params['name']
         key_type = self.req.params['key_type']
@@ -795,7 +856,7 @@ class KeyPairContainerView(GenericView):
 
         return self.new_keypair(name, private_key, public_key, attributes, key_type)
 
-
+    @validate_parameters(required_params=['name'])
     def DELETE(self):
         name = self.req.params['name']
         self.datasvc.keysvc.DeleteKeyPair(name)
@@ -815,13 +876,15 @@ class KeyPairView(GenericView):
             }
         }
 
-    def POST(self):
-        try:
-            info = self.req.json_body
-        except:
-            return self.Error(400, "invalid keypair info object (problem deserializing, bad JSON?)")
-        self.datasvc.keysvc.UpdateKeyPair(self.context.name, info)
-        return self.status_ok({'update_keypair': self.datasvc.keysvc.GetKeyPair(self.context.name)})
+    @validate_parameters(json_body={})
+    def PATCH(self):
+        ok, err = self.check_patch_keys()
+        if not ok:
+            return err
+        self.datasvc.keysvc.UpdateKeyPair(self.context.name, self.body)
+        return {
+            'modifed_keypair': self.datasvc.keysvc.GetKeyPair(self.context.name)
+        }
 
     def DELETE(self):
         self.datasvc.keysvc.DeleteKeyPair(self.context.name)
@@ -831,13 +894,13 @@ class KeyPairView(GenericView):
 class GitProviderContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request)
-        self.set_params({"GET": [], "PUT": ['name'], "POST": ['name'], "DELETE": ['name']})
 
     def GET(self):
         return {
             'gitproviders': self.datasvc.gitsvc.GetGitProviders()
         }
 
+    @validate_parameters(required_params=['name'])
     def PUT(self):
         name = self.req.params['name']
         try:
@@ -858,9 +921,11 @@ class GitProviderContainerView(GenericView):
             }
         })
 
+    @validate_parameters(required_params=['name'])
     def POST(self):
         return self.PUT()
 
+    @validate_parameters(required_params=['name'])
     def DELETE(self):
         name = self.req.params['name']
         if name in self.datasvc.gitsvc.GetGitProviders():
@@ -884,10 +949,15 @@ class GitProviderView(GenericView):
             }
         }
 
-    def POST(self):
-        new_doc = dict()
-        if 'type' in self.req.params:
-            pass
+    @validate_parameters(json_body={})
+    def PATCH(self):
+        ok, err = self.check_patch_keys()
+        if not ok:
+            return err
+        self.datasvc.gitsvc.UpdateGitProvider(self.context.name)
+        return {
+            'modifed_gitprovider': self.datasvc.gitsvc.GetGitProvider(self.context.name)
+        }
 
     def DELETE(self):
         self.datasvc.gitsvc.DeleteGitProvider(self.context.name)
@@ -900,7 +970,6 @@ class GitProviderView(GenericView):
 class GitRepoContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, app_name=context.parent)
-        self.set_params({"GET": [], "PUT": ['name', 'existing', 'gitprovider', 'keypair'], "POST": ['name', 'existing'], "DELETE": ['name']})
 
     def GET(self):
         return {
@@ -908,6 +977,7 @@ class GitRepoContainerView(GenericView):
             'gitrepos': self.datasvc.gitsvc.GetGitRepos(self.context.parent)
         }
 
+    @validate_parameters(required_params=['name', 'existing', 'gitprovider', 'keypair'])
     def PUT(self):
         existing = self.req.params['existing'] in AFFIRMATIVE_SYNONYMS
         gitprovider = self.req.params['gitprovider']
@@ -960,9 +1030,7 @@ class GitRepoContainerView(GenericView):
             'message': msg
         })
 
-    def POST(self):
-        return self.PUT()
-
+    @validate_parameters(required_params=['name'])
     def DELETE(self):
         name = self.req.params['name']
         if name in self.datasvc.gitsvc.GetGitRepos():
@@ -974,7 +1042,6 @@ class GitRepoContainerView(GenericView):
 class GitRepoView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, app_name=context.application)
-        self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
 
     def GET(self):
         gitrepo = self.datasvc.gitsvc.GetGitRepo(self.context.application, self.context.name)
@@ -984,6 +1051,16 @@ class GitRepoView(GenericView):
         gitrepo['keypair'] = gitrepo['keypair']['name']
         return {
             'gitrepo': gitrepo
+        }
+
+    @validate_parameters(json_body={})
+    def PATCH(self):
+        ok, err = self.check_patch_keys()
+        if not ok:
+            return err
+        self.datasvc.gitsvc.UpdateGitRepo(self.context.application, self.context.name, self.body)
+        return {
+            'modified_gitrepo': self.datasvc.gitsvc.GetGitRepo(self.context.application, self.context.name)
         }
 
     def DELETE(self):
@@ -1005,14 +1082,13 @@ class GitRepoView(GenericView):
                 'name': self.context.name
             }
             msg = self.run_async("delete_repository", "async", job_data, del_callable, args)
-            resp['message'] = { 'delete_repository': msg}
+            resp['message'] = {'delete_repository': msg}
         return self.status_ok(resp)
 
 
 class GitDeployContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, app_name=context.parent)
-        self.set_params({"GET": [], "PUT": ['name'], "POST": [], "DELETE": []})
 
     def GET(self):
         return {
@@ -1020,6 +1096,7 @@ class GitDeployContainerView(GenericView):
             'gitdeploys': self.datasvc.gitsvc.GetGitDeploys(self.context.parent)
         }
 
+    @validate_parameters(required_params=['name'])
     def PUT(self):
         name = self.req.params['name']
         app = self.context.parent
@@ -1056,7 +1133,6 @@ class GitDeployContainerView(GenericView):
 class GitDeployView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, app_name=context.application)
-        self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
 
     def GET(self):
         gddoc = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
@@ -1081,25 +1157,6 @@ class GitDeployView(GenericView):
                 return False, self.Error(400, "no servers matched pattern: {}".format(sglob))
         self.servers = servers
         return True, None
-
-    def update(self, body):
-        keys = {'attributes', 'options', 'package', 'actions', 'location'}
-        if "location" not in body:
-            return self.Error(400, "invalid location object (valid JSON, 'location' key not found)")
-        #verify no unknown/incorrect location keys
-        body_keys = {k for k in body.keys()}
-        if not keys.issuperset(body_keys):
-            diff = body_keys - keys
-            u_i = len(diff)
-            word = "key"
-            word += "s" if u_i > 1 else ""
-            return self.Error(400, "invalid {}: {}".format(word, diff))
-        self.datasvc.gitsvc.UpdateGitDeploy(self.context.application, self.context.name, body)
-        gd = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
-        args = {'gitdeploy': gd}
-        msg = self.run_async("create_gitdeploy", "async", {'gitdeploy': gd['name']},
-                             elita.deployment.gitservice.create_gitdeploy, args)
-        return self.status_ok({'update_gitdeploy': {'name': self.context.name, 'object': body, 'message': msg}})
 
     def initialize(self, body):
         ok, err = self.check_servers_list(body)
@@ -1161,7 +1218,20 @@ class GitDeployView(GenericView):
         elif "deinitialize" in self.req.params and self.req.params['deinitialize'] in AFFIRMATIVE_SYNONYMS:
             return self.deinitialize(body)
         else:
-            return self.update(body)
+            return self.Error(400, "neither init or deinit requested")
+
+    @validate_parameters(json_body={})
+    def PATCH(self):
+        ok, err = self.check_patch_keys()
+        if not ok:
+            return err
+        self.datasvc.gitsvc.UpdateGitDeploy(self.context.application, self.context.name, self.body)
+        gd = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
+        return {
+            'modified_gitdeploy': gd,
+            'message': self.run_async("create_gitdeploy", "async", {'gitdeploy': gd['name']},
+                             elita.deployment.gitservice.create_gitdeploy, {'gitdeploy': gd})
+        }
 
     def DELETE(self):
         gddoc = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
@@ -1205,7 +1275,6 @@ class GlobalContainerView(GenericView):
 class GroupContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, app_name=context.parent)
-        self.set_params({"GET": [], "PUT": ["name", "rolling_deploy"], "POST": [], "DELETE": ["name"]})
 
     def GET(self):
         return {
@@ -1213,6 +1282,7 @@ class GroupContainerView(GenericView):
             'groups': self.datasvc.groupsvc.GetGroups(self.context.parent)
         }
 
+    @validate_parameters(required_params=["name", "rolling_deploy"])
     def PUT(self):
         name = self.req.params['name']
         rolling_deploy = self.req.params['rolling_deploy'] in AFFIRMATIVE_SYNONYMS
@@ -1246,6 +1316,7 @@ class GroupContainerView(GenericView):
             }
         })
 
+    @validate_parameters(required_params=["name"])
     def DELETE(self):
         name = self.req.params['name']
         if name not in self.datasvc.groupsvc.GetGroups(self.context.parent):
@@ -1280,6 +1351,16 @@ class GroupView(GenericView):
             'servers': self.datasvc.groupsvc.GetGroupServers(self.context.application, self.context.name,
                                                              environments=environments),
             'environments': environments if environments else "(any)"
+        }
+
+    @validate_parameters(json_body={})
+    def PATCH(self):
+        ok, err = self.check_patch_keys()
+        if not ok:
+            return err
+        self.datasvc.groupsvc.UpdateGroup(self.context.application, self.context.name, self.body)
+        return {
+            'modified_group': self.datasvc.groupsvc.GetGroup(self.context.application, self.context.name)
         }
 
     def DELETE(self):
@@ -1375,13 +1456,31 @@ class PackageMapView(GenericView):
             'packages': self.context.packages
          }
 
+    @validate_parameters(json_body={})
+    def PATCH(self):
+        ok, err = self.check_patch_keys()
+        if not ok:
+            return err
+        self.datasvc.pmsvc.UpdatePackageMap(self.context.application, self.context.name, self.body)
+        return {
+            'modified_packagemap': self.datasvc.pmsvc.GetPackageMap(self.context.application, self.context.name)
+        }
+
+    def DELETE(self):
+        self.datasvc.pmsvc.DeletePackageMap(self.context.application, self.context.name)
+        return self.status_ok({
+            "Delete_PackageMap": {
+                "name": self.context.name,
+                "application": self.context.application
+            }
+        })
+
 
 class UserContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request)
-        self.set_params({"GET": [], "PUT": ["username", "password"],
-                         "POST": ["username", "password"], "DELETE": ["username"]})
 
+    @validate_parameters(required_params=["username", "password"])
     def PUT(self):
         name = self.req.params['username']
         pw = self.req.params['password']
@@ -1404,9 +1503,7 @@ class UserContainerView(GenericView):
     def GET(self):
         return {"users": self.datasvc.usersvc.GetUsers()}
 
-    def POST(self):
-        return self.PUT()
-
+    @validate_parameters(required_params=['username'])
     def DELETE(self):
         name = self.req.params['username']
         if name in self.datasvc.usersvc.GetUsers():
@@ -1418,7 +1515,6 @@ class UserContainerView(GenericView):
 class JobView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, permissionless=True)  # job_id is the secret
-        self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
 
     def GET(self):
         ret = {
@@ -1441,8 +1537,8 @@ class JobView(GenericView):
 class JobContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request)
-        self.set_params({"GET": ["active"], "PUT": [], "POST": [], "DELETE": []})
 
+    @validate_parameters(required_params=['active'])
     def GET(self):
         active = self.req.params['active'] in AFFIRMATIVE_SYNONYMS
         return {"jobs": {"active": active, "job_ids": self.datasvc.jobsvc.GetJobs(active=active)}}
@@ -1451,29 +1547,15 @@ class JobContainerView(GenericView):
 class UserView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, allow_pw_auth=True)  # allow both pw and auth_token auth
-        self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
-
 
     def status_ok_with_token(self, username):
         return self.status_ok({"username": username, "permissions": self.context.permissions,
                                "attributes": self.context.attributes,
                                "auth_token": self.datasvc.usersvc.GetUserTokens(username)})
 
-    def change_password(self, new_pw):
-        self.context.change_password(new_pw)
-        self.datasvc.usersvc.SaveUser(self.context)
-
-    def change_attributes(self, attribs):
-        self.context.attributes = attribs
-        self.datasvc.usersvc.SaveUser(self.context)
-
-    def change_permissions(self, perms):
-        self.context.permissions = perms
-        self.datasvc.usersvc.SaveUser(self.context)
-
     def GET(self):
-        # ugly. we want to support both password auth and valid tokens, but only tokens from the same user or with the
-        # '_global' permission.
+        # another ugly. we want to support both password auth and valid tokens, but only tokens from the same user or
+        #  with the '_global' permission.
         if 'password' in self.req.params:
             if not self.context.validate_password(self.req.params['password']):
                 return self.Error(403, "incorrect password")
@@ -1500,45 +1582,20 @@ class UserView(GenericView):
             self.datasvc.usersvc.NewToken(name)
         return self.status_ok_with_token(name)
 
-    def POST(self):
-        if 'password' in self.req.params:
-            if not self.context.validate_password(self.req.params['password']):
-                return self.Error(403, "incorrect password")
-        update = self.req.params['update'] if 'update' in self.req.params else 'token'
-        if update == "token":
-            self.datasvc.usersvc.NewToken(self.context.name)
-            return self.status_ok_with_token(self.context.name)
-        elif update == "password":
-            if "new_password" in self.req.params:
-                self.change_password(self.req.params['new_password'])
-                return self.status_ok("password changed")
-            else:
-                return self.Error(400, "parameter new_password required")
-        elif update == "attributes":
-            try:
-                attribs = self.req.json_body
-            except:
-                return self.Error(400, "problem deserializing attributes object")
-            self.change_attributes(attribs)
-            return self.status_ok({"new_attributes": attribs})
-        elif update == "permissions":
-            try:
-                perms = self.req.json_body
-            except:
-                return self.Error(400, "problem deserializing permissions object (bad JSON?)")
-            perms = perms['permissions'] if 'permissions' in perms else perms
-            if auth.ValidatePermissionsObject(perms).run():
-                self.change_permissions(perms)
-                return self.status_ok({"new_permissions": perms})
-            else:
-                return self.Error(400, "invalid permissions object (valid JSON but semantically incorrect)")
-        else:
-            return self.Error(400, "incorrect request type '{}'".format(self.req.params['request']))
+    @validate_parameters(json_body={})
+    def PATCH(self):
+        ok, err = self.check_patch_keys()
+        if not ok:
+            return err
+        self.datasvc.usersvc.UpdateUser(self.context.username, self.body)
+        return {
+            'modified_user': self.datasvc.usersvc.GetUser(self.context.username)
+        }
+
 
 class UserPermissionsView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, allow_pw_auth=True)
-        self.set_params({"GET": [], "PUT": [], "POST": [], "DELETE": []})
 
     def compute_app_perms(self):
         return auth.UserPermissions(self.datasvc.usersvc, None, datasvc=self.datasvc).get_allowed_apps(self.context
@@ -1566,8 +1623,8 @@ class UserPermissionsView(GenericView):
 class TokenContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, app_name='_global')
-        self.set_params({"GET": ["username", "password"], "PUT": [], "POST": [], "DELETE": ["token"]})
 
+    @validate_parameters(required_params=["username", "password"])
     def GET(self):
         username = self.req.params['username']
         pw = self.req.params['password']
@@ -1580,6 +1637,7 @@ class TokenContainerView(GenericView):
         else:
             return self.Error(403, "incorrect password")
 
+    @validate_parameters(required_params=["token"])
     def DELETE(self):
         token = self.req.params['token']
         if token in self.datasvc.usersvc.GetAllTokens():

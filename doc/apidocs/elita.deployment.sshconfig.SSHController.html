@@ -1,0 +1,304 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+          "DTD/xhtml1-strict.dtd">
+<html>
+  <head>
+    <title>elita.deployment.sshconfig.SSHController : API documentation</title>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+    <link href="apidocs.css" type="text/css" rel="stylesheet" />
+    
+    
+  </head>
+  <body>
+    <h1 class="class">e.d.s.SSHController : class documentation</h1>
+    <p>
+      <span id="part">Part of <a href="elita.html">elita</a>.<a href="elita.deployment.html">deployment</a>.<a href="elita.deployment.sshconfig.html">sshconfig</a></span>
+      
+      <a href="classIndex.html#elita.deployment.sshconfig.SSHController">View In Hierarchy</a>
+    </p>
+    <div>
+      
+    </div>
+    <div class="docstring">
+      <div class="undocumented">No class docstring</div>
+    </div>
+
+    
+    <div id="splitTables">
+      <table class="children sortable" id="id34">
+  
+  
+  <tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.sshconfig.SSHController.html#__init__">__init__</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.sshconfig.SSHController.html#get_alias_block">get_alias_block</a></td>
+    <td><span>Return the ssh config block for the requested alias. We use tabs to make
+it easier to parse if we ever need to in the future.</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.sshconfig.SSHController.html#get_local_ssh_dir">get_local_ssh_dir</a></td>
+    <td><span>Get path of local .ssh config and create it if necessary</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.sshconfig.SSHController.html#get_key_name">get_key_name</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.sshconfig.SSHController.html#get_alias">get_alias</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.sshconfig.SSHController.html#get_full_alias_uri">get_full_alias_uri</a></td>
+    <td><span>Get the full aliased URI for a given gitrepo</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.sshconfig.SSHController.html#add_local_alias">add_local_alias</a></td>
+    <td><span>Add ssh alias (for gitdeploy most likely) to the local ssh config</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.sshconfig.SSHController.html#add_remote_alias">add_remote_alias</a></td>
+    <td><span>Add ssh alias to remote ssh config via file.append</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.sshconfig.SSHController.html#write_local_keys">write_local_keys</a></td>
+    <td><span>Write key data to named key files for gitrepo</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.sshconfig.SSHController.html#create_key_dir">create_key_dir</a></td>
+    <td><span>Create platform-specific directory to hold ssh config and keys @type 
+remote_controller: RemoteCommands</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.deployment.sshconfig.SSHController.html#push_remote_keys">push_remote_keys</a></td>
+    <td><span>Write keydata to temp files, push to remote servers. Add alias to remote
+ssh config</span></td>
+  </tr>
+</table>
+      
+    </div>
+    
+    
+
+    <div class="function">
+  <a name="elita.deployment.sshconfig.SSHController.__init__">
+    
+  </a>
+  <a name="__init__">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    __init__(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.sshconfig.SSHController.get_alias_block">
+    
+  </a>
+  <a name="get_alias_block">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    get_alias_block(self, alias_name, real_hostname, keyfile, username='git'):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Return the ssh config block for the requested alias. We use tabs to make
+it easier to parse if we ever need to in the future.</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.sshconfig.SSHController.get_local_ssh_dir">
+    
+  </a>
+  <a name="get_local_ssh_dir">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    get_local_ssh_dir(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get path of local .ssh config and create it if necessary</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.sshconfig.SSHController.get_key_name">
+    
+  </a>
+  <a name="get_key_name">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    get_key_name(self, application, gitrepo_name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.sshconfig.SSHController.get_alias">
+    
+  </a>
+  <a name="get_alias">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    get_alias(self, gitrepo_name, app):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.sshconfig.SSHController.get_full_alias_uri">
+    
+  </a>
+  <a name="get_full_alias_uri">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    get_full_alias_uri(self, gitrepo):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get the full aliased URI for a given gitrepo</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.sshconfig.SSHController.add_local_alias">
+    
+  </a>
+  <a name="add_local_alias">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    add_local_alias(self, alias_block):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Add ssh alias (for gitdeploy most likely) to the local ssh config</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.sshconfig.SSHController.add_remote_alias">
+    
+  </a>
+  <a name="add_remote_alias">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    add_remote_alias(self, remote_controller, server_list, sshconf, alias_block):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Add ssh alias to remote ssh config via file.append</p>
+<p>This is pretty hacky since the alias could already exist and this will 
+just append to the config endlessly, but fixing that would involve parsing 
+the whole config and that gets complicated.</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.sshconfig.SSHController.write_local_keys">
+    
+  </a>
+  <a name="write_local_keys">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    write_local_keys(self, application, gitrepo_type, gitrepo_name, private_key_data, public_key_data):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Write key data to named key files for gitrepo</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.sshconfig.SSHController.create_key_dir">
+    
+  </a>
+  <a name="create_key_dir">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    create_key_dir(self, remote_controller, server_list):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Create platform-specific directory to hold ssh config and keys</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.sshconfig.SSHController.push_remote_keys">
+    
+  </a>
+  <a name="push_remote_keys">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    push_remote_keys(self, remote_controller, server_list, application, gitrepo_name, gitrepo_type, privkey_data, pubkey_data):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Write keydata to temp files, push to remote servers. Add alias to remote
+ssh config</p><table class="fieldTable"></table></div>
+  </div>
+</div>
+    <address>
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-09-25 10:44:58.
+    </address>
+  </body>
+</html>

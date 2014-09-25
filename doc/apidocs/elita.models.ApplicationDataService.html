@@ -20,12 +20,12 @@
       
     </div>
     <div class="docstring">
-      <div class="undocumented">Undocumented</div>
+      <div class="undocumented">No class docstring</div>
     </div>
 
     
     <div id="splitTables">
-      <table class="children sortable" id="id41">
+      <table class="children sortable" id="id43">
   
   
   <tr class="method">
@@ -33,38 +33,46 @@
     
     <td>Method</td>
     <td><a href="elita.models.ApplicationDataService.html#GetApplications">GetApplications</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span>Get all applications. Pull from in-memory root_tree rather than mongo 
+for speed.</span></td>
   </tr><tr class="method">
     
     
     <td>Method</td>
     <td><a href="elita.models.ApplicationDataService.html#GetApplication">GetApplication</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span>Get application document</span></td>
   </tr><tr class="method">
     
     
     <td>Method</td>
     <td><a href="elita.models.ApplicationDataService.html#NewApplication">NewApplication</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
-  </tr><tr class="method">
-    
-    
-    <td>Method</td>
-    <td><a href="elita.models.ApplicationDataService.html#ChangeApplication">ChangeApplication</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span>Create new application and all subcontainers and root_tree 
+sub-references</span></td>
   </tr><tr class="method">
     
     
     <td>Method</td>
     <td><a href="elita.models.ApplicationDataService.html#DeleteApplication">DeleteApplication</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span>Delete application and all root_tree references and sub-objects.</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.ApplicationDataService.html#GetApplicationCensus">GetApplicationCensus</a></td>
+    <td><span class="undocumented">No summary</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.ApplicationDataService.html#UpdateApplication">UpdateApplication</a></td>
+    <td><span>Update application with keys in doc</span></td>
   </tr>
 </table>
       <invisible>
         <p>
           Inherited from <a href="elita.models.GenericChildDataService.html">GenericChildDataService</a>:
         </p>
-        <table class="children sortable" id="id42">
+        <table class="children sortable" id="id44">
   
   
   <tr class="basemethod">
@@ -72,7 +80,40 @@
     
     <td>Method</td>
     <td><a href="elita.models.GenericChildDataService.html#__init__">__init__</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span class="undocumented">No summary</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#populate_dependencies">populate_dependencies</a></td>
+    <td><span>Child dataservice classes may need to access methods of siblings. This 
+allows parent dataservice to inject cross dependencies as needed without 
+generating a big reference cycle.</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#NewContainer">NewContainer</a></td>
+    <td><span>Create new container object suitable for a root_tree reference</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#UpdateObject">UpdateObject</a></td>
+    <td><span>Generic method to update a particular object (document) with the data in
+doc</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#AddThreadLocalRootTree">AddThreadLocalRootTree</a></td>
+    <td><span>Add new node to thread-local root_tree (copy from mongo's root_tree)</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#RmThreadLocalRootTree">RmThreadLocalRootTree</a></td>
+    <td><span>Remove deleted node from thread-local root_tree</span></td>
   </tr>
 </table>
       </invisible>
@@ -95,7 +136,8 @@
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
+    <div><p>Get all applications. Pull from in-memory root_tree rather than mongo 
+for speed.</p><table class="fieldTable"></table></div>
   </div>
 </div><div class="function">
   <a name="elita.models.ApplicationDataService.GetApplication">
@@ -112,7 +154,7 @@
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
+    <div><p>Get application document</p><table class="fieldTable"></table></div>
   </div>
 </div><div class="function">
   <a name="elita.models.ApplicationDataService.NewApplication">
@@ -129,24 +171,8 @@
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
-  </div>
-</div><div class="function">
-  <a name="elita.models.ApplicationDataService.ChangeApplication">
-    
-  </a>
-  <a name="ChangeApplication">
-    
-  </a>
-  <div class="functionHeader">
-    
-    def
-    ChangeApplication(self, app_name, data):
-    
-  </div>
-  <div class="docstring functionBody">
-    
-    <div class="undocumented">Undocumented</div>
+    <div><p>Create new application and all subcontainers and root_tree 
+sub-references</p><table class="fieldTable"></table></div>
   </div>
 </div><div class="function">
   <a name="elita.models.ApplicationDataService.DeleteApplication">
@@ -163,11 +189,55 @@
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
+    <div><p>Delete application and all root_tree references and sub-objects.</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.ApplicationDataService.GetApplicationCensus">
+    
+  </a>
+  <a name="GetApplicationCensus">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetApplicationCensus(self, app_name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <pre>Generates a census of all environments, groups, servers and builds deployed:
+{
+  "env_name": {
+    "group_name": {
+        "server_name": {
+            "gitdeploy_name": {
+                "committed": "build_name",
+                "deployed": "build_name"
+        }
+    }
+}</pre>
+  </div>
+</div><div class="function">
+  <a name="elita.models.ApplicationDataService.UpdateApplication">
+    
+  </a>
+  <a name="UpdateApplication">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    UpdateApplication(self, app, doc):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Update application with keys in doc</p><table class="fieldTable"></table></div>
   </div>
 </div>
     <address>
-      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-05-15 18:24:09.
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-09-25 10:44:58.
     </address>
   </body>
 </html>

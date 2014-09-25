@@ -1,3 +1,8 @@
+0.61.0
+- Implement PATCH verb support for relevant endpoints (docs do not lie anymore)
+- Fix stale root_tree bug
+- Docs update
+
 0.60.2
 - Fix startup script
 

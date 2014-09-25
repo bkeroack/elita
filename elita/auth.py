@@ -4,6 +4,7 @@ import fnmatch
 import logging
 
 import elita.util
+from elita.models import User
 
 class ValidatePermissionsObject:
     __metaclass__ = elita.util.LoggingMetaClass
@@ -69,13 +70,15 @@ class UserPermissions:
             return {}
         if not username:
             username = self.username
-        userobj = self.usersvc.GetUser(username)
+        user = self.usersvc.GetUser(username)
         assert self.datasvc is not None
+        assert 'permissions' in user
+        permissions = user['permissions']
         apps = self.datasvc.appsvc.GetApplications()
         apps.append('_global') #not returned by GetApplications()
         logging.debug("get_allowed_apps: username: {}".format(username))
         raw_app_list = [(fnmatch.filter(apps, a),
-                 userobj.permissions['apps'][a]) for a in userobj.permissions['apps']]
+                 permissions['apps'][a]) for a in permissions['apps']]
         logging.debug("get_allowed_apps: raw_app_list: {}".format(raw_app_list))
         perms_dict = dict()
         for l in raw_app_list:  # coalesce the list, really wish this could be a dict comprehension
@@ -89,15 +92,17 @@ class UserPermissions:
 
     def get_allowed_actions(self, username):
         '''Returns list of tuples: (appname, actionname). If present, 'execute' permission is implicit'''
-        userobj = self.usersvc.GetUser(username)
+        user = self.usersvc.GetUser(username)
         assert self.datasvc is not None
+        assert 'permissions' in user
+        permissions = user['permissions']
         logging.debug("get_allowed_actions: username: {}".format(username))
         allowed_actions = dict()
-        for a in userobj.permissions['actions']:
+        for a in permissions['actions']:
             app_list = fnmatch.filter(self.datasvc.appsvc.GetApplications(), a)
             for app in app_list:
                 app_actions_allowed = set()
-                for action_pattern in userobj.permissions['actions'][a]:
+                for action_pattern in permissions['actions'][a]:
                     app_actions_allowed.update(tuple(fnmatch.filter(self.datasvc.jobsvc.GetAllActions(app),
                                                                action_pattern)))
                 allowed_actions[app] = list(app_actions_allowed)
@@ -105,11 +110,13 @@ class UserPermissions:
 
     def get_allowed_servers(self, username):
         '''Returns list'''
-        userobj = self.usersvc.GetUser(username)
+        user = self.usersvc.GetUser(username)
         assert self.datasvc is not None
+        assert 'permissions' in user
+        assert 'servers' in user['permissions']
         logging.debug("get_allowed_servers: username: {}".format(username))
         servers = self.datasvc.serversvc.GetServers()
-        return ([fnmatch.filter(servers, s) for s in userobj.permissions['servers']])
+        return ([fnmatch.filter(servers, s) for s in user['permissions']['servers']])
 
     def get_action_permissions(self, app, action):
         logging.debug("get_action_permissions: {}: {}".format(app, action))
@@ -136,21 +143,21 @@ class UserPermissions:
     def get_app_permissions(self, app):
         logging.debug("get_permissions: app: {}".format(app))
         if self.valid_token and self.username in self.usersvc.GetUsers():
-            userobj = self.usersvc.GetUser(self.username)
-            if userobj.username == 'admin':
+            user = self.usersvc.GetUser(self.username)
+            if user['username'] == 'admin':
                 logging.debug("returning admin permissions")
                 return "read;write"
-            elif "*" in userobj.permissions['apps']:
+            elif "*" in user['permissions']['apps']:
                 logging.debug("found wildcard perms")
-                return userobj.permissions['apps']['*']
-            elif app in userobj.permissions['apps']:
-                logging.debug("returning perms: {}".format(userobj.permissions['apps'][app]))
-                return userobj.permissions['apps'][app]
+                return user['permissions']['apps']['*']
+            elif app in user['permissions']['apps']:
+                logging.debug("returning perms: {}".format(user['permissions']['apps'][app]))
+                return user['permissions']['apps'][app]
         logging.debug("invalid user or token: {}; {}".format(self.username, self.token))
         return ""
 
     def validate_pw(self, username, password):
-        userobj = self.usersvc.GetUser(username)
+        userobj = User(self.usersvc.GetUser(username))
         return userobj.validate_password(password)
 
 

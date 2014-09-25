@@ -637,7 +637,7 @@ class DeployController:
         assert elita.util.type_check.is_seq(gitdeploys)
         assert isinstance(batch_number, int) and batch_number >= 0
 
-        build_doc = self.datasvc.buildsvc.GetBuildDoc(app_name, build_name)
+        build_doc = self.datasvc.buildsvc.GetBuild(app_name, build_name)
         gitdeploy_docs = {gd: self.datasvc.gitsvc.GetGitDeploy(app_name, gd) for gd in gitdeploys}
 
         queue = billiard.Queue()

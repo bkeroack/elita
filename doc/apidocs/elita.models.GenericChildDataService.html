@@ -17,15 +17,15 @@
       <a href="classIndex.html#elita.models.GenericChildDataService">View In Hierarchy</a>
     </p>
     <div>
-      <p>Known subclasses: <a href="elita.models.ApplicationDataService.html">elita.models.ApplicationDataService</a>, <a href="elita.models.BuildDataService.html">elita.models.BuildDataService</a>, <a href="elita.models.DeploymentDataService.html">elita.models.DeploymentDataService</a>, <a href="elita.models.GitDataService.html">elita.models.GitDataService</a>, <a href="elita.models.GroupDataService.html">elita.models.GroupDataService</a>, <a href="elita.models.JobDataService.html">elita.models.JobDataService</a>, <a href="elita.models.KeyDataService.html">elita.models.KeyDataService</a>, <a href="elita.models.ServerDataService.html">elita.models.ServerDataService</a>, <a href="elita.models.UserDataService.html">elita.models.UserDataService</a></p>
+      <p>Known subclasses: <a href="elita.models.ApplicationDataService.html">elita.models.ApplicationDataService</a>, <a href="elita.models.BuildDataService.html">elita.models.BuildDataService</a>, <a href="elita.models.DeploymentDataService.html">elita.models.DeploymentDataService</a>, <a href="elita.models.GitDataService.html">elita.models.GitDataService</a>, <a href="elita.models.GroupDataService.html">elita.models.GroupDataService</a>, <a href="elita.models.JobDataService.html">elita.models.JobDataService</a>, <a href="elita.models.KeyDataService.html">elita.models.KeyDataService</a>, <a href="elita.models.PackageMapDataService.html">elita.models.PackageMapDataService</a>, <a href="elita.models.ServerDataService.html">elita.models.ServerDataService</a>, <a href="elita.models.UserDataService.html">elita.models.UserDataService</a></p>
     </div>
     <div class="docstring">
-      <div class="undocumented">Undocumented</div>
+      <div class="undocumented">No class docstring</div>
     </div>
 
     
     <div id="splitTables">
-      <table class="children sortable" id="id36">
+      <table class="children sortable" id="id38">
   
   
   <tr class="method">
@@ -33,7 +33,40 @@
     
     <td>Method</td>
     <td><a href="elita.models.GenericChildDataService.html#__init__">__init__</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span class="undocumented">No summary</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#populate_dependencies">populate_dependencies</a></td>
+    <td><span>Child dataservice classes may need to access methods of siblings. This 
+allows parent dataservice to inject cross dependencies as needed without 
+generating a big reference cycle.</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#NewContainer">NewContainer</a></td>
+    <td><span>Create new container object suitable for a root_tree reference</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#UpdateObject">UpdateObject</a></td>
+    <td><span>Generic method to update a particular object (document) with the data in
+doc</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#AddThreadLocalRootTree">AddThreadLocalRootTree</a></td>
+    <td><span>Add new node to thread-local root_tree (copy from mongo's root_tree)</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#RmThreadLocalRootTree">RmThreadLocalRootTree</a></td>
+    <td><span>Remove deleted node from thread-local root_tree</span></td>
   </tr>
 </table>
       
@@ -51,16 +84,105 @@
   <div class="functionHeader">
     
     def
-    __init__(self, parent):
+    __init__(self, mongo_service, root, settings, job_id=None):
     
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
+    <div><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.GenericChildDataService.populate_dependencies">
+    
+  </a>
+  <a name="populate_dependencies">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    populate_dependencies(self, dependency_objs):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Child dataservice classes may need to access methods of siblings. This 
+allows parent dataservice to inject cross dependencies as needed without 
+generating a big reference cycle.</p>
+<p>dependency_objs = { 'FooDataService': FooDataService }</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.GenericChildDataService.NewContainer">
+    
+  </a>
+  <a name="NewContainer">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    NewContainer(self, class_name, name, parent):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Create new container object suitable for a root_tree reference</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.GenericChildDataService.UpdateObject">
+    
+  </a>
+  <a name="UpdateObject">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    UpdateObject(self, collection, keys, doc):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Generic method to update a particular object (document) with the data in
+doc</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.GenericChildDataService.AddThreadLocalRootTree">
+    
+  </a>
+  <a name="AddThreadLocalRootTree">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    AddThreadLocalRootTree(self, path):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Add new node to thread-local root_tree (copy from mongo's root_tree)</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.GenericChildDataService.RmThreadLocalRootTree">
+    
+  </a>
+  <a name="RmThreadLocalRootTree">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    RmThreadLocalRootTree(self, path):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Remove deleted node from thread-local root_tree</p><table class="fieldTable"></table></div>
   </div>
 </div>
     <address>
-      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-05-15 18:24:09.
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-09-25 10:44:58.
     </address>
   </body>
 </html>

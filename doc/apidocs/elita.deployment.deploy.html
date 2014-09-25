@@ -25,34 +25,74 @@
 
     
     <div id="splitTables">
-      <table class="children sortable" id="id19">
+      <table class="children sortable" id="id20">
   
   
-  <tr class="function">
+  <tr class="class">
+    
+    
+    <td>Class</td>
+    <td><a href="elita.deployment.deploy.FatalDeploymentError.html">FatalDeploymentError</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="function">
     
     
     <td>Function</td>
     <td><a href="elita.deployment.deploy.html#run_deploy">run_deploy</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span>Asynchronous entry point for deployments</span></td>
   </tr><tr class="class">
     
     
     <td>Class</td>
-    <td><a href="elita.deployment.deploy.GenericDeployController.html">GenericDeployController</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><a href="elita.deployment.deploy.BatchCompute.html">BatchCompute</a></td>
+    <td><span>Given a list of application groups that require rolling deployment and 
+an (optional) list that do not, compute the optimal batches of 
+server/gitdeploy pairs. All non-rolling groups are added to the first 
+batch. Splitting algorithm is tolerant of outrageously large 
+rolling_divisors.</span></td>
   </tr><tr class="class">
     
     
     <td>Class</td>
     <td><a href="elita.deployment.deploy.RollingDeployController.html">RollingDeployController</a></td>
     <td><span>Break deployment up into server/gitdeploy batches, then invoke 
-DeployController with them</span></td>
+DeployController with each batch sequentially</span></td>
+  </tr><tr class="function">
+    
+    
+    <td>Function</td>
+    <td><a href="elita.deployment.deploy.html#determine_deployabe_servers">determine_deployabe_servers</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
   </tr><tr class="class">
     
     
     <td>Class</td>
     <td><a href="elita.deployment.deploy.DeployController.html">DeployController</a></td>
-    <td><span class="undocumented">No class docstring; 2/7 methods documented</span></td>
+    <td><span>Class that runs deploys. Only knows about server/gitdeploy pairs, so is 
+used for both manual-style deployments and group/environment 
+deployments.</span></td>
+  </tr><tr class="function private">
+    
+    
+    <td>Function</td>
+    <td><a href="elita.deployment.deploy.html#_threadsafe_process_gitdeploy">_threadsafe_process_gitdeploy</a></td>
+    <td><span>Threadsafe function for processing a single gitdeploy during a 
+deployment. Creates own instance of datasvc, etc.</span></td>
+  </tr><tr class="function private">
+    
+    
+    <td>Function</td>
+    <td><a href="elita.deployment.deploy.html#_threadsafe_pull_callback">_threadsafe_pull_callback</a></td>
+    <td><span>Passed to run_slses_async and is used to provide realtime updates to 
+users polling the deploy job object</span></td>
+  </tr><tr class="function private">
+    
+    
+    <td>Function</td>
+    <td><a href="elita.deployment.deploy.html#_threadsafe_pull_gitdeploy">_threadsafe_pull_gitdeploy</a></td>
+    <td><span>Thread-safe way of performing a deployment SLS call for one specific 
+gitdeploy on a group of servers gitdeploy_struct: { 
+"gitdeploy_name": [ list_of_servers_to_deploy_to ] }</span></td>
   </tr>
 </table>
       
@@ -70,16 +110,88 @@ DeployController with them</span></td>
   <div class="functionHeader">
     
     def
-    run_deploy(datasvc, application, build_name, target, rolling_divisor, rolling_pause, deployment):
+    run_deploy(datasvc, application, build_name, target, rolling_divisor, rolling_pause, deployment_id):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Asynchronous entry point for deployments</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.deploy.determine_deployabe_servers">
+    
+  </a>
+  <a name="determine_deployabe_servers">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    determine_deployabe_servers(all_gd_servers, specified_servers):
     
   </div>
   <div class="docstring functionBody">
     
     <div class="undocumented">Undocumented</div>
   </div>
+</div><div class="function">
+  <a name="elita.deployment.deploy._threadsafe_process_gitdeploy">
+    
+  </a>
+  <a name="_threadsafe_process_gitdeploy">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    _threadsafe_process_gitdeploy(gddoc, build_doc, settings, job_id, deployment_id):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Threadsafe function for processing a single gitdeploy during a 
+deployment. Creates own instance of datasvc, etc.</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.deploy._threadsafe_pull_callback">
+    
+  </a>
+  <a name="_threadsafe_pull_callback">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    _threadsafe_pull_callback(results, tag, **kwargs):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Passed to run_slses_async and is used to provide realtime updates to 
+users polling the deploy job object</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.deployment.deploy._threadsafe_pull_gitdeploy">
+    
+  </a>
+  <a name="_threadsafe_pull_gitdeploy">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    _threadsafe_pull_gitdeploy(application, gitdeploy_struct, queue, settings, job_id, deployment_id, batch_number):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Thread-safe way of performing a deployment SLS call for one specific 
+gitdeploy on a group of servers gitdeploy_struct: { 
+"gitdeploy_name": [ list_of_servers_to_deploy_to ] }</p><table class="fieldTable"></table></div>
+  </div>
 </div>
     <address>
-      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-05-15 18:24:09.
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-09-25 10:44:58.
     </address>
   </body>
 </html>

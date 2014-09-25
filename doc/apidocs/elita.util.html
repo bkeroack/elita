@@ -25,32 +25,67 @@
 
     
     <div id="splitTables">
-      
+      <table class="children sortable" id="id103">
+  
+  
+  <tr class="module">
+    
+    
+    <td>Module</td>
+    <td><a href="elita.util.type_check.html">type_check</a></td>
+    <td><span class="undocumented">No module docstring; 1/7 functions documented</span></td>
+  </tr>
+</table>
       
     </div>
     
-    <p>From the __init__.py module:</p><table class="children sortable" id="id95">
+    <p>From the __init__.py module:</p><table class="children sortable" id="id104">
   
   
   <tr class="class">
     
     
     <td>Class</td>
-    <td><a href="elita.util.IndentedTextParser.html">IndentedTextParser</a></td>
-    <td><span>Written to parse our auto-generated ssh configs. Entries of the format 
-are only indented to one level</span></td>
+    <td><a href="elita.util.LoggingMetaClass.html">LoggingMetaClass</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
   </tr><tr class="function">
     
     
     <td>Function</td>
     <td><a href="elita.util.html#change_dict_keys">change_dict_keys</a></td>
-    <td><span>Recursively replaces char in nested dict keys with rep</span></td>
+    <td><span>Recursively replaces char in nested dict keys with rep (for sanitizing 
+input to mongo, for example) Modifies object in place! Returns None.</span></td>
   </tr><tr class="function">
     
     
     <td>Function</td>
-    <td><a href="elita.util.html#debugLog">debugLog</a></td>
+    <td><a href="elita.util.html#flatten">flatten</a></td>
+    <td><span>Given a nested n-dimensional list, return a flattened list</span></td>
+  </tr><tr class="function">
+    
+    
+    <td>Function</td>
+    <td><a href="elita.util.html#flatten_list">flatten_list</a></td>
+    <td><span>Above without having to iterate</span></td>
+  </tr><tr class="function">
+    
+    
+    <td>Function</td>
+    <td><a href="elita.util.html#log_wrapper">log_wrapper</a></td>
     <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="function">
+    
+    
+    <td>Function</td>
+    <td><a href="elita.util.html#paths_from_nested_dict">paths_from_nested_dict</a></td>
+    <td><span class="undocumented">No summary</span></td>
+  </tr><tr class="function">
+    
+    
+    <td>Function</td>
+    <td><a href="elita.util.html#set_dict_key">set_dict_key</a></td>
+    <td><span>In the dict-like obj (assumed to be a nested set of dicts), walk path 
+and insert value.</span></td>
   </tr><tr class="function">
     
     
@@ -61,16 +96,16 @@ are only indented to one level</span></td>
 </table>
 
     <div class="function">
-  <a name="elita.util.debugLog">
+  <a name="elita.util.log_wrapper">
     
   </a>
-  <a name="debugLog">
+  <a name="log_wrapper">
     
   </a>
   <div class="functionHeader">
     
     def
-    debugLog(self, msg):
+    log_wrapper(func):
     
   </div>
   <div class="docstring functionBody">
@@ -92,7 +127,8 @@ are only indented to one level</span></td>
   </div>
   <div class="docstring functionBody">
     
-    <div><p>Recursively replaces char in nested dict keys with rep</p><table class="fieldTable"></table></div>
+    <div><p>Recursively replaces char in nested dict keys with rep (for sanitizing 
+input to mongo, for example) Modifies object in place! Returns None.</p><table class="fieldTable"></table></div>
   </div>
 </div><div class="function">
   <a name="elita.util.split_seq">
@@ -111,9 +147,102 @@ are only indented to one level</span></td>
     
     <div><p>split iterable into n number of equal-length (approx) chunks</p><table class="fieldTable"></table></div>
   </div>
+</div><div class="function">
+  <a name="elita.util.set_dict_key">
+    
+  </a>
+  <a name="set_dict_key">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    set_dict_key(obj, path, value):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>In the dict-like obj (assumed to be a nested set of dicts), walk path 
+and insert value.</p>
+<p>For example,</p>
+<p>obj = root_tree path = ('app', 'myapp', 'builds') value = { 
+[build_reference_doc] }</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.util.paths_from_nested_dict">
+    
+  </a>
+  <a name="paths_from_nested_dict">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    paths_from_nested_dict(dict_obj, path=None):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <pre>Given an arbitrarily-nested dict-like object, generate a list of unique tree path tuples.
+The last object in any path will be the deepest leaf value in that path.
+Ex:
+dict_obj = {
+    'a': {
+        0: 1,
+        1: 2
+    },
+    'b': {
+        'foo': 'bar'
+    }
+}
+
+returns:
+[
+    ('a', 0, 1),
+    ('a', 1, 2),
+    ('b', 'foo', 'bar')
+]
+
+@type dict_obj: dict
+@type path: list</pre>
+  </div>
+</div><div class="function">
+  <a name="elita.util.flatten">
+    
+  </a>
+  <a name="flatten">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    flatten(list_obj):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Given a nested n-dimensional list, return a flattened list</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.util.flatten_list">
+    
+  </a>
+  <a name="flatten_list">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    flatten_list(list_obj):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Above without having to iterate</p><table class="fieldTable"></table></div>
+  </div>
 </div>
     <address>
-      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-05-15 18:24:09.
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-09-25 10:44:58.
     </address>
   </body>
 </html>

@@ -20,12 +20,12 @@
       
     </div>
     <div class="docstring">
-      <div class="undocumented">Undocumented</div>
+      <div class="undocumented">No class docstring</div>
     </div>
 
     
     <div id="splitTables">
-      <table class="children sortable" id="id47">
+      <table class="children sortable" id="id51">
   
   
   <tr class="method">
@@ -33,38 +33,47 @@
     
     <td>Method</td>
     <td><a href="elita.models.ServerDataService.html#GetServers">GetServers</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span>Return a list of all extant server objects</span></td>
   </tr><tr class="method">
     
     
     <td>Method</td>
     <td><a href="elita.models.ServerDataService.html#NewServer">NewServer</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span>Create a new server object</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.ServerDataService.html#UpdateServer">UpdateServer</a></td>
+    <td><span>Change existing server object with data in doc</span></td>
   </tr><tr class="method">
     
     
     <td>Method</td>
     <td><a href="elita.models.ServerDataService.html#DeleteServer">DeleteServer</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span>Delete a server object</span></td>
   </tr><tr class="method">
     
     
     <td>Method</td>
     <td><a href="elita.models.ServerDataService.html#GetGitDeploys">GetGitDeploys</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span>Get all gitdeploys initialized on a server. The canonical data source is
+the gitdeploy object (which contains a list of servers it's been 
+initialized on)</span></td>
   </tr><tr class="method">
     
     
     <td>Method</td>
     <td><a href="elita.models.ServerDataService.html#GetEnvironments">GetEnvironments</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span>Get a census of all environments. "environment" is just a tag 
+associated with a server upon creation, so get all tags and dedupe.</span></td>
   </tr>
 </table>
       <invisible>
         <p>
           Inherited from <a href="elita.models.GenericChildDataService.html">GenericChildDataService</a>:
         </p>
-        <table class="children sortable" id="id48">
+        <table class="children sortable" id="id52">
   
   
   <tr class="basemethod">
@@ -72,7 +81,40 @@
     
     <td>Method</td>
     <td><a href="elita.models.GenericChildDataService.html#__init__">__init__</a></td>
-    <td><span class="undocumented">Undocumented</span></td>
+    <td><span class="undocumented">No summary</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#populate_dependencies">populate_dependencies</a></td>
+    <td><span>Child dataservice classes may need to access methods of siblings. This 
+allows parent dataservice to inject cross dependencies as needed without 
+generating a big reference cycle.</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#NewContainer">NewContainer</a></td>
+    <td><span>Create new container object suitable for a root_tree reference</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#UpdateObject">UpdateObject</a></td>
+    <td><span>Generic method to update a particular object (document) with the data in
+doc</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#AddThreadLocalRootTree">AddThreadLocalRootTree</a></td>
+    <td><span>Add new node to thread-local root_tree (copy from mongo's root_tree)</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.GenericChildDataService.html#RmThreadLocalRootTree">RmThreadLocalRootTree</a></td>
+    <td><span>Remove deleted node from thread-local root_tree</span></td>
   </tr>
 </table>
       </invisible>
@@ -95,7 +137,7 @@
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
+    <div><p>Return a list of all extant server objects</p><table class="fieldTable"></table></div>
   </div>
 </div><div class="function">
   <a name="elita.models.ServerDataService.NewServer">
@@ -112,7 +154,24 @@
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
+    <div><p>Create a new server object</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.ServerDataService.UpdateServer">
+    
+  </a>
+  <a name="UpdateServer">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    UpdateServer(self, name, doc):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Change existing server object with data in doc</p><table class="fieldTable"></table></div>
   </div>
 </div><div class="function">
   <a name="elita.models.ServerDataService.DeleteServer">
@@ -129,7 +188,7 @@
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
+    <div><p>Delete a server object</p><table class="fieldTable"></table></div>
   </div>
 </div><div class="function">
   <a name="elita.models.ServerDataService.GetGitDeploys">
@@ -146,7 +205,9 @@
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
+    <div><p>Get all gitdeploys initialized on a server. The canonical data source is
+the gitdeploy object (which contains a list of servers it's been 
+initialized on)</p><table class="fieldTable"></table></div>
   </div>
 </div><div class="function">
   <a name="elita.models.ServerDataService.GetEnvironments">
@@ -163,11 +224,12 @@
   </div>
   <div class="docstring functionBody">
     
-    <div class="undocumented">Undocumented</div>
+    <div><p>Get a census of all environments. "environment" is just a tag 
+associated with a server upon creation, so get all tags and dedupe.</p><table class="fieldTable"></table></div>
   </div>
 </div>
     <address>
-      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-05-15 18:24:09.
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-09-25 10:44:58.
     </address>
   </body>
 </html>

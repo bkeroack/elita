@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+          "DTD/xhtml1-strict.dtd">
+<html>
+  <head>
+    <title>elita.models.MongoService : API documentation</title>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+    <link href="apidocs.css" type="text/css" rel="stylesheet" />
+    
+    
+  </head>
+  <body>
+    <h1 class="class">e.m.MongoService : class documentation</h1>
+    <p>
+      <span id="part">Part of <a href="elita.html">elita</a>.<a href="elita.models.html">models</a></span>
+      
+      <a href="classIndex.html#elita.models.MongoService">View In Hierarchy</a>
+    </p>
+    <div>
+      
+    </div>
+    <div class="docstring">
+      <div class="undocumented">No class docstring</div>
+    </div>
+
+    
+    <div id="splitTables">
+      <table class="children sortable" id="id37">
+  
+  
+  <tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.MongoService.html#__init__">__init__</a></td>
+    <td><tt>@type db = pymongo.database.Database</tt></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.MongoService.html#create_new">create_new</a></td>
+    <td><span>Creates new document in collection. Optionally, remove any existing 
+according to keys (which specify how the new document is unique)</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.MongoService.html#modify">modify</a></td>
+    <td><span>Modifies document with the keys in doc. Does so atomically but remember 
+that any key will overwrite the existing key.</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.MongoService.html#delete">delete</a></td>
+    <td><span>Drop a document from the collection</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.MongoService.html#update_roottree">update_roottree</a></td>
+    <td><span>Update the root tree at path [must be a tuple of indices: ('app', 
+'myapp', 'builds', '123-foo')] with DBRef Optional doc can be passed in 
+which will be inserted into the tree after adding DBRef field</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.MongoService.html#rm_roottree">rm_roottree</a></td>
+    <td><span>Delete/remove the root_tree reference at path</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.MongoService.html#get">get</a></td>
+    <td><span>Thin wrapper around find() Retrieve a document from Mongo, keyed by 
+name. Optionally, if duplicates are found, delete all but the first. If 
+empty, it's ok to return None if nothing matches</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.models.MongoService.html#dereference">dereference</a></td>
+    <td><span>Simple wrapper around db.dereference() Returns document pointed to by 
+DBRef</span></td>
+  </tr>
+</table>
+      
+    </div>
+    
+    
+
+    <div class="function">
+  <a name="elita.models.MongoService.__init__">
+    
+  </a>
+  <a name="__init__">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    __init__(self, db):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <pre>@type db = pymongo.database.Database</pre>
+  </div>
+</div><div class="function">
+  <a name="elita.models.MongoService.create_new">
+    
+  </a>
+  <a name="create_new">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    create_new(self, collection, keys, classname, doc, remove_existing=True):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Creates new document in collection. Optionally, remove any existing 
+according to keys (which specify how the new document is unique)</p>
+<p>Returns id of new document</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.MongoService.modify">
+    
+  </a>
+  <a name="modify">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    modify(self, collection, keys, path, doc_or_obj):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Modifies document with the keys in doc. Does so atomically but remember 
+that any key will overwrite the existing key.</p>
+<p>doc_or_obj could be None, zero, etc.</p>
+<p>Returns boolean indicating success</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.MongoService.delete">
+    
+  </a>
+  <a name="delete">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    delete(self, collection, keys):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Drop a document from the collection</p>
+<p>Return whatever pymongo returns for deletion</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.MongoService.update_roottree">
+    
+  </a>
+  <a name="update_roottree">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    update_roottree(self, path, collection, id, doc=None):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Update the root tree at path [must be a tuple of indices: ('app', 
+'myapp', 'builds', '123-foo')] with DBRef Optional doc can be passed in 
+which will be inserted into the tree after adding DBRef field</p>
+<p>Return boolean indicating success</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.MongoService.rm_roottree">
+    
+  </a>
+  <a name="rm_roottree">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    rm_roottree(self, path):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Delete/remove the root_tree reference at path</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.MongoService.get">
+    
+  </a>
+  <a name="get">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    get(self, collection, keys, multi=False, empty=False):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Thin wrapper around find() Retrieve a document from Mongo, keyed by 
+name. Optionally, if duplicates are found, delete all but the first. If 
+empty, it's ok to return None if nothing matches</p>
+<p>Returns document</p><table class="fieldTable"><tr class="fieldStart"><td class="fieldName">Returns</td><td colspan="2"> (type: dict | list(dict) | None)</td></tr></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.models.MongoService.dereference">
+    
+  </a>
+  <a name="dereference">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    dereference(self, dbref):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Simple wrapper around db.dereference() Returns document pointed to by 
+DBRef</p><table class="fieldTable"></table></div>
+  </div>
+</div>
+    <address>
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-09-25 10:44:58.
+    </address>
+  </body>
+</html>
