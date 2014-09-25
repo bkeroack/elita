@@ -121,22 +121,24 @@ class UserPermissions:
     def get_action_permissions(self, app, action):
         logging.debug("get_action_permissions: {}: {}".format(app, action))
         if self.valid_token and self.username in self.usersvc.GetUsers():
-            userobj = self.usersvc.GetUser(self.username)
-            if userobj.username == 'admin':
+            user = self.usersvc.GetUser(self.username)
+            assert 'permissions' in user
+            permissions = user['permissions']
+            if self.username == 'admin':
                 logging.debug("returning admin permissions")
                 return "execute"
-            if app in userobj.permissions['actions']:
+            if app in permissions['actions']:
                 logging.debug("{} in permissions['actions']".format(app))
-                if action in userobj.permissions['actions'][app]:
-                    return userobj.permissions['actions'][app][action]
-                if '*' in userobj.permissions['actions'][app]:
-                    return userobj.permissions['actions'][app]['*']
-            if "*" in userobj.permissions['actions']:
+                if action in permissions['actions'][app]:
+                    return permissions['actions'][app][action]
+                if '*' in permissions['actions'][app]:
+                    return permissions['actions'][app]['*']
+            if "*" in permissions['actions']:
                 logging.debug("* in permissions['actions']")
-                if action in userobj.permissions['actions']['*']:
-                    return userobj.permissions['actions']['*'][action]
-                if '*' in userobj.permissions['actions']['*']:
-                    return userobj.permissions['actions']['*']['*']
+                if action in permissions['actions']['*']:
+                    return permissions['actions']['*'][action]
+                if '*' in permissions['actions']['*']:
+                    return permissions['actions']['*']['*']
             logging.debug("returning deny")
             return "deny"
 

@@ -371,6 +371,7 @@ class BuildDataService(GenericChildDataService):
         assert app_name in self.root['app']
         assert build_name in self.root['app'][app_name]['builds']
         doc = self.mongo_service.get('builds', {'app_name': app_name, 'build_name': build_name})
+        doc['created_datetime'] = doc['_id'].generation_time
         return {k: doc[k] for k in doc if k[0] != '_'}
 
 
@@ -457,6 +458,7 @@ class UserDataService(GenericChildDataService):
         assert elita.util.type_check.is_string(username)
         assert username
         doc = self.mongo_service.get('users', {'username': username})
+        doc['created_datetime'] = doc['_id'].generation_time
         return {k: doc[k] for k in doc if k[0] != '_'}
 
     def DeleteUser(self, name):
@@ -505,6 +507,7 @@ class ApplicationDataService(GenericChildDataService):
         assert app_name
         assert elita.util.type_check.is_string(app_name)
         doc = self.mongo_service.get('applications', {'app_name': app_name})
+        doc['created_datetime'] = doc['_id'].generation_time
         return {k: doc[k] for k in doc if k[0] != '_'}
 
     def NewApplication(self, app_name):
@@ -615,6 +618,7 @@ class PackageMapDataService(GenericChildDataService):
         assert elita.util.type_check.is_string(app)
         assert elita.util.type_check.is_string(name)
         doc = self.mongo_service.get('packagemaps', {'application': app, 'name': name})
+        doc['created_datetime'] = doc['_id'].generation_time
         return {k: doc[k] for k in doc if k[0] != '_'}
 
     def NewPackageMap(self, app, name, packages, attributes=None):
@@ -685,6 +689,7 @@ class GroupDataService(GenericChildDataService):
         assert elita.util.type_check.is_string(name)
         doc = self.mongo_service.get('groups', {'application': app, 'name': name})
         doc['servers'] = self.GetGroupServers(app, name, group_doc=doc)
+        doc['created_datetime'] = doc['_id'].generation_time
         return {k: doc[k] for k in doc if k[0] != '_'}
 
     def NewGroup(self, app, name, gitdeploys, rolling_deploy=False, description="", attributes=None):
@@ -1051,6 +1056,7 @@ class GitDataService(GenericChildDataService):
         assert name in self.root['app'][app]['gitdeploys']
 
         doc = self.mongo_service.get('gitdeploys', {'name': name, 'application': app})
+        doc['created_datetime'] = doc['_id'].generation_time
         assert 'location' in doc
         assert 'gitrepo' in doc['location']
         #dereference embedded dbrefs
@@ -1119,7 +1125,7 @@ class GitDataService(GenericChildDataService):
         assert name in self.root['global']['gitproviders']
 
         doc = self.mongo_service.get('gitproviders', {'name': name})
-        assert doc
+        doc['created_datetime'] = doc['_id'].generation_time
         return {k: doc[k] for k in doc if k[0] != '_'}
 
     def NewGitProvider(self, name, provider_type, auth):
@@ -1194,6 +1200,7 @@ class GitDataService(GenericChildDataService):
 
         doc = self.mongo_service.get('gitrepos', {'name': name, 'application': app})
         assert doc and 'gitprovider' in doc and 'keypair' in doc
+        doc['created_datetime'] = doc['_id'].generation_time
         gitprovider = self.mongo_service.dereference(doc['gitprovider'])
         doc['gitprovider'] = {k: gitprovider[k] for k in gitprovider if k[0] != '_'}
         keypair = self.mongo_service.dereference(doc['keypair'])
@@ -1325,6 +1332,7 @@ class DeploymentDataService(GenericChildDataService):
         assert name in self.root['app'][app]['deployments']
 
         doc = self.mongo_service.get('deployments', {'application': app, 'name': name})
+        doc['created_datetime'] = doc['_id'].generation_time
         return {k: doc[k] for k in doc if k[0] != '_'}
 
     def UpdateDeployment(self, app, name, doc):
@@ -1508,6 +1516,7 @@ class KeyDataService(GenericChildDataService):
         assert name in self.root['global']['keypairs']
 
         doc = self.mongo_service.get('keypairs', {'name': name})
+        doc['created_datetime'] = doc['_id'].generation_time
         return {k: doc[k] for k in doc if k[0] != '_'} if doc else None
 
     def NewKeyPair(self, name, attribs, key_type, private_key, public_key):
