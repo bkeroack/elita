@@ -2022,11 +2022,12 @@ class RootTree(collections.MutableMapping):
     def __setitem__(self, key, value):
         self.tree[key] = value
         if not self.is_action():     # dynamically populated each request
-            self.updater.update()
+            pass
+            #self.updater.update()
 
     def __delitem__(self, key):
         del self.tree[key]
-        self.updater.update()
+        #self.updater.update()
         return
 
     def __iter__(self):
