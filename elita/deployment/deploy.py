@@ -200,6 +200,20 @@ class RollingDeployController:
     def compute_batches(self, rolling_group_docs, nonrolling_group_docs, rolling_divisor):
         return BatchCompute.compute_rolling_batches(rolling_divisor, rolling_group_docs, nonrolling_group_docs)
 
+    def run_hook(self, name, application, build_name, batches, batch_number=None, target=None):
+        args = {
+            "hook_parameters": {
+                "build": build_name,
+                "batches": batches
+            }
+        }
+
+        if name == "AUTO_DEPLOYMENT_START" or name == "AUTO_DEPLOYMENT_COMPLETE":
+            args['hook_parameters']['target'] = target
+        if "AUTO_DEPLOYMENT_BATCH" in name:
+            args['hook_parameters']['batch_number'] = batch_number
+        self.datasvc.actionsvc.hooks.run_hook(application, name, args)
+
     def run(self, application, build_name, target, rolling_divisor, rolling_pause, parallel=True):
         '''
         Run rolling deployment. This should be called iff the deployment is called via groups/environments
@@ -218,6 +232,9 @@ class RollingDeployController:
 
         logging.debug("computed batches: {}".format(batches))
 
+        #run pre hook
+        self.run_hook("AUTO_DEPLOYMENT_START", application, build_name, batches, target=target)
+
         self.datasvc.deploysvc.InitializeDeploymentPlan(application, self.deployment_id, batches, gitrepos)
 
         self.datasvc.jobsvc.NewJobData({
@@ -229,11 +246,18 @@ class RollingDeployController:
 
         for i, b in enumerate(batches):
             logging.debug("doing DeployController.run: deploy_gds: {}".format(b['gitdeploys']))
+
+            #run start hook
+            self.run_hook("AUTO_DEPLOYMENT_BATCH_BEGIN", application, build_name, batches, batch_number=i)
+
             ok, results = self.dc.run(application, build_name, b['servers'], b['gitdeploys'],
                                       parallel=parallel, batch_number=i)
             if not ok:
                 self.datasvc.jobsvc.NewJobData({"RollingDeployment": "error"})
                 return False
+
+            #run batch done hook
+            self.run_hook("AUTO_DEPLOYMENT_BATCH_DONE", application, build_name, batches, batch_number=i)
 
             deploy_doc = self.datasvc.deploysvc.GetDeployment(application, self.deployment_id)
             assert deploy_doc
@@ -247,6 +271,8 @@ class RollingDeployController:
                 logging.debug("RollingDeployController: {}".format(msg))
                 time.sleep(rolling_pause)
 
+        #run post hook
+        self.run_hook("AUTO_DEPLOYMENT_COMPLETE", application, build_name, batches, target=target)
         return True
 
 def determine_deployabe_servers(all_gd_servers, specified_servers):
