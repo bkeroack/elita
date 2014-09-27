@@ -203,15 +203,18 @@ class RollingDeployController:
     def run_hook(self, name, application, build_name, batches, batch_number=None, target=None):
         args = {
             "hook_parameters": {
-                "build": build_name,
-                "batches": batches
+                "deployment_id": self.deployment_id,
+                "build": build_name
             }
         }
 
         if name == "AUTO_DEPLOYMENT_START" or name == "AUTO_DEPLOYMENT_COMPLETE":
             args['hook_parameters']['target'] = target
+            args['hook_parameters']['batches'] = batches
         if "AUTO_DEPLOYMENT_BATCH" in name:
             args['hook_parameters']['batch_number'] = batch_number
+            args['hook_parameters']['batch_count'] = len(batches)
+            args['hook_parameters']['batch'] = batches[batch_number]
         self.datasvc.actionsvc.hooks.run_hook(application, name, args)
 
     def run(self, application, build_name, target, rolling_divisor, rolling_pause, parallel=True):

@@ -203,6 +203,7 @@ AUTO_DEPLOYMENT_START
 
   Parameters:
 
+  * *deployment_id* - current deployment id
   * *build* - build name to be deployed
   * *target* - target to be deployed to (dictionary with the following keys: "groups", "environments")
   * *batches* - a list of dictionaries (each with keys: "gitdeploys", "servers") representing deployment batches
@@ -210,22 +211,27 @@ AUTO_DEPLOYMENT_START
 AUTO_DEPLOYMENT_BATCH_BEGIN
   Triggered at the beginning of each deployment batch.
 
+  * *deployment_id* - current deployment id
   * *build* - build name being deployed
   * *batch_number* - batch number (starting at 0)
-  * *batches* - same as batches above
+  * *batch_count* - total number of batches
+  * *batch* - the batch to be deployed - dictionary with keys: "gitdeploys", "servers"
 
 AUTO_DEPLOYMENT_BATCH_DONE
   Triggered at the end of each deployment batch.
 
+  * *deployment_id* - current deployment id
   * *build* - build name being deployed
   * *batch_number* - batch number (starting at 0)
-  * *batches* - same as batches above
+  * *batch_count* - total number of batches
+  * *batch* - the batch just deployed - dictionary with keys: "gitdeploys", "servers"
 
 AUTO_DEPLOYMENT_COMPLETE
   Triggered at the end of a groups/environments automatic deployment (not a deployment to individual servers/gitdeploys).
 
   Parameters:
 
+  * *deployment_id* - current deployment id
   * *build* - build name deployed
   * *target* - target that was deployed to (dictionary with the following keys: "groups", "environments")
   * *batches* - a list of dictionaries (each with keys: "gitdeploys", "servers") representing deployment batches
