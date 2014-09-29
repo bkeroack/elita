@@ -1,3 +1,7 @@
+0.62.0
+- Add deployment hook points
+- Add commits object to deployment object
+
 0.61.1
 - Fix authentication bug
 - (internal, affects plugins) Fix issue with missing created_datetime field on documents

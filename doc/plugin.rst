@@ -144,6 +144,8 @@ Hook functions are passed the following parameters:
 * datasvc - (see below)
 * hook_parameters - A dictionary of hook-specific items.
 
+Hook functions must have both the above as named parameters.
+
 Hooks are always executed within an existing asynchronous context. The exact context is hook-specific.
 
 Supported hooks:
@@ -218,7 +220,7 @@ AUTO_DEPLOYMENT_BATCH_BEGIN
   * *batch* - the batch to be deployed - dictionary with keys: "gitdeploys", "servers"
 
 AUTO_DEPLOYMENT_BATCH_DONE
-  Triggered at the end of each deployment batch.
+  Triggered at the end of each deployment batch. This will only be triggered if batch was successful.
 
   * *deployment_id* - current deployment id
   * *build* - build name being deployed
@@ -228,13 +230,23 @@ AUTO_DEPLOYMENT_BATCH_DONE
 
 AUTO_DEPLOYMENT_COMPLETE
   Triggered at the end of a groups/environments automatic deployment (not a deployment to individual servers/gitdeploys).
+  This will only be triggered if entire deployment was successful.
 
   Parameters:
 
   * *deployment_id* - current deployment id
-  * *build* - build name deployed
-  * *target* - target that was deployed to (dictionary with the following keys: "groups", "environments")
+  * *build* - build name being deployed
+  * *deployment* - current deployment document (contains all information in Deployment data model)
   * *batches* - a list of dictionaries (each with keys: "gitdeploys", "servers") representing deployment batches
+
+AUTO_DEPLOYMENT_FAILED
+  Triggered when a deployment is aborted due to any fatal error. Inspect the deployment object for information on cause.
+
+  * *deployment_id* - current deployment id
+  * *build* - build name being deployed
+  * *deployment* - current deployment document (contains all information in Deployment data model)
+  * *batches* - a list of dictionaries (each with keys: "gitdeploys", "servers") representing deployment batches
+
 
 Datasvc
 -------

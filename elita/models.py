@@ -1798,6 +1798,7 @@ class Deployment(GenericDataModel):
         'servers': None,
         'gitdeploys': None,
         'status': None,
+        'commits': dict(),    # { gitrepo_name: commit_hash }
         'progress': {
             'currently_on': None,
             'phase1': {

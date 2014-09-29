@@ -81,7 +81,8 @@ DefaultHookMap = {
     'AUTO_DEPLOYMENT_START': None,
     'AUTO_DEPLOYMENT_BATCH_BEGIN': None,
     'AUTO_DEPLOYMENT_BATCH_DONE': None,
-    'AUTO_DEPLOYMENT_COMPLETE': None
+    'AUTO_DEPLOYMENT_COMPLETE': None,
+    'AUTO_DEPLOYMENT_FAILED': None
 }
 
 class RegisterHooks:

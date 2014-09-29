@@ -441,11 +441,19 @@ class GitDeployManager:
         path = self.get_path()
         return sh.git.bake(_cwd=path)
 
-    def inspect_latest_diff(self):
+    def get_latest_commit(self):
         repo = git.Repo(self.get_path())
         m = repo.heads.master
-        logging.debug("commit hash: {}".format(m.commit.hexsha))
-        s = m.commit.stats
+        return m.commit
+
+    def get_latest_commit_hash(self):
+        commit = self.get_latest_commit()
+        return commit.hexsha
+
+    def inspect_latest_diff(self):
+        commit = self.get_latest_commit()
+        logging.debug("commit hash: {}".format(commit.hexsha))
+        s = commit.stats
         #replace all '.' with underscore to make Mongo happy
         #make copy for the hook
         return s.files    # not appropriate for direct inclusion into mongo due to filenames as keys

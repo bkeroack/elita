@@ -794,6 +794,7 @@ class DeploymentView(GenericView):
                 'groups': self.context.groups if hasattr(self.context, 'groups') else None,
                 'build': self.context.build_name,
                 'servers': self.context.servers if hasattr(self.context, 'servers') else None,
+                'commits': self.context.commits if hasattr(self.context, 'commits') else None,
                 'gitdeploys': self.context.gitdeploys if hasattr(self.context, 'gitdeploys') else None,
                 'status': self.context.status,
                 'progress': self.context.progress

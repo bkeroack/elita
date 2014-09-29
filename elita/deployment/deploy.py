@@ -208,8 +208,12 @@ class RollingDeployController:
             }
         }
 
-        if name == "AUTO_DEPLOYMENT_START" or name == "AUTO_DEPLOYMENT_COMPLETE":
+        if name == "AUTO_DEPLOYMENT_START":
             args['hook_parameters']['target'] = target
+            args['hook_parameters']['batches'] = batches
+        if name == "AUTO_DEPLOYMENT_COMPLETE" or name == "AUTO_DEPLOYMENT_FAILED":
+            args['hook_parameters']['deployment'] = self.datasvc.deploysvc.GetDeployment(application,
+                                                                                         self.deployment_id)
             args['hook_parameters']['batches'] = batches
         if "AUTO_DEPLOYMENT_BATCH" in name:
             args['hook_parameters']['batch_number'] = batch_number
@@ -257,6 +261,7 @@ class RollingDeployController:
                                       parallel=parallel, batch_number=i)
             if not ok:
                 self.datasvc.jobsvc.NewJobData({"RollingDeployment": "error"})
+                self.run_hook("AUTO_DEPLOYMENT_FAILED", application, build_name, batches)
                 return False
 
             #run batch done hook
@@ -378,6 +383,17 @@ def _threadsafe_process_gitdeploy(gddoc, build_doc, settings, job_id, deployment
                                                           step=exc_msg)
                 return
             logging.debug("_threadsafe_process_gitdeploy: git commit result: {}".format(str(res)))
+
+            try:
+                commit_hash = gdm.get_latest_commit_hash()
+                datasvc.deploysvc.UpdateDeployment(gddoc['application'], deployment_id,
+                                                   {'commits': {gitrepo_name: str(commit_hash)}})
+                logging.debug("_threadsafe_process_gitdeploy: git commit hash: {}".format(str(commit_hash)))
+            except:
+                exc_msg = str(sys.exc_info()[1]).split('\n')
+                exc_msg.insert(0, "ERROR: get_commit_hash")
+                datasvc.deploysvc.UpdateDeployment_Phase1(gddoc['application'], deployment_id, gitrepo_name,
+                                                          step=exc_msg)
 
             datasvc.jobsvc.NewJobData({"ProcessGitdeploys": {gddoc['name']: "checking diff"}})
             try:
