@@ -213,6 +213,8 @@ AUTO_DEPLOYMENT_START
 AUTO_DEPLOYMENT_BATCH_BEGIN
   Triggered at the beginning of each deployment batch.
 
+  Parameters:
+
   * *deployment_id* - current deployment id
   * *build* - build name being deployed
   * *batch_number* - batch number (starting at 0)
@@ -221,6 +223,8 @@ AUTO_DEPLOYMENT_BATCH_BEGIN
 
 AUTO_DEPLOYMENT_BATCH_DONE
   Triggered at the end of each deployment batch. This will only be triggered if batch was successful.
+
+  Parameters:
 
   * *deployment_id* - current deployment id
   * *build* - build name being deployed
@@ -241,6 +245,8 @@ AUTO_DEPLOYMENT_COMPLETE
 
 AUTO_DEPLOYMENT_FAILED
   Triggered when a deployment is aborted due to any fatal error. Inspect the deployment object for information on cause.
+
+  Parameters:
 
   * *deployment_id* - current deployment id
   * *build* - build name being deployed

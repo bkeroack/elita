@@ -1301,27 +1301,38 @@ class DeploymentDataService(GenericChildDataService):
         })
 
         did = self.mongo_service.create_new('deployments', {}, 'Deployment', dpo.get_doc(), remove_existing=False)
-        # we don't know the deployment 'name' until it's inserted
-        self.mongo_service.modify('deployments', {'_id': did}, ('name',), str(did))
-        self.mongo_service.update_roottree(('app', app, 'deployments', str(did)), 'deployments', did)
-        self.AddThreadLocalRootTree(('app', app, 'deployments', str(did)))
+        # we don't know the full deployment 'name' until it's inserted
+        name = "{}_{}".format(build_name, str(did))
+        self.mongo_service.modify('deployments', {'_id': did}, ('name',), name)
+        self.mongo_service.update_roottree(('app', app, 'deployments', name), 'deployments', did)
+        self.AddThreadLocalRootTree(('app', app, 'deployments', name))
         return {
             'NewDeployment': {
                 'application': app,
-                'id': str(did)
-        }}
+                'id': name
+            }
+        }
 
-    def GetDeployments(self, app):
+    def GetDeployments(self, app, sort=False, with_creation_time=False):
         '''
-        Get a list of all deployments for application
+        Get a list of all deployments for application.
 
+        sort can be either "asc" or "desc" (False indicates no sorting). Sorting always done by created_datetime
         @rtype: list(str)
         '''
         assert app
         assert elita.util.type_check.is_string(app)
         assert app in self.root['app']
 
-        return [k for k in self.root['app'][app]['deployments'] if k[0] != '_']
+        #query from mongo instead of root_tree so we can sort and get datetimes
+        deployments = self.mongo_service.get('deployments', {'application': app}, multi=True, empty=True)
+        #pymongo does not easily let you sort by generation_time internally, so we have to hack it here
+        if sort:
+            deployments = sorted(deployments, key=lambda d: d['_id'].generation_time, reverse=(sort == "desc"))
+        if with_creation_time:
+            return [{"name": doc['name'], "created": doc['_id'].generation_time.isoformat(' ')} for doc in deployments]
+        else:
+            return [doc['name'] for doc in deployments]
 
     def GetDeployment(self, app, name):
         '''
