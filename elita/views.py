@@ -103,6 +103,10 @@ class GenericView:
         return self.context.created_datetime.isoformat(' ') if hasattr(self.context, 'created_datetime') else None
 
     def sanitize_doc_created_datetime(self, doc):
+        '''
+        created_datetime field in doc (as supplied by DataService) is a Python datetime object and is not serializable
+        to JSON. If field exists on doc, convert to string in ISO format
+        '''
         assert doc
         assert elita.util.type_check.is_dictlike(doc)
         if 'created_datetime' in doc:
@@ -204,9 +208,14 @@ class GenericView:
         if self.permissionless:
             self.permissions = "read;write"
             return
-        if self.allow_pw_auth and 'auth_token' not in self.req.params:  # view sub-class responsible for verifying pw
-            self.permissions = "read;write"
-            return
+        if self.allow_pw_auth:
+            if 'auth_token' not in self.req.params and 'Auth-Token' not in self.req.headers:
+                # view sub-class responsible for verifying pw
+                self.permissions = "read;write" if "password" in self.req.params else ""
+                return
+            elif "password" in self.req.params:  # both pw and auth token provided, fail the request
+                self.permissions = ""
+                return
         if 'auth_token' in self.req.params or 'Auth-Token' in self.req.headers:
             if 'auth_token' in self.req.params and 'Auth-Token' in self.req.headers:
                 #if both are specified on one request it's an error condition
@@ -1562,17 +1571,15 @@ class UserView(GenericView):
                                "attributes": self.context.attributes,
                                "auth_token": self.datasvc.usersvc.GetUserTokens(username)})
 
-    def GET(self):
-        # another ugly. we want to support both password auth and valid tokens, but only tokens from the same user or
-        #  with the '_global' permission.
+    def check_password(self):
         if 'password' in self.req.params:
             if not self.context.validate_password(self.req.params['password']):
-                return self.Error(403, "incorrect password")
+                return False, self.Error(403, "incorrect password")
         elif ('auth_token' not in self.req.params) and ('Auth-Token' not in self.req.headers):
-            return self.Error(403, "password or auth token required")
+            return False, self.Error(403, "password or auth token required")
         else:
             if 'auth_token' in self.req.params and len(self.req.params.getall('auth_token')) > 1:  # multiple auth tokens
-                return self.Error(403, "incorrect authentication")
+                return False, self.Error(403, "incorrect authentication")
             token = self.req.params.getall('auth_token')[0] if 'auth_token' in self.req.params else self.req.headers['Auth-Token']
             authsvc = auth.UserPermissions(self.datasvc.usersvc, token, datasvc=self.datasvc)
             allowed_apps = authsvc.get_allowed_apps()
@@ -1585,7 +1592,15 @@ class UserView(GenericView):
                 logging.debug("valid_token: {}".format(authsvc.valid_token))
                 logging.debug("usernames: {}, {}".format(authsvc.username, self.context.username))
                 logging.debug("allowed_apps: {}".format(authsvc.get_allowed_apps()))
-                return self.Error(403, "bad token")
+                return False, self.Error(403, "bad token")
+        return True, None
+
+    def GET(self):
+        # another ugly. we want to support both password auth and valid tokens, but only tokens from the same user or
+        #  with the '_global' permission.
+        ok, err = self.check_password()
+        if not ok:
+            return err
         name = self.context.username
         if len(self.datasvc.usersvc.GetUserTokens(name)) == 0:
             self.datasvc.usersvc.NewToken(name)
@@ -1593,6 +1608,9 @@ class UserView(GenericView):
 
     @validate_parameters(json_body={})
     def PATCH(self):
+        ok, err = self.check_password()
+        if not ok:
+            return err
         ok, err = self.check_patch_keys()
         if not ok:
             return err
@@ -1672,9 +1690,11 @@ class TokenView(GenericView):
         return self.status_ok({"token_deleted": {"username": user, "token": token}})
 
 
-#this is the default 'root' view that gets called for every request
 @view_config(name="", renderer='json')
 def Action(context, request):
+    '''
+    Default unnamed 'root' view that gets called for every request that doesn't 404 during traversal
+    '''
     logger.debug("REQUEST: url: {}".format(request.url))
     logger.debug("REQUEST: context: {}".format(context.__class__.__name__))
     logger.debug("REQUEST: method: {}".format(request.method))
