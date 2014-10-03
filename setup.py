@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 here = os.path.abspath(os.path.dirname(__file__))
 README = open(os.path.join(here, 'README.rst')).read()
-CHANGES = open(os.path.join(here, 'CHANGES.txt')).read()
+CHANGES = open(os.path.join(here, 'RELEASE_CHANGES.rst')).read()
 
 requires = [
     #core deps
@@ -43,7 +43,7 @@ requires = [
 ]
 
 setup(name='elita',
-      version="0.62.1",
+      version="0.62.2",
       description='Continuous deployment (continuous delivery) and infrastructure management REST framework',
       long_description=README + '\n\n' + CHANGES,
       license='Apache',
