@@ -271,6 +271,8 @@ class RollingDeployController:
             assert deploy_doc
             if deploy_doc['status'] == 'error':
                 self.datasvc.jobsvc.NewJobData({"message": "detected failed deployment so aborting further batches"})
+                self.datasvc.jobsvc.NewJobData({"RollingDeployment": "error"})
+                self.run_hook("AUTO_DEPLOYMENT_FAILED", application, build_name, batches)
                 return False
 
             if i != (len(batches)-1):

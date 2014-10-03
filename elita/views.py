@@ -102,6 +102,13 @@ class GenericView:
     def get_created_datetime_text(self):
         return self.context.created_datetime.isoformat(' ') if hasattr(self.context, 'created_datetime') else None
 
+    def sanitize_doc_created_datetime(self, doc):
+        assert doc
+        assert elita.util.type_check.is_dictlike(doc)
+        if 'created_datetime' in doc:
+            doc['created_datetime'] = doc['created_datetime'].isoformat(' ')
+        return doc
+
     def run_async(self, name, job_type, data, callable, args):
         jid = action.run_async(self.datasvc, name, job_type, data, callable, args)
         return {
@@ -346,7 +353,7 @@ class ApplicationView(GenericView):
             return err
         self.datasvc.appsvc.UpdateApplication(self.context.app_name, self.body)
         return {
-            'modified_application': self.datasvc.appsvc.GetApplication(self.context.app_name)
+            'modified_application': self.sanitize_doc_created_datetime(self.datasvc.appsvc.GetApplication(self.context.app_name))
         }
 
 class ActionContainerView(GenericView):
@@ -519,7 +526,7 @@ class BuildView(GenericView):
             return err
         self.datasvc.buildsvc.UpdateBuild(self.context.app_name, self.context.build_name, self.body)
         return {
-            'modifed_build': self.datasvc.buildsvc.GetBuild(self.context.app_name, self.context.build_name)
+            'modifed_build': self.sanitize_doc_created_datetime(self.datasvc.buildsvc.GetBuild(self.context.app_name, self.context.build_name))
         }
 
     def DELETE(self):
@@ -601,7 +608,7 @@ class ServerView(GenericView):
             return err
         self.datasvc.serversvc.UpdateServer(self.context.name, self.body)
         return {
-            'modified_server': self.datasvc.serversvc.GetServer(self.context.name)
+            'modified_server': self.sanitize_doc_created_datetime(self.datasvc.serversvc.GetServer(self.context.name))
         }
 
     def DELETE(self):
@@ -885,7 +892,7 @@ class KeyPairView(GenericView):
             return err
         self.datasvc.keysvc.UpdateKeyPair(self.context.name, self.body)
         return {
-            'modifed_keypair': self.datasvc.keysvc.GetKeyPair(self.context.name)
+            'modifed_keypair': self.sanitize_doc_created_datetime(self.datasvc.keysvc.GetKeyPair(self.context.name))
         }
 
     def DELETE(self):
@@ -958,7 +965,7 @@ class GitProviderView(GenericView):
             return err
         self.datasvc.gitsvc.UpdateGitProvider(self.context.name)
         return {
-            'modifed_gitprovider': self.datasvc.gitsvc.GetGitProvider(self.context.name)
+            'modifed_gitprovider': self.sanitize_doc_created_datetime(self.datasvc.gitsvc.GetGitProvider(self.context.name))
         }
 
     def DELETE(self):
@@ -1062,7 +1069,7 @@ class GitRepoView(GenericView):
             return err
         self.datasvc.gitsvc.UpdateGitRepo(self.context.application, self.context.name, self.body)
         return {
-            'modified_gitrepo': self.datasvc.gitsvc.GetGitRepo(self.context.application, self.context.name)
+            'modified_gitrepo': self.sanitize_doc_created_datetime(self.datasvc.gitsvc.GetGitRepo(self.context.application, self.context.name))
         }
 
     def DELETE(self):
@@ -1230,7 +1237,7 @@ class GitDeployView(GenericView):
         self.datasvc.gitsvc.UpdateGitDeploy(self.context.application, self.context.name, self.body)
         gd = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
         return {
-            'modified_gitdeploy': gd,
+            'modified_gitdeploy': self.sanitize_doc_created_datetime(gd),
             'message': self.run_async("create_gitdeploy", "async", {'gitdeploy': gd['name']},
                              elita.deployment.gitservice.create_gitdeploy, {'gitdeploy': gd})
         }
@@ -1362,7 +1369,7 @@ class GroupView(GenericView):
             return err
         self.datasvc.groupsvc.UpdateGroup(self.context.application, self.context.name, self.body)
         return {
-            'modified_group': self.datasvc.groupsvc.GetGroup(self.context.application, self.context.name)
+            'modified_group': self.sanitize_doc_created_datetime(self.datasvc.groupsvc.GetGroup(self.context.application, self.context.name))
         }
 
     def DELETE(self):
@@ -1465,7 +1472,7 @@ class PackageMapView(GenericView):
             return err
         self.datasvc.pmsvc.UpdatePackageMap(self.context.application, self.context.name, self.body)
         return {
-            'modified_packagemap': self.datasvc.pmsvc.GetPackageMap(self.context.application, self.context.name)
+            'modified_packagemap': self.sanitize_doc_created_datetime(self.datasvc.pmsvc.GetPackageMap(self.context.application, self.context.name))
         }
 
     def DELETE(self):
@@ -1591,7 +1598,7 @@ class UserView(GenericView):
             return err
         self.datasvc.usersvc.UpdateUser(self.context.username, self.body)
         return {
-            'modified_user': self.datasvc.usersvc.GetUser(self.context.username)
+            'modified_user': self.sanitize_doc_created_datetime(self.datasvc.usersvc.GetUser(self.context.username))
         }
 
 

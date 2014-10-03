@@ -490,6 +490,12 @@ class UserDataService(GenericChildDataService):
         assert elita.util.type_check.is_dictlike(doc)
         assert name in self.root['global']['users']
 
+        if "password" in doc:
+            user = User(doc)
+            doc['hashed_pw'] = user.hashed_pw
+            doc['salt'] = user.salt
+            doc['password'] = None
+
         self.UpdateObject('users', {'username': name}, doc)
 
 
@@ -1880,10 +1886,11 @@ class User(GenericDataModel):
     }
 
     def init_hook(self):
-        assert self.hashed_pw is not None or self.password is not None
-        self.salt = base64.urlsafe_b64encode(uuid.uuid4().bytes) if self.salt is None else self.salt
-        self.hashed_pw = self.hash_pw(self.password) if self.hashed_pw is None else self.hashed_pw
-        self.password = None
+        assert self.hashed_pw or self.password
+        if self.password:   # new or changed password
+            self.salt = base64.urlsafe_b64encode(uuid.uuid4().bytes)
+            self.hashed_pw = self.hash_pw(self.password)
+            self.password = None
 
     def hash_pw(self, pw):
         assert pw is not None
@@ -1892,8 +1899,6 @@ class User(GenericDataModel):
     def validate_password(self, pw):
         return self.hashed_pw == self.hash_pw(pw)
 
-    def change_password(self, new_pw):
-        self.hashed_pw = self.hash_pw(new_pw)
 
 #dummy model. Values are computed for each request
 class UserPermissions(GenericDataModel):
@@ -2345,7 +2350,7 @@ class DataValidator:
             for o in ('apps', 'actions', 'servers'):
                 if o not in u['permissions']:
                     logging.warning("{} not found in permissions object for user {}; fixing with empty "
-                                        "obj".format(o, u['name']))
+                                        "obj".format(o, u['username']))
                     u['permissions'][o] = list() if o == 'servers' else dict()
             if not isinstance(u['permissions']['servers'], list):
                 logging.warning("servers key under permissions object for user {} is not a list; fixing"
