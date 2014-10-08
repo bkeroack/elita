@@ -74,21 +74,27 @@ class BatchCompute:
             for g in nonrolling_docs:
                 servers = nonrolling_docs[g]['servers']
                 gitdeploys = nonrolling_docs[g]['gitdeploys']
-                if isinstance(nonrolling_docs[g]['gitdeploys'][0], list):
+                ordered = isinstance(nonrolling_docs[g]['gitdeploys'][0], list)
+                if ordered:
                     for i, gdb in enumerate(nonrolling_docs[g]['gitdeploys']):
                         if i > len(non_rolling_batches)-1:
                             non_rolling_batches.append({'gitdeploys': gdb, 'servers': servers})
                         else:
                             non_rolling_batches[i]['servers'] = list(set(servers + non_rolling_batches[i]['servers']))
                             non_rolling_batches[i]['gitdeploys'] = list(set(gdb + non_rolling_batches[i]['gitdeploys']))
+                        if i == len(nonrolling_docs[g]['gitdeploys'])-1:
+                            non_rolling_batches[i]['ordered_gitdeploy'] = False
+                        else:
+                            non_rolling_batches[i]['ordered_gitdeploy'] = True
                 else:
-                    non_rolling_batches.append({'gitdeploys': gitdeploys, 'servers': servers})
+                    non_rolling_batches.append({'gitdeploys': gitdeploys, 'servers': servers, 'ordered_gitdeploy': False})
             for i, nrb in enumerate(non_rolling_batches):
                 if i > len(batches)-1:
                     batches.append(nrb)
                 else:
                     batches[i]['servers'] = list(set(nrb['servers'] + batches[i]['servers']))
                     batches[i]['gitdeploys'] = list(set(nrb['gitdeploys'] + batches[i]['gitdeploys']))
+                    batches[i]['ordered_gitdeploy'] = nrb['ordered_gitdeploy']
         return batches
 
     @staticmethod
@@ -103,7 +109,9 @@ class BatchCompute:
         '''
         assert len(batches) > 0
         assert all(map(lambda x: 'servers' in x and 'gitdeploys' in x, batches))
-        return map(lambda x: {"servers": list(set(x['servers'])), "gitdeploys": list(set(elita.util.flatten_list(x['gitdeploys'])))}, batches)
+        return map(lambda x: {"servers": list(set(x['servers'])),
+                              "gitdeploys": list(set(elita.util.flatten_list(x['gitdeploys']))),
+                              "ordered_gitdeploy": x['ordered_gitdeploy']}, batches)
 
     @staticmethod
     def reduce_group_batches(accumulated, update):
@@ -137,9 +145,10 @@ class BatchCompute:
                 lambda acc, upd:
                 {
                     'servers': acc['servers'] + upd['servers'],
-                    'gitdeploys': acc['gitdeploys'] + upd['gitdeploys']
+                    'gitdeploys': acc['gitdeploys'] + upd['gitdeploys'],
+                    'ordered_gitdeploy': acc['ordered_gitdeploy'] and upd['ordered_gitdeploy']
                 }, batch_aggregate
-            ), itertools.izip_longest(*batches, fillvalue={"servers": [], "gitdeploys": []}))
+            ), itertools.izip_longest(*batches, fillvalue={"servers": [], "gitdeploys": [], "ordered_gitdeploy": False}))
 
     @staticmethod
     def compute_group_batches(divisor, group):
@@ -157,14 +166,22 @@ class BatchCompute:
         gitdeploys = group[1]['gitdeploys']
         server_batches = elita.util.split_seq(servers, divisor)
         gd_multiplier = len(server_batches)  # gitdeploy_batches multipler
-        if isinstance(gitdeploys[0], list):
+        ordered = isinstance(gitdeploys[0], list)
+        if ordered:
             # duplicate all server batches by the length of the gitdeploy list-of-lists
             server_batches = [x for item in server_batches for x in itertools.repeat(item, len(gitdeploys))]
             gitdeploy_batches = list(gitdeploys) * gd_multiplier
+            ordered_flags = [True] * (len(gitdeploys) - 1)
+            ordered_flags.append(False)
+            ordered_flags = ordered_flags * gd_multiplier
         else:
             gitdeploy_batches = [gitdeploys] * gd_multiplier
+            ordered_flags = [False] * gd_multiplier
         assert len(gitdeploy_batches) == len(server_batches)
-        return [{'servers': sb, 'gitdeploys': gd} for sb, gd in zip(server_batches, gitdeploy_batches)]
+        batches = [{'servers': sb, 'gitdeploys': gd, 'ordered_gitdeploy': of}
+                   for sb, gd, of in zip(server_batches, gitdeploy_batches, ordered_flags)]
+        return batches
+
 
     @staticmethod
     def compute_rolling_batches(divisor, rolling_group_docs, nonrolling_group_docs):

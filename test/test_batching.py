@@ -89,6 +89,7 @@ def test_rolling_batches():
     assert sorted(batches[0]['servers']) == sorted(['server0', 'server1', 'server4', 'server5'])
     assert sorted(batches[1]['servers']) == sorted(['server2', 'server3', 'server6', 'server7'])
     assert all([sorted(x['gitdeploys']) == sorted(['gd0', 'gd1', 'gd2']) for x in batches])
+    assert not any([x['ordered_gitdeploy'] for x in batches])
 
 
 def test_rolling_and_nonrolling_batches():
@@ -106,6 +107,7 @@ def test_rolling_and_nonrolling_batches():
     assert sorted(batches[1]['servers']) == sorted(['server2', 'server3', 'server6', 'server7'])
     assert sorted(batches[0]['gitdeploys']) == sorted(['gd0', 'gd1', 'gd2', 'gd3'])
     assert sorted(batches[1]['gitdeploys']) == sorted(['gd0', 'gd1', 'gd2'])
+    assert not any([x['ordered_gitdeploy'] for x in batches])
 
 def test_ordered_rolling_batches():
     '''
@@ -121,6 +123,8 @@ def test_ordered_rolling_batches():
     assert all([sorted(batches[x]['gitdeploys']) == sorted(['gd4', 'gd5']) for x in (1, 3)])
     assert all([sorted(batches[x]['servers']) == sorted(['server12', 'server10']) for x in (0, 1)])
     assert all([sorted(batches[x]['servers']) == sorted(['server11', 'server13']) for x in (2, 3)])
+    assert all([x['ordered_gitdeploy'] for x in batches[0::2]])
+    assert not any([x['ordered_gitdeploy'] for x in batches[1::2]])
 
 
 def test_ordered_and_unordered_rolling_batches():
@@ -133,6 +137,7 @@ def test_ordered_and_unordered_rolling_batches():
 
     assert len(batches) == 4
     assert all(["servers" in x and "gitdeploys" in x for x in batches])
+    assert not any([x['ordered_gitdeploy'] for x in batches])
 
     server_batch_mapping = generate_server_batch_mapping(batches)
     for s in server_batch_mapping:
@@ -150,6 +155,8 @@ def test_simulated_scorebig_mixed_groups():
 
     assert len(batches) == 4
     assert all(["servers" in x and "gitdeploys" in x for x in batches])
+    assert all([x['ordered_gitdeploy'] for x in batches[0::2]])
+    assert not any([x['ordered_gitdeploy'] for x in batches[1::2]])
 
     server_batch_mapping = generate_server_batch_mapping(batches)
     for s in server_batch_mapping:
@@ -167,6 +174,7 @@ def test_simulated_scorebig_unordered_groups():
 
     assert len(batches) == 2
     assert all(["servers" in x and "gitdeploys" in x for x in batches])
+    assert batches[0]['ordered_gitdeploy'] and not batches[1]['ordered_gitdeploy']
 
     server_batch_mapping = generate_server_batch_mapping(batches)
     for s in server_batch_mapping:
