@@ -19,7 +19,7 @@ class FatalDeploymentError(Exception):
     pass
 
 #async callable
-def run_deploy(datasvc, application, build_name, target, rolling_divisor, rolling_pause, deployment_id):
+def run_deploy(datasvc, application, build_name, target, rolling_divisor, rolling_pause, ordered_pause, deployment_id):
     '''
     Asynchronous entry point for deployments
     '''
@@ -32,7 +32,7 @@ def run_deploy(datasvc, application, build_name, target, rolling_divisor, rollin
             logging.debug("run_deploy: Doing rolling deployment")
             dc = DeployController(datasvc, deployment_id)
             rdc = RollingDeployController(datasvc, dc, deployment_id)
-            ret = rdc.run(application, build_name, target, rolling_divisor, rolling_pause)
+            ret = rdc.run(application, build_name, target, rolling_divisor, rolling_pause, ordered_pause)
         else:
             logging.debug("run_deploy: Doing manual deployment")
             dc = DeployController(datasvc, deployment_id)
@@ -238,7 +238,7 @@ class RollingDeployController:
             args['hook_parameters']['batch'] = batches[batch_number]
         self.datasvc.actionsvc.hooks.run_hook(application, name, args)
 
-    def run(self, application, build_name, target, rolling_divisor, rolling_pause, parallel=True):
+    def run(self, application, build_name, target, rolling_divisor, rolling_pause, ordered_pause, parallel=True):
         '''
         Run rolling deployment. This should be called iff the deployment is called via groups/environments
         '''
@@ -293,10 +293,13 @@ class RollingDeployController:
                 return False
 
             if i != (len(batches)-1):
-                msg = "pausing for {} seconds between batches".format(rolling_pause)
+                pause = ordered_pause if b['ordered_gitdeploy'] else rolling_pause
+                msg = "pausing for {} seconds between batches ({})".format(pause,
+                                                                           "ordered" if b['ordered_gitdeploy']
+                                                                           else "batch complete")
                 self.datasvc.jobsvc.NewJobData({"RollingDeployment": msg})
                 logging.debug("RollingDeployController: {}".format(msg))
-                time.sleep(rolling_pause)
+                time.sleep(pause)
 
         #run post hook
         self.run_hook("AUTO_DEPLOYMENT_COMPLETE", application, build_name, batches, target=target)

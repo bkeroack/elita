@@ -778,6 +778,8 @@ Execute Deployment
    :type rolling_divisor: positive integer
    :param rolling_pause: (optional) pause for N seconds between rolling batches. Default is 15.
    :type rolling_pause: positive integer
+   :param ordered_pause: (optional) pause for N seconds between ordered gitdeploy batches. Default is 15.
+   :type rolling_pause: positive integer
    :jsonparam string body: JSON object containing deployment target specification
 
    Perform a deployment.
@@ -792,6 +794,16 @@ Execute Deployment
    calculate the servers and gitdeploys that satisfy both specifications and--if the relevant groups require it--
    will perform an automatic batched rolling deploy.
 
+   **Pause Options**
+
+   The "rolling_pause" parameter is the number of seconds to wait between batches (the total number of servers split using
+   the rolling_divisor parameter). If any groups contain ordered gitdeploys, the batches will be further split into batches
+   to enforce the ordering.
+
+   For example, if rolling_divisor is two (2), without ordering the servers would be split into two evenly sized batches.
+   If each group had a set of two ordered gitdeploys, the servers would be split into four (4) batches. Batches 1 and 3
+   would be "ordered" batches and, after complete, would result in a pause of ordered_pause seconds. Batch 2 would result
+   in a rolling_pause (batch 4 is last and so would not have any pause afterward).
 
    **Example request (manual)**:
 

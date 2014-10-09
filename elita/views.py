@@ -670,19 +670,23 @@ class DeploymentContainerView(GenericView):
             "servers": list(),
             "gitdeploys": list()
         }
-        try:
-            rolling_divisor = int(self.req.params['rolling_divisor']) if 'rolling_divisor' in self.req.params else 2
-        except ValueError:
-            return self.Error(400, "invalid rolling_divisor")
-        if rolling_divisor < 1:
-            return self.Error(400, "invalid rolling_divisor: {}".format(rolling_divisor))
+        integer_params = {  # defaults
+            "rolling_divisor": 2,
+            "rolling_pause": 15,
+            "ordered_pause": 15
+        }
+        for p in integer_params.keys():
+            try:
+                if p in self.req.params:
+                    integer_params[p] = int(self.req.params[p])
+            except ValueError:
+                return self.Error(400, "invalid {}".format(p))
+            if integer_params[p] < 1:
+                return self.Error(400, "invalid {}: {}".format(p, integer_params[p]))
 
-        try:
-            rolling_pause = int(self.req.params['rolling_pause']) if 'rolling_pause' in self.req.params else 15
-        except ValueError:
-            return self.Error(400, "invalid rolling_pause")
-        if rolling_pause < 1:
-            return self.Error(400, "invalid rolling_pause: {}".format(rolling_pause))
+        rolling_divisor = integer_params['rolling_divisor']
+        rolling_pause = integer_params['rolling_pause']
+        ordered_pause = integer_params['ordered_pause']
 
         if "environments" in body and "groups" in body:
 
@@ -764,7 +768,8 @@ class DeploymentContainerView(GenericView):
 
         environments = body['environments'] if 'environments' in body else None
         groups = body['groups'] if 'groups' in body else None
-        dpo = self.datasvc.deploysvc.NewDeployment(app, build_name, environments, groups, target['servers'], target['gitdeploys'])
+        dpo = self.datasvc.deploysvc.NewDeployment(app, build_name, environments, groups, target['servers'],
+                                                   target['gitdeploys'], integer_params)
         d_id = dpo['NewDeployment']['id']
         target['environments'] = environments if isinstance(environments, list) else None
         target['groups'] = groups if isinstance(groups, list) else None
@@ -774,6 +779,7 @@ class DeploymentContainerView(GenericView):
             'target': target,
             'rolling_divisor': rolling_divisor,
             'rolling_pause': rolling_pause,
+            'ordered_pause': ordered_pause,
             'deployment_id': d_id
         }
         msg = self.run_async('deploy_{}_{}'.format(app,  build_name), "deployment", args,

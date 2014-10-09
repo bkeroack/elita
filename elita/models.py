@@ -1275,15 +1275,16 @@ class GitDataService(GenericChildDataService):
         self.mongo_service.delete('gitrepos', {'name': name, 'application': app})
 
 class DeploymentDataService(GenericChildDataService):
-    def NewDeployment(self, app, build_name, environments, groups, servers, gitdeploys):
+    def NewDeployment(self, app, build_name, environments, groups, servers, gitdeploys, options):
         '''
         Create new deployment object
 
         @rtype: dict
         '''
-        assert app and build_name and ((environments and groups) or (servers and gitdeploys))
+        assert app and build_name and options and ((environments and groups) or (servers and gitdeploys))
         assert elita.util.type_check.is_string(app)
         assert elita.util.type_check.is_string(build_name)
+        assert elita.util.type_check.is_dictlike(options)
         assert app in self.root['app']
         assert build_name in self.root['app'][app]['builds']
         assert all([not p for p in (environments, groups)]) or all([elita.util.type_check.is_seq(p) for p in (environments, groups)])
@@ -1302,6 +1303,7 @@ class DeploymentDataService(GenericChildDataService):
             'groups': groups,
             'servers': servers,
             'gitdeploys': gitdeploys,
+            'options': options,
             'status': 'created',
             'job_id': ''
         })
@@ -1814,6 +1816,7 @@ class Deployment(GenericDataModel):
         'groups': None,
         'servers': None,
         'gitdeploys': None,
+        'options': dict(),  # pauses, divisor
         'status': None,
         'commits': dict(),    # { gitrepo_name: commit_hash }
         'progress': {

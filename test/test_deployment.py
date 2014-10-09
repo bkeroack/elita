@@ -121,7 +121,7 @@ def test_rolling_deployment(mockRD, mockGitDeployManager, mockRemoteCommands, mo
                 "environments": ["testing"],
                 "gitdeploys": list(set(gp0['gitdeploys'] + gp1['gitdeploys'])),
                 "servers": list(set(gp0['servers'] + gp1['servers']))
-            }, 2, 0, parallel=False)
+            }, 2, 0, 0, parallel=False)
 
     #assert False
 
