@@ -645,7 +645,7 @@ class DeploymentContainerView(GenericView):
         return {
             'application': self.context.parent,
             'deployments': self.datasvc.deploysvc.GetDeployments(self.context.parent, sort="desc",
-                                                                 with_creation_time=True)
+                                                                 with_details=True)
         }
 
     @validate_parameters(required_params=['build_name'])

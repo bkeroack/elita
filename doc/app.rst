@@ -779,7 +779,7 @@ Execute Deployment
    :param rolling_pause: (optional) pause for N seconds between rolling batches. Default is 15.
    :type rolling_pause: positive integer
    :param ordered_pause: (optional) pause for N seconds between ordered gitdeploy batches. Default is 15.
-   :type rolling_pause: positive integer
+   :type ordered_pause: positive integer
    :jsonparam string body: JSON object containing deployment target specification
 
    Perform a deployment.

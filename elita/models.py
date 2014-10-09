@@ -1321,7 +1321,7 @@ class DeploymentDataService(GenericChildDataService):
             }
         }
 
-    def GetDeployments(self, app, sort=False, with_creation_time=False):
+    def GetDeployments(self, app, sort=False, with_details=False):
         '''
         Get a list of all deployments for application.
 
@@ -1337,8 +1337,10 @@ class DeploymentDataService(GenericChildDataService):
         #pymongo does not easily let you sort by generation_time internally, so we have to hack it here
         if sort:
             deployments = sorted(deployments, key=lambda d: d['_id'].generation_time, reverse=(sort == "desc"))
-        if with_creation_time:
-            return [{"name": doc['name'], "created": doc['_id'].generation_time.isoformat(' ')} for doc in deployments]
+        if with_details:
+            return [{"name": doc['name'],
+                     "created": doc['_id'].generation_time.isoformat(' '),
+                     "status": doc['status']} for doc in deployments]
         else:
             return [doc['name'] for doc in deployments]
 
