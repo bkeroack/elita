@@ -674,7 +674,7 @@ View Group
    :type name: string (space-delimited list of environment names)
 
    View individual group. If *environments* is specified, the servers listed will be filtered by the environments
-   specified.
+   specified (will return servers present in *any* of the environments passed).
 
    The server list returned is dynamically calculated based on the gitdeploys initialized on servers at the time the
    request is made.

@@ -760,10 +760,12 @@ class GroupDataService(GenericChildDataService):
         # list of lists if necessary
         server_sets = [set(self.deps['GitDataService'].GetGitDeploy(app, gd)['servers']) for sublist in group['gitdeploys'] for gd in sublist] if isinstance(group['gitdeploys'][0], list) else [set(self.deps['GitDataService'].GetGitDeploy(app, gd)['servers']) for gd in group['gitdeploys']]
         if environments:
+            server_env_set = set()
             envs = self.deps['ServerDataService'].GetEnvironments()
             for e in environments:
                 assert e in envs
-                server_sets.append(set(envs[e]))
+                server_env_set = set(envs[e]).union(server_env_set)
+            server_sets.append(server_env_set)
         return list(set.intersection(*server_sets))
 
     def UpdateGroup(self, app, name, doc):
