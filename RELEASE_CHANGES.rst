@@ -1,3 +1,6 @@
+0.63.1
+    - Allow zero second rolling/ordered deployment pauses. Make zero the default.
+
 0.63.0
 
     - Add ability to specify different delays between ordered gitdeploy batches and regular batches

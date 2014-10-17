@@ -775,10 +775,10 @@ Execute Deployment
    :param build_name: name of build to deploy
    :type build_name: string
    :param rolling_divisor: (optional) divisor for calculating rolling batches ("split into N batches"). Default is 2.
-   :type rolling_divisor: positive integer
-   :param rolling_pause: (optional) pause for N seconds between rolling batches. Default is 15.
-   :type rolling_pause: positive integer
-   :param ordered_pause: (optional) pause for N seconds between ordered gitdeploy batches. Default is 15.
+   :type rolling_divisor: zero or positive integer
+   :param rolling_pause: (optional) pause for N seconds between rolling batches. Default is 0.
+   :type rolling_pause: zero or positive integer
+   :param ordered_pause: (optional) pause for N seconds between ordered gitdeploy batches. Default is 0.
    :type ordered_pause: positive integer
    :jsonparam string body: JSON object containing deployment target specification
 

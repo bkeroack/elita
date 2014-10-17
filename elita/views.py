@@ -672,8 +672,8 @@ class DeploymentContainerView(GenericView):
         }
         integer_params = {  # defaults
             "rolling_divisor": 2,
-            "rolling_pause": 15,
-            "ordered_pause": 15
+            "rolling_pause": 0,
+            "ordered_pause": 0
         }
         for p in integer_params.keys():
             try:
@@ -681,7 +681,7 @@ class DeploymentContainerView(GenericView):
                     integer_params[p] = int(self.req.params[p])
             except ValueError:
                 return self.Error(400, "invalid {}".format(p))
-            if integer_params[p] < 1:
+            if integer_params[p] < (1 if p == "rolling_divisor" else 0):
                 return self.Error(400, "invalid {}: {}".format(p, integer_params[p]))
 
         rolling_divisor = integer_params['rolling_divisor']
