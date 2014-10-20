@@ -1,3 +1,7 @@
+0.63.2
+    - Fix ability for admin or other user with admin permissions to view user object endpoints (GET /global/users/{username})
+    - Change output format of user endpoint to be consistent with other objects (JSON response has top-level "user" key instead of "message")
+
 0.63.1
     - Allow zero second rolling/ordered deployment pauses. Make zero the default.
 

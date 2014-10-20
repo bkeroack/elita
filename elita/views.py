@@ -21,12 +21,11 @@ import elita_exceptions
 import elita.deployment.deploy
 import elita.util
 
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+#logging.basicConfig(level=logging.DEBUG)
+#logger = logging.getLogger()
 #lh = logging.StreamHandler(sys.stdout)
 #lh.setLevel(logging.DEBUG)
-#logger.addHandler(lh)
+#logging.addHandler(lh)
 
 AFFIRMATIVE_SYNONYMS = ("true", "True", "TRUE", "yup", "yep", "yut", "yes", "yea", "aye", "please", "si", "sim")
 
@@ -86,7 +85,7 @@ class GenericView:
 
     def __init__(self, context, request, app_name="_global", permissionless=False, allow_pw_auth=False, is_action=False):
         self.required_params = {"GET": [], "PUT": [], "POST": [], "DELETE": []}  # { reqverb: [ params ] }
-        logger.debug("{}: {} ; {}".format(self.__class__.__name__, context.__class__.__name__, request.subpath))
+        logging.debug("{}: {} ; {}".format(self.__class__.__name__, context.__class__.__name__, request.subpath))
         self.req = request
         self.db = request.db
         self.datasvc = request.datasvc
@@ -244,6 +243,7 @@ class GenericView:
 
 
     def status_ok(self, msg):
+
         return {'status': 'ok', 'message': msg}
 
     def Success(self):
@@ -285,10 +285,10 @@ class GenericView:
 class NotFoundView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, permissionless=True)
-        logger.debug("REQUEST: url: {}".format(request.url))
-        logger.debug("REQUEST: context: {}".format(context.__class__.__name__))
-        logger.debug("REQUEST: method: {}".format(request.method))
-        logger.debug("REQUEST: params: {}".format(request.params))
+        logging.debug("REQUEST: url: {}".format(request.url))
+        logging.debug("REQUEST: context: {}".format(context.__class__.__name__))
+        logging.debug("REQUEST: method: {}".format(request.method))
+        logging.debug("REQUEST: params: {}".format(request.params))
 
     def notfound(self):
         return self.Error(404, "not found (404)")
@@ -305,7 +305,7 @@ class NotFoundView(GenericView):
 @view_config(context=Exception, renderer='json')
 def ExceptionView(exc, request):
     exc_type, exc_obj, tb = sys.exc_info()
-    logger.exception("")
+    logging.exception("")
     body = {
         "status": "error",
         "error": {
@@ -481,10 +481,10 @@ class BuildView(GenericView):
         return self.run_build_storage(builds.store_indirect_build, {'uri': uri, 'verify': verify})
 
     def direct_upload(self):
-        logger.debug("BuildView: direct_upload")
+        logging.debug("BuildView: direct_upload")
         if 'build' in self.req.POST:
             fname = self.req.POST['build'].filename
-            logger.debug("BuildView: PUT: filename: {}".format(fname))
+            logging.debug("BuildView: PUT: filename: {}".format(fname))
             fd, temp_file = tempfile.mkstemp()
             os.close(fd)
             with open(temp_file, 'wb') as f:
@@ -867,7 +867,7 @@ class KeyPairContainerView(GenericView):
         name = self.req.params['name']
         key_type = self.req.params['key_type']
         attributes = dict()
-        logger.debug("POST keys: {}".format(self.req.POST.keys()))
+        logging.debug("POST keys: {}".format(self.req.POST.keys()))
         for kt in ("private_key", "public_key"):
             if kt not in self.req.POST:
                 return self.Error(400, "{} not found in POST data".format(kt))
@@ -1016,7 +1016,7 @@ class GitRepoContainerView(GenericView):
             gp_doc = self.datasvc.gitsvc.GetGitProvider(gitprovider)
             if not gp_doc:
                 return self.Error(400, "unkown gitprovider")
-            logger.debug("GitRepoContainerView: gp_doc: {}".format(gp_doc))
+            logging.debug("GitRepoContainerView: gp_doc: {}".format(gp_doc))
             repo_callable = elita.deployment.gitservice.create_repo_callable_from_type(gp_doc['type'])
             if not repo_callable:
                 return self.Error(400, "gitprovider type not supported ({})".format(gp_doc['type']))
@@ -1269,7 +1269,7 @@ class GitDeployView(GenericView):
                 if self.context.name in group['gitdeploys']:
                     delete_groups.append(g)
             for g in delete_groups:
-                logger.debug("deleting group: {} (application: {})".format(g, self.context.application))
+                logging.debug("deleting group: {} (application: {})".format(g, self.context.application))
                 self.datasvc.appsvc.DeleteGroup(self.context.application, g)
             groups_deleted = True
 
@@ -1572,15 +1572,12 @@ class UserView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, allow_pw_auth=True)  # allow both pw and auth_token auth
 
-    def status_ok_with_token(self, username):
-        return self.status_ok({"username": username, "permissions": self.context.permissions,
-                               "attributes": self.context.attributes,
-                               "auth_token": self.datasvc.usersvc.GetUserTokens(username)})
-
     def check_password(self):
         if 'password' in self.req.params:
             if not self.context.validate_password(self.req.params['password']):
                 return False, self.Error(403, "incorrect password")
+            else:
+                return True, None
         elif ('auth_token' not in self.req.params) and ('Auth-Token' not in self.req.headers):
             return False, self.Error(403, "password or auth token required")
         else:
@@ -1594,12 +1591,12 @@ class UserView(GenericView):
                 if 'read' in k:
                     if '_global' in allowed_apps[k]:
                         global_read = True
-            if not authsvc.valid_token or authsvc.username != self.context.username or not global_read:
-                logging.debug("valid_token: {}".format(authsvc.valid_token))
-                logging.debug("usernames: {}, {}".format(authsvc.username, self.context.username))
-                logging.debug("allowed_apps: {}".format(authsvc.get_allowed_apps()))
-                return False, self.Error(403, "bad token")
-        return True, None
+            if authsvc.valid_token and (global_read or authsvc.username == self.context.username):
+                return True, None
+        logging.debug("valid_token: {}".format(authsvc.valid_token))
+        logging.debug("usernames: {}, {}".format(authsvc.username, self.context.username))
+        logging.debug("allowed_apps: {}".format(authsvc.get_allowed_apps()))
+        return False, self.Error(403, "bad token")
 
     def GET(self):
         # another ugly. we want to support both password auth and valid tokens, but only tokens from the same user or
@@ -1610,7 +1607,14 @@ class UserView(GenericView):
         name = self.context.username
         if len(self.datasvc.usersvc.GetUserTokens(name)) == 0:
             self.datasvc.usersvc.NewToken(name)
-        return self.status_ok_with_token(name)
+        return {
+            "user": {
+                "username": name,
+                "permissions": self.context.permissions,
+                "attributes": self.context.attributes,
+                "auth_token": self.datasvc.usersvc.GetUserTokens(name)
+            }
+        }
 
     @validate_parameters(json_body={})
     def PATCH(self):
@@ -1701,18 +1705,18 @@ def Action(context, request):
     '''
     Default unnamed 'root' view that gets called for every request that doesn't 404 during traversal
     '''
-    logger.debug("REQUEST: url: {}".format(request.url))
-    logger.debug("REQUEST: context: {}".format(context.__class__.__name__))
-    logger.debug("REQUEST: method: {}".format(request.method))
-    logger.debug("REQUEST: params: {}".format(request.params))
+    logging.debug("REQUEST: url: {}".format(request.url))
+    logging.debug("REQUEST: context: {}".format(context.__class__.__name__))
+    logging.debug("REQUEST: method: {}".format(request.method))
+    logging.debug("REQUEST: params: {}".format(request.params))
 
     pp = pprint.PrettyPrinter(indent=4)
     if context.__class__.__name__ == 'Action':
-        logger.debug("REQUEST: action")
+        logging.debug("REQUEST: action")
         mobj = context
         cname = "Action"
     else:
-        logger.debug("REQUEST: context.doc: {}".format(pp.pformat(context.doc)))
+        logging.debug("REQUEST: context.doc: {}".format(pp.pformat(context.doc)))
         cname = context.doc['_class']
         try:
             mobj = models.__dict__[cname](context.doc)
@@ -1722,7 +1726,7 @@ def Action(context, request):
                 'error': "Server object not accessible via salt"
             }
 
-    logger.debug("Model class: {}".format(cname))
+    logging.debug("Model class: {}".format(cname))
 
     view_class = globals()[cname + "View"]
 
