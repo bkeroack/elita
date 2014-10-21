@@ -1,3 +1,6 @@
+0.63.3
+    - Don't allow users to change their own permissions
+
 0.63.2
     - Fix ability for admin or other user with admin permissions to view user object endpoints (GET /global/users/{username})
     - Change output format of user endpoint to be consistent with other objects (JSON response has top-level "user" key instead of "message")

@@ -16,12 +16,15 @@ class ValidatePermissionsObject:
         return isinstance(self.permissions, dict)
 
     def verify_top_keys(self):
-        for t in self.permissions:
-            try:
-                assert (t == "apps") or (t == "actions") or (t == "servers")
-            except AssertionError:
-                return False
-        return True
+        if self.permissions:
+            for t in self.permissions:
+                try:
+                    assert (t == "apps") or (t == "actions") or (t == "servers")
+                except AssertionError:
+                    return False
+            return True
+        else:
+            return False
 
     def verify_perm_keys(self):
         #perm keys can be basically anything

@@ -1570,7 +1570,7 @@ class JobContainerView(GenericView):
 
 class UserView(GenericView):
     def __init__(self, context, request):
-        GenericView.__init__(self, context, request, allow_pw_auth=True)  # allow both pw and auth_token auth
+        GenericView.__init__(self, context, request, permissionless=True)  # we do validation here, not GenericView
 
     def check_password(self):
         if 'password' in self.req.params:
@@ -1586,12 +1586,16 @@ class UserView(GenericView):
             token = self.req.params.getall('auth_token')[0] if 'auth_token' in self.req.params else self.req.headers['Auth-Token']
             authsvc = auth.UserPermissions(self.datasvc.usersvc, token, datasvc=self.datasvc)
             allowed_apps = authsvc.get_allowed_apps()
-            global_read = False
+            self.global_read = False
+            self.global_write = False
             for k in allowed_apps:
                 if 'read' in k:
                     if '_global' in allowed_apps[k]:
-                        global_read = True
-            if authsvc.valid_token and (global_read or authsvc.username == self.context.username):
+                        self.global_read = True
+                if 'write' in k:
+                    if '_global' in allowed_apps[k]:
+                        self.global_write = True
+            if authsvc.valid_token and (self.global_read or authsvc.username == self.context.username):
                 return True, None
         logging.debug("valid_token: {}".format(authsvc.valid_token))
         logging.debug("usernames: {}, {}".format(authsvc.username, self.context.username))
@@ -1624,6 +1628,11 @@ class UserView(GenericView):
         ok, err = self.check_patch_keys()
         if not ok:
             return err
+        if 'permissions' in self.body:
+            if not self.global_write:
+                return self.Error(403, "only admins can change user permissions")
+            if not auth.ValidatePermissionsObject(self.body["permissions"]).run():
+                return self.Error(400, "invalid permissions object (valid JSON but semantically incorrect)")
         self.datasvc.usersvc.UpdateUser(self.context.username, self.body)
         return {
             'modified_user': self.sanitize_doc_created_datetime(self.datasvc.usersvc.GetUser(self.context.username))
