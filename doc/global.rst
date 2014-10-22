@@ -176,7 +176,7 @@ Create User
 
    .. sourcecode:: bash
 
-      $ curl -XPOST '/global/users?username=joe&password=1234' -d '
+      $ curl -XPUT '/global/users?username=joe&password=1234' -d '
       {
         "attributes": {
             "address": "123 Spring Street, Knoxville, TN 012345"
