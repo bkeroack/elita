@@ -1602,6 +1602,15 @@ class UserView(GenericView):
         logging.debug("allowed_apps: {}".format(authsvc.get_allowed_apps()))
         return False, self.Error(403, "bad token")
 
+    def DELETE(self):
+        ok, err = self.check_password()
+        if not ok:
+            return err
+        if not self.global_write:
+            return self.Error(403, "only admins can delete users")
+        self.datasvc.usersvc.DeleteUser(self.context.username)
+        return self.status_ok({"user_deleted": {"username": self.context.username}})
+
     def GET(self):
         # another ugly. we want to support both password auth and valid tokens, but only tokens from the same user or
         #  with the '_global' permission.
