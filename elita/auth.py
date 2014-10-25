@@ -68,9 +68,6 @@ class UserPermissions:
         return self.token in self.usersvc.GetAllTokens()
 
     def get_allowed_apps(self, username=None):
-        '''Returns list of tuples: (appname, permissions ('read;write'))'''
-        if not self.valid_token:
-            return {}
         if not username:
             username = self.username
         user = self.usersvc.GetUser(username)

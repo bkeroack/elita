@@ -1,3 +1,7 @@
+0.63.4
+    - Fix computed user permissions endpoint (applications was blank) (GET /global/users/{username}/permissions)
+    - Fix gitdeploy endpoint exception (GET /app/{appname}/gitdeploys/{gitdeploy_name})
+
 0.63.3
     - Don't allow users to change their own permissions
 

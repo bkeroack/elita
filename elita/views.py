@@ -1162,6 +1162,7 @@ class GitDeployView(GenericView):
         gddoc = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
         #re-reference embedded
         gddoc['location']['gitrepo'] = gddoc['location']['gitrepo']['name']
+        gddoc['created_datetime'] = self.get_created_datetime_text()
         return {k: gddoc[k] for k in gddoc if k[0] != '_'}
 
     def check_servers_list(self, body):
@@ -1660,7 +1661,6 @@ class UserPermissionsView(GenericView):
         return auth.UserPermissions(self.datasvc.usersvc, None, datasvc=self.datasvc).get_allowed_actions(self
                                                                                                           .context
                                                                                                           .username)
-
     def compute_server_perms(self):
         return auth.UserPermissions(self.datasvc.usersvc, None, datasvc=self.datasvc).get_allowed_servers(self
                                                                                                           .context
