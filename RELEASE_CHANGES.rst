@@ -1,3 +1,10 @@
+0.63.5
+    - Fix authentication for application container endpoint (GET /app):
+        * GET - application list will only show applications for which user has at least read permission
+        * DELETE - request will succeed iff user has write permission for the requested application
+        * PUT - request will succeed iff user has '_global' write permission (admin privileges, essentially)
+        * (previously user required '_global' permissions for all verbs)
+
 0.63.4
     - Fix computed user permissions endpoint (applications was blank) (GET /global/users/{username}/permissions)
     - Fix gitdeploy endpoint exception (GET /app/{appname}/gitdeploys/{gitdeploy_name})

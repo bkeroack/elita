@@ -90,6 +90,16 @@ class UserPermissions:
                 perms_dict[perm] = set(apps)
         return {k: list(perms_dict[k]) for k in perms_dict}
 
+    def get_allowed_app_list(self, permission="read", username=None):
+        if not username:
+            username = self.username
+        allowed_apps = self.get_allowed_apps(username=username)
+        output = set()
+        for k in allowed_apps:
+            if permission in k:
+                [output.add(a) for a in allowed_apps[k]]
+        return list(output)
+
     def get_allowed_actions(self, username):
         '''Returns list of tuples: (appname, actionname). If present, 'execute' permission is implicit'''
         user = self.usersvc.GetUser(username)

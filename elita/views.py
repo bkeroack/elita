@@ -137,6 +137,38 @@ class GenericView:
     def get_unknown(self, existing, submitted):
         return list(set(submitted) - set(existing))
 
+    def user_check_password(self):
+        ''' Used by UserView/UserPermissionsView to verify password or auth_token (but only token from the context user)
+        '''
+        if 'password' in self.req.params:
+            if not self.context.validate_password(self.req.params['password']):
+                return False, self.Error(403, "incorrect password")
+            else:
+                return True, None
+        elif ('auth_token' not in self.req.params) and ('Auth-Token' not in self.req.headers):
+            return False, self.Error(403, "password or auth token required")
+        else:
+            if 'auth_token' in self.req.params and len(self.req.params.getall('auth_token')) > 1:  # multiple auth tokens
+                return False, self.Error(403, "incorrect authentication")
+            token = self.req.params.getall('auth_token')[0] if 'auth_token' in self.req.params else self.req.headers['Auth-Token']
+            authsvc = auth.UserPermissions(self.datasvc.usersvc, token, datasvc=self.datasvc)
+            allowed_apps = authsvc.get_allowed_apps()
+            self.global_read = False
+            self.global_write = False
+            for k in allowed_apps:
+                if 'read' in k:
+                    if '_global' in allowed_apps[k]:
+                        self.global_read = True
+                if 'write' in k:
+                    if '_global' in allowed_apps[k]:
+                        self.global_write = True
+            if authsvc.valid_token and (self.global_read or authsvc.username == self.context.username):
+                return True, None
+        logging.debug("valid_token: {}".format(authsvc.valid_token))
+        logging.debug("usernames: {}, {}".format(authsvc.username, self.context.username))
+        logging.debug("allowed_apps: {}".format(authsvc.get_allowed_apps()))
+        return False, self.Error(403, "bad token")
+
     def check_patch_keys(self):
         '''
         Verify that the keys in the provided JSON body are a strict subset of the keys in the context object.
@@ -203,6 +235,21 @@ class GenericView:
             pass
         return True, None
 
+    def get_submitted_token(self):
+        if 'auth_token' in self.req.params or 'Auth-Token' in self.req.headers:
+            if 'auth_token' in self.req.params and 'Auth-Token' in self.req.headers:
+                #if both are specified on one request it's an error condition
+                return False, None
+            else:
+                submitted_tokens = self.req.params.getall('auth_token') if 'auth_token' in self.req.params else \
+                    [self.req.headers['Auth-Token']]
+                if len(submitted_tokens) != 1:  # multiple auth tokens are an error condition
+                    return False, None
+                else:
+                    return True, submitted_tokens[0]
+        else:
+            return False, None
+
     def setup_permissions(self, app_name):
         if self.permissionless:
             self.permissions = "read;write"
@@ -215,17 +262,8 @@ class GenericView:
             elif "password" in self.req.params:  # both pw and auth token provided, fail the request
                 self.permissions = ""
                 return
-        if 'auth_token' in self.req.params or 'Auth-Token' in self.req.headers:
-            if 'auth_token' in self.req.params and 'Auth-Token' in self.req.headers:
-                #if both are specified on one request it's an error condition
-                token = ''
-            else:
-                submitted_tokens = self.req.params.getall('auth_token') if 'auth_token' in self.req.params else \
-                    [self.req.headers['Auth-Token']]
-                if len(submitted_tokens) != 1:  # multiple auth tokens are an error condition
-                    token = ''
-                else:
-                    token = submitted_tokens[0]
+        ok, token = self.get_submitted_token()
+        if ok:
             if self.is_action and self.req.method == 'POST':
                 self.permissions = auth.UserPermissions(self.datasvc.usersvc, token).get_action_permissions(app_name,
                                                                                       self.context.action_name)
@@ -316,14 +354,27 @@ def ExceptionView(exc, request):
 
 class ApplicationContainerView(GenericView):
     def __init__(self, context, request):
-        GenericView.__init__(self, context, request)
+        GenericView.__init__(self, context, request, permissionless=True)
 
     def validate_app_name(self, name):
         return name in self.datasvc.appsvc.GetApplications()
 
+    def get_app_permissions(self, permission="read"):
+        ok, token = self.get_submitted_token()
+        if ok:
+            authsvc = auth.UserPermissions(self.datasvc.usersvc, token, datasvc=self.datasvc)
+            return True, authsvc.get_allowed_app_list(permission=permission)
+        else:
+            return False, []
+
     @validate_parameters(required_params=["app_name"])
     def PUT(self):
         app_name = self.req.params["app_name"]
+        ok, allowed_apps = self.get_app_permissions("write")
+        if not ok:
+            return self.Error(401, "insufficient permissions")
+        if '_global' not in allowed_apps:
+            return self.Error(401, "insufficient permissions to create applications")
         self.datasvc.appsvc.NewApplication(app_name)
         return self.return_action_status({"new_application": {"name": app_name}})
 
@@ -332,11 +383,23 @@ class ApplicationContainerView(GenericView):
         app_name = self.req.params["app_name"]
         if not self.validate_app_name(app_name):
             return self.Error(400, "app name '{}' not found".format(app_name))
+        ok, allowed_apps = self.get_app_permissions("write")
+        if not ok:
+            return self.Error(401, "insufficient permissions")
+        if app_name not in allowed_apps or '_global' not in allowed_apps:
+            return self.Error(401, "not authorized to delete application '{}'".format(app_name))
         self.datasvc.appsvc.DeleteApplication(app_name)
         return self.return_action_status({"delete_application": app_name})
 
     def GET(self):
-        return {"applications": self.datasvc.appsvc.GetApplications()}
+        '''
+        Only return a list of applications the user has at least "read" access to
+        '''
+        ok, allowed_apps = self.get_app_permissions()
+        if not ok:
+            return self.Error(401, "insufficient permissions")
+        else:
+            return {"applications": [a for a in allowed_apps if a != '_global']}
 
 
 class ApplicationView(GenericView):
@@ -1573,38 +1636,8 @@ class UserView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, permissionless=True)  # we do validation here, not GenericView
 
-    def check_password(self):
-        if 'password' in self.req.params:
-            if not self.context.validate_password(self.req.params['password']):
-                return False, self.Error(403, "incorrect password")
-            else:
-                return True, None
-        elif ('auth_token' not in self.req.params) and ('Auth-Token' not in self.req.headers):
-            return False, self.Error(403, "password or auth token required")
-        else:
-            if 'auth_token' in self.req.params and len(self.req.params.getall('auth_token')) > 1:  # multiple auth tokens
-                return False, self.Error(403, "incorrect authentication")
-            token = self.req.params.getall('auth_token')[0] if 'auth_token' in self.req.params else self.req.headers['Auth-Token']
-            authsvc = auth.UserPermissions(self.datasvc.usersvc, token, datasvc=self.datasvc)
-            allowed_apps = authsvc.get_allowed_apps()
-            self.global_read = False
-            self.global_write = False
-            for k in allowed_apps:
-                if 'read' in k:
-                    if '_global' in allowed_apps[k]:
-                        self.global_read = True
-                if 'write' in k:
-                    if '_global' in allowed_apps[k]:
-                        self.global_write = True
-            if authsvc.valid_token and (self.global_read or authsvc.username == self.context.username):
-                return True, None
-        logging.debug("valid_token: {}".format(authsvc.valid_token))
-        logging.debug("usernames: {}, {}".format(authsvc.username, self.context.username))
-        logging.debug("allowed_apps: {}".format(authsvc.get_allowed_apps()))
-        return False, self.Error(403, "bad token")
-
     def DELETE(self):
-        ok, err = self.check_password()
+        ok, err = self.user_check_password()
         if not ok:
             return err
         if not self.global_write:
@@ -1615,7 +1648,7 @@ class UserView(GenericView):
     def GET(self):
         # another ugly. we want to support both password auth and valid tokens, but only tokens from the same user or
         #  with the '_global' permission.
-        ok, err = self.check_password()
+        ok, err = self.user_check_password()
         if not ok:
             return err
         name = self.context.username
@@ -1632,7 +1665,7 @@ class UserView(GenericView):
 
     @validate_parameters(json_body={})
     def PATCH(self):
-        ok, err = self.check_password()
+        ok, err = self.user_check_password()
         if not ok:
             return err
         ok, err = self.check_patch_keys()
@@ -1651,7 +1684,7 @@ class UserView(GenericView):
 
 class UserPermissionsView(GenericView):
     def __init__(self, context, request):
-        GenericView.__init__(self, context, request, allow_pw_auth=True)
+        GenericView.__init__(self, context, request, permissionless=True)
 
     def compute_app_perms(self):
         return auth.UserPermissions(self.datasvc.usersvc, None, datasvc=self.datasvc).get_allowed_apps(self.context
@@ -1667,6 +1700,9 @@ class UserPermissionsView(GenericView):
                                                                                                           .username)
 
     def GET(self):
+        ok, err = self.user_check_password()
+        if not ok:
+            return err
         return {
             'username': self.context.username,
             'applications': self.compute_app_perms(),
