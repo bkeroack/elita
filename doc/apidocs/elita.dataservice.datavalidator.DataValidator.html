@@ -1,0 +1,514 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+          "DTD/xhtml1-strict.dtd">
+<html>
+  <head>
+    <title>elita.dataservice.datavalidator.DataValidator : API documentation</title>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+    <link href="apidocs.css" type="text/css" rel="stylesheet" />
+    
+    
+  </head>
+  <body>
+    <h1 class="class">e.d.d.DataValidator : class documentation</h1>
+    <p>
+      <span id="part">Part of <a href="elita.html">elita</a>.<a href="elita.dataservice.html">dataservice</a>.<a href="elita.dataservice.datavalidator.html">datavalidator</a></span>
+      
+      <a href="classIndex.html#elita.dataservice.datavalidator.DataValidator">View In Hierarchy</a>
+    </p>
+    <div>
+      
+    </div>
+    <div class="docstring">
+      <div><p>Responsible for:</p>
+<ul>
+  <li>
+    Creating proper data model/root_tree on first run
+  </li>
+  <li>
+    Validating that data isn't broken/inconsistent
+  </li>
+  <li>
+    Running migrations between versions
+  </li>
+</ul><table class="fieldTable"></table></div>
+    </div>
+
+    
+    <div id="splitTables">
+      <table class="children sortable" id="id45">
+  
+  
+  <tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.datavalidator.DataValidator.html#__init__">__init__</a></td>
+    <td></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.datavalidator.DataValidator.html#run">run</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.datavalidator.DataValidator.html#SaveRoot">SaveRoot</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.datavalidator.DataValidator.html#NewContainer">NewContainer</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.datavalidator.DataValidator.html#check_doc_consistency">check_doc_consistency</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="staticmethod">
+    
+    
+    <td>Static Method</td>
+    <td><a href="elita.dataservice.datavalidator.DataValidator.html#check_root_refs">check_root_refs</a></td>
+    <td><span>Recurse into obj, find DBRefs, check if they are valid</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.datavalidator.DataValidator.html#check_root_references">check_root_references</a></td>
+    <td><span>Check that every DBRef in the root tree points to a valid document</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.datavalidator.DataValidator.html#check_global">check_global</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.datavalidator.DataValidator.html#check_users">check_users</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.datavalidator.DataValidator.html#check_user_permissions">check_user_permissions</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.datavalidator.DataValidator.html#check_jobs">check_jobs</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.datavalidator.DataValidator.html#check_apps">check_apps</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.datavalidator.DataValidator.html#check_servers">check_servers</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.datavalidator.DataValidator.html#check_deployments">check_deployments</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.datavalidator.DataValidator.html#check_gitdeploys">check_gitdeploys</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.datavalidator.DataValidator.html#check_gitrepos">check_gitrepos</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.datavalidator.DataValidator.html#check_groups">check_groups</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.datavalidator.DataValidator.html#check_toplevel">check_toplevel</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.datavalidator.DataValidator.html#check_containers">check_containers</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.datavalidator.DataValidator.html#check_root">check_root</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr>
+</table>
+      
+    </div>
+    
+    
+
+    <div class="function">
+  <a name="elita.dataservice.datavalidator.DataValidator.__init__">
+    
+  </a>
+  <a name="__init__">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    __init__(self, settings, root, db):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.datavalidator.DataValidator.run">
+    
+  </a>
+  <a name="run">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    run(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.datavalidator.DataValidator.SaveRoot">
+    
+  </a>
+  <a name="SaveRoot">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    SaveRoot(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.datavalidator.DataValidator.NewContainer">
+    
+  </a>
+  <a name="NewContainer">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    NewContainer(self, class_name, name, parent):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.datavalidator.DataValidator.check_doc_consistency">
+    
+  </a>
+  <a name="check_doc_consistency">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    check_doc_consistency(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.datavalidator.DataValidator.check_root_refs">
+    
+  </a>
+  <a name="check_root_refs">
+    
+  </a>
+  <div class="functionHeader">
+    @staticmethod<br />
+    def
+    check_root_refs(db, obj):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Recurse into obj, find DBRefs, check if they are valid</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.datavalidator.DataValidator.check_root_references">
+    
+  </a>
+  <a name="check_root_references">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    check_root_references(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Check that every DBRef in the root tree points to a valid document</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.datavalidator.DataValidator.check_global">
+    
+  </a>
+  <a name="check_global">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    check_global(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.datavalidator.DataValidator.check_users">
+    
+  </a>
+  <a name="check_users">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    check_users(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.datavalidator.DataValidator.check_user_permissions">
+    
+  </a>
+  <a name="check_user_permissions">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    check_user_permissions(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.datavalidator.DataValidator.check_jobs">
+    
+  </a>
+  <a name="check_jobs">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    check_jobs(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.datavalidator.DataValidator.check_apps">
+    
+  </a>
+  <a name="check_apps">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    check_apps(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.datavalidator.DataValidator.check_servers">
+    
+  </a>
+  <a name="check_servers">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    check_servers(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.datavalidator.DataValidator.check_deployments">
+    
+  </a>
+  <a name="check_deployments">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    check_deployments(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.datavalidator.DataValidator.check_gitdeploys">
+    
+  </a>
+  <a name="check_gitdeploys">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    check_gitdeploys(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.datavalidator.DataValidator.check_gitrepos">
+    
+  </a>
+  <a name="check_gitrepos">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    check_gitrepos(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.datavalidator.DataValidator.check_groups">
+    
+  </a>
+  <a name="check_groups">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    check_groups(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.datavalidator.DataValidator.check_toplevel">
+    
+  </a>
+  <a name="check_toplevel">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    check_toplevel(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.datavalidator.DataValidator.check_containers">
+    
+  </a>
+  <a name="check_containers">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    check_containers(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.datavalidator.DataValidator.check_root">
+    
+  </a>
+  <a name="check_root">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    check_root(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div>
+    <address>
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-10-29 15:25:55.
+    </address>
+  </body>
+</html>

@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+          "DTD/xhtml1-strict.dtd">
+<html>
+  <head>
+    <title>elita.dataservice.GenericChildDataService : API documentation</title>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+    <link href="apidocs.css" type="text/css" rel="stylesheet" />
+    
+    
+  </head>
+  <body>
+    <h1 class="class">e.d.GenericChildDataService : class documentation</h1>
+    <p>
+      <span id="part">Part of <a href="elita.html">elita</a>.<a href="elita.dataservice.html">dataservice</a></span>
+      
+      <a href="classIndex.html#elita.dataservice.GenericChildDataService">View In Hierarchy</a>
+    </p>
+    <div>
+      <p>Known subclasses: <a href="elita.dataservice.ApplicationDataService.html">elita.dataservice.ApplicationDataService</a>, <a href="elita.dataservice.BuildDataService.html">elita.dataservice.BuildDataService</a>, <a href="elita.dataservice.DeploymentDataService.html">elita.dataservice.DeploymentDataService</a>, <a href="elita.dataservice.GitDataService.html">elita.dataservice.GitDataService</a>, <a href="elita.dataservice.GroupDataService.html">elita.dataservice.GroupDataService</a>, <a href="elita.dataservice.JobDataService.html">elita.dataservice.JobDataService</a>, <a href="elita.dataservice.KeyDataService.html">elita.dataservice.KeyDataService</a>, <a href="elita.dataservice.PackageMapDataService.html">elita.dataservice.PackageMapDataService</a>, <a href="elita.dataservice.ServerDataService.html">elita.dataservice.ServerDataService</a>, <a href="elita.dataservice.UserDataService.html">elita.dataservice.UserDataService</a></p>
+    </div>
+    <div class="docstring">
+      <div class="undocumented">No class docstring</div>
+    </div>
+
+    
+    <div id="splitTables">
+      <table class="children sortable" id="id22">
+  
+  
+  <tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#__init__">__init__</a></td>
+    <td><span class="undocumented">No summary</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#populate_dependencies">populate_dependencies</a></td>
+    <td><span>Child dataservice classes may need to access methods of siblings. This 
+allows parent dataservice to inject cross dependencies as needed without 
+generating a big reference cycle.</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#NewContainer">NewContainer</a></td>
+    <td><span>Create new container object suitable for a root_tree reference</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#UpdateObjectFromPatch">UpdateObjectFromPatch</a></td>
+    <td><span>Generic method to update an object (document) with a JSON Patch 
+document</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#UpdateObject">UpdateObject</a></td>
+    <td><span>Generic method to update a particular object (document) with the data in
+doc</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#AddThreadLocalRootTree">AddThreadLocalRootTree</a></td>
+    <td><span>Add new node to thread-local root_tree (copy from mongo's root_tree)</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#RmThreadLocalRootTree">RmThreadLocalRootTree</a></td>
+    <td><span>Remove deleted node from thread-local root_tree</span></td>
+  </tr>
+</table>
+      
+    </div>
+    
+    
+
+    <div class="function">
+  <a name="elita.dataservice.GenericChildDataService.__init__">
+    
+  </a>
+  <a name="__init__">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    __init__(self, mongo_service, root, settings, job_id=None):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GenericChildDataService.populate_dependencies">
+    
+  </a>
+  <a name="populate_dependencies">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    populate_dependencies(self, dependency_objs):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Child dataservice classes may need to access methods of siblings. This 
+allows parent dataservice to inject cross dependencies as needed without 
+generating a big reference cycle.</p>
+<p>dependency_objs = { 'FooDataService': FooDataService }</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GenericChildDataService.NewContainer">
+    
+  </a>
+  <a name="NewContainer">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    NewContainer(self, class_name, name, parent):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Create new container object suitable for a root_tree reference</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GenericChildDataService.UpdateObjectFromPatch">
+    
+  </a>
+  <a name="UpdateObjectFromPatch">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    UpdateObjectFromPatch(self, collection, keys, patch):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Generic method to update an object (document) with a JSON Patch 
+document</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GenericChildDataService.UpdateObject">
+    
+  </a>
+  <a name="UpdateObject">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    UpdateObject(self, collection, keys, doc):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Generic method to update a particular object (document) with the data in
+doc</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GenericChildDataService.AddThreadLocalRootTree">
+    
+  </a>
+  <a name="AddThreadLocalRootTree">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    AddThreadLocalRootTree(self, path):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Add new node to thread-local root_tree (copy from mongo's root_tree)</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GenericChildDataService.RmThreadLocalRootTree">
+    
+  </a>
+  <a name="RmThreadLocalRootTree">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    RmThreadLocalRootTree(self, path):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Remove deleted node from thread-local root_tree</p><table class="fieldTable"></table></div>
+  </div>
+</div>
+    <address>
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-10-29 15:25:55.
+    </address>
+  </body>
+</html>

@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+          "DTD/xhtml1-strict.dtd">
+<html>
+  <head>
+    <title>elita.dataservice.BuildDataService : API documentation</title>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+    <link href="apidocs.css" type="text/css" rel="stylesheet" />
+    
+    
+  </head>
+  <body>
+    <h1 class="class">e.d.BuildDataService(<a href="elita.dataservice.GenericChildDataService.html">GenericChildDataService</a>) : class documentation</h1>
+    <p>
+      <span id="part">Part of <a href="elita.html">elita</a>.<a href="elita.dataservice.html">dataservice</a></span>
+      
+      <a href="classIndex.html#elita.dataservice.BuildDataService">View In Hierarchy</a>
+    </p>
+    <div>
+      
+    </div>
+    <div class="docstring">
+      <div class="undocumented">No class docstring</div>
+    </div>
+
+    
+    <div id="splitTables">
+      <table class="children sortable" id="id23">
+  
+  
+  <tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.BuildDataService.html#GetBuilds">GetBuilds</a></td>
+    <td><span>Get all builds for application.</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.BuildDataService.html#NewBuild">NewBuild</a></td>
+    <td><span>Create new build document</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.BuildDataService.html#AddPackages">AddPackages</a></td>
+    <td><span>Add new packages fields to existing build. Regenerate legacy 'files' 
+field (which is a flat array of files associated with build</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.BuildDataService.html#UpdateBuild">UpdateBuild</a></td>
+    <td><span>Update build with doc (JSON Patch or keys to update).</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.BuildDataService.html#DeleteBuildStorage">DeleteBuildStorage</a></td>
+    <td><span>Delete all stored files associated with build.</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.BuildDataService.html#DeleteBuild">DeleteBuild</a></td>
+    <td><span>Delete build object, root_tree reference and all stored files.</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.BuildDataService.html#GetBuild">GetBuild</a></td>
+    <td><span>Get build document</span></td>
+  </tr>
+</table>
+      <invisible>
+        <p>
+          Inherited from <a href="elita.dataservice.GenericChildDataService.html">GenericChildDataService</a>:
+        </p>
+        <table class="children sortable" id="id24">
+  
+  
+  <tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#__init__">__init__</a></td>
+    <td><span class="undocumented">No summary</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#populate_dependencies">populate_dependencies</a></td>
+    <td><span>Child dataservice classes may need to access methods of siblings. This 
+allows parent dataservice to inject cross dependencies as needed without 
+generating a big reference cycle.</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#NewContainer">NewContainer</a></td>
+    <td><span>Create new container object suitable for a root_tree reference</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#UpdateObjectFromPatch">UpdateObjectFromPatch</a></td>
+    <td><span>Generic method to update an object (document) with a JSON Patch 
+document</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#UpdateObject">UpdateObject</a></td>
+    <td><span>Generic method to update a particular object (document) with the data in
+doc</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#AddThreadLocalRootTree">AddThreadLocalRootTree</a></td>
+    <td><span>Add new node to thread-local root_tree (copy from mongo's root_tree)</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#RmThreadLocalRootTree">RmThreadLocalRootTree</a></td>
+    <td><span>Remove deleted node from thread-local root_tree</span></td>
+  </tr>
+</table>
+      </invisible>
+    </div>
+    
+    
+
+    <div class="function">
+  <a name="elita.dataservice.BuildDataService.GetBuilds">
+    
+  </a>
+  <a name="GetBuilds">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetBuilds(self, app_name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get all builds for application.</p>
+<p>When getting a list of all objects of a given type, the convention is to
+pull from in-memory root_tree instead of directly from mongo. This keeps it
+fast so we can do it frequently for things like parameter validation, 
+etc</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.BuildDataService.NewBuild">
+    
+  </a>
+  <a name="NewBuild">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    NewBuild(self, app_name, build_name, attribs):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Create new build document</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.BuildDataService.AddPackages">
+    
+  </a>
+  <a name="AddPackages">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    AddPackages(self, app, build, packages):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Add new packages fields to existing build. Regenerate legacy 'files' 
+field (which is a flat array of files associated with build</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.BuildDataService.UpdateBuild">
+    
+  </a>
+  <a name="UpdateBuild">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    UpdateBuild(self, app, name, doc):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Update build with doc (JSON Patch or keys to update).</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.BuildDataService.DeleteBuildStorage">
+    
+  </a>
+  <a name="DeleteBuildStorage">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    DeleteBuildStorage(self, app_name, build_name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Delete all stored files associated with build.</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.BuildDataService.DeleteBuild">
+    
+  </a>
+  <a name="DeleteBuild">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    DeleteBuild(self, app_name, build_name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Delete build object, root_tree reference and all stored files.</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.BuildDataService.GetBuild">
+    
+  </a>
+  <a name="GetBuild">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetBuild(self, app_name, build_name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get build document</p><table class="fieldTable"></table></div>
+  </div>
+</div>
+    <address>
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-10-29 15:25:55.
+    </address>
+  </body>
+</html>

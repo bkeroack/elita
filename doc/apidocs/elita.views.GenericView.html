@@ -25,7 +25,7 @@
 
     
     <div id="splitTables">
-      <table class="children sortable" id="id109">
+      <table class="children sortable" id="id115">
   
   
   <tr class="method">
@@ -40,6 +40,14 @@
     <td>Method</td>
     <td><a href="elita.views.GenericView.html#get_created_datetime_text">get_created_datetime_text</a></td>
     <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.views.GenericView.html#sanitize_doc_created_datetime">sanitize_doc_created_datetime</a></td>
+    <td><span>created_datetime field in doc (as supplied by DataService) is a Python 
+datetime object and is not serializable to JSON. If field exists on doc, 
+convert to string in ISO format</span></td>
   </tr><tr class="method">
     
     
@@ -68,8 +76,23 @@
     
     
     <td>Method</td>
-    <td><a href="elita.views.GenericView.html#check_patch_keys">check_patch_keys</a></td>
-    <td><span class="undocumented">No summary</span></td>
+    <td><a href="elita.views.GenericView.html#get_username">get_username</a></td>
+    <td><span>Get username of requester</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.views.GenericView.html#user_check_password">user_check_password</a></td>
+    <td><span>Used by UserView/UserPermissionsView to verify password or auth_token 
+(but only token from the context user)</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.views.GenericView.html#check_patch_body">check_patch_body</a></td>
+    <td><span>Verify that the keys in the provided JSON body are either: a) a strict 
+subset of the keys in the context object; b) a valid JSON Patch document 
+only affecting valid paths</span></td>
   </tr><tr class="method">
     
     
@@ -87,6 +110,12 @@
     
     <td>Method</td>
     <td><a href="elita.views.GenericView.html#check_params">check_params</a></td>
+    <td><span class="undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.views.GenericView.html#get_submitted_token">get_submitted_token</a></td>
     <td><span class="undocumented">Undocumented</span></td>
   </tr><tr class="method">
     
@@ -220,6 +249,25 @@
     <div class="undocumented">Undocumented</div>
   </div>
 </div><div class="function">
+  <a name="elita.views.GenericView.sanitize_doc_created_datetime">
+    
+  </a>
+  <a name="sanitize_doc_created_datetime">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    sanitize_doc_created_datetime(self, doc):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>created_datetime field in doc (as supplied by DataService) is a Python 
+datetime object and is not serializable to JSON. If field exists on doc, 
+convert to string in ISO format</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
   <a name="elita.views.GenericView.run_async">
     
   </a>
@@ -288,26 +336,62 @@
     <div class="undocumented">Undocumented</div>
   </div>
 </div><div class="function">
-  <a name="elita.views.GenericView.check_patch_keys">
+  <a name="elita.views.GenericView.get_username">
     
   </a>
-  <a name="check_patch_keys">
+  <a name="get_username">
     
   </a>
   <div class="functionHeader">
     
     def
-    check_patch_keys(self):
+    get_username(self):
     
   </div>
   <div class="docstring functionBody">
     
-    <div><p>Verify that the keys in the provided JSON body are a strict subset of 
-the keys in the context object. For PATCH calls, we want to make sure that 
-the user is only trying to modify keys that actually exist in the data 
-model. PATCH should only ever be called on object endpoints (not 
-containers) so the context object will be the corresponding data model 
-object.</p><table class="fieldTable"></table></div>
+    <div><p>Get username of requester</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.views.GenericView.user_check_password">
+    
+  </a>
+  <a name="user_check_password">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    user_check_password(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Used by UserView/UserPermissionsView to verify password or auth_token 
+(but only token from the context user)</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.views.GenericView.check_patch_body">
+    
+  </a>
+  <a name="check_patch_body">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    check_patch_body(self, forbidden_keys=None):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <pre>Verify that the keys in the provided JSON body are either:
+ a) a strict subset of the keys in the context object;
+ b) a valid JSON Patch document only affecting valid paths
+
+For PATCH calls, we want to make sure that the user is only trying to modify keys that actually exist in the
+data model. PATCH should only ever be called on object endpoints (not containers) so the context object will be
+the corresponding data model object.</pre>
   </div>
 </div><div class="function">
   <a name="elita.views.GenericView.call_action">
@@ -354,6 +438,23 @@ object.</p><table class="fieldTable"></table></div>
     
     def
     check_params(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div class="undocumented">Undocumented</div>
+  </div>
+</div><div class="function">
+  <a name="elita.views.GenericView.get_submitted_token">
+    
+  </a>
+  <a name="get_submitted_token">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    get_submitted_token(self):
     
   </div>
   <div class="docstring functionBody">
@@ -527,7 +628,7 @@ object.</p><table class="fieldTable"></table></div>
     
   </div>
   <div class="docstring functionBody">
-    <div class="interfaceinfo">overridden in <a href="elita.views.ApplicationContainerView.html">elita.views.ApplicationContainerView</a>, <a href="elita.views.ApplicationView.html">elita.views.ApplicationView</a>, <a href="elita.views.BuildContainerView.html">elita.views.BuildContainerView</a>, <a href="elita.views.BuildView.html">elita.views.BuildView</a>, <a href="elita.views.GitDeployView.html">elita.views.GitDeployView</a>, <a href="elita.views.GitProviderContainerView.html">elita.views.GitProviderContainerView</a>, <a href="elita.views.GitProviderView.html">elita.views.GitProviderView</a>, <a href="elita.views.GitRepoContainerView.html">elita.views.GitRepoContainerView</a>, <a href="elita.views.GitRepoView.html">elita.views.GitRepoView</a>, <a href="elita.views.GroupContainerView.html">elita.views.GroupContainerView</a>, <a href="elita.views.GroupView.html">elita.views.GroupView</a>, <a href="elita.views.KeyPairContainerView.html">elita.views.KeyPairContainerView</a>, <a href="elita.views.KeyPairView.html">elita.views.KeyPairView</a>, <a href="elita.views.NotFoundView.html">elita.views.NotFoundView</a>, <a href="elita.views.PackageMapContainerView.html">elita.views.PackageMapContainerView</a>, <a href="elita.views.PackageMapView.html">elita.views.PackageMapView</a>, <a href="elita.views.RootView.html">elita.views.RootView</a>, <a href="elita.views.ServerContainerView.html">elita.views.ServerContainerView</a>, <a href="elita.views.ServerView.html">elita.views.ServerView</a>, <a href="elita.views.TokenContainerView.html">elita.views.TokenContainerView</a>, <a href="elita.views.TokenView.html">elita.views.TokenView</a>, <a href="elita.views.UserContainerView.html">elita.views.UserContainerView</a></div>
+    <div class="interfaceinfo">overridden in <a href="elita.views.ApplicationContainerView.html">elita.views.ApplicationContainerView</a>, <a href="elita.views.ApplicationView.html">elita.views.ApplicationView</a>, <a href="elita.views.BuildContainerView.html">elita.views.BuildContainerView</a>, <a href="elita.views.BuildView.html">elita.views.BuildView</a>, <a href="elita.views.GitDeployView.html">elita.views.GitDeployView</a>, <a href="elita.views.GitProviderContainerView.html">elita.views.GitProviderContainerView</a>, <a href="elita.views.GitProviderView.html">elita.views.GitProviderView</a>, <a href="elita.views.GitRepoContainerView.html">elita.views.GitRepoContainerView</a>, <a href="elita.views.GitRepoView.html">elita.views.GitRepoView</a>, <a href="elita.views.GroupContainerView.html">elita.views.GroupContainerView</a>, <a href="elita.views.GroupView.html">elita.views.GroupView</a>, <a href="elita.views.KeyPairContainerView.html">elita.views.KeyPairContainerView</a>, <a href="elita.views.KeyPairView.html">elita.views.KeyPairView</a>, <a href="elita.views.NotFoundView.html">elita.views.NotFoundView</a>, <a href="elita.views.PackageMapContainerView.html">elita.views.PackageMapContainerView</a>, <a href="elita.views.PackageMapView.html">elita.views.PackageMapView</a>, <a href="elita.views.RootView.html">elita.views.RootView</a>, <a href="elita.views.ServerContainerView.html">elita.views.ServerContainerView</a>, <a href="elita.views.ServerView.html">elita.views.ServerView</a>, <a href="elita.views.TokenContainerView.html">elita.views.TokenContainerView</a>, <a href="elita.views.TokenView.html">elita.views.TokenView</a>, <a href="elita.views.UserContainerView.html">elita.views.UserContainerView</a>, <a href="elita.views.UserView.html">elita.views.UserView</a></div>
     <div class="undocumented">Undocumented</div>
   </div>
 </div><div class="function">
@@ -617,7 +718,7 @@ object.</p><table class="fieldTable"></table></div>
   </div>
 </div>
     <address>
-      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-09-25 10:44:58.
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-10-29 15:25:55.
     </address>
   </body>
 </html>

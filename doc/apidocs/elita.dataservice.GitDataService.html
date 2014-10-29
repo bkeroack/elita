@@ -1,0 +1,445 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+          "DTD/xhtml1-strict.dtd">
+<html>
+  <head>
+    <title>elita.dataservice.GitDataService : API documentation</title>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+    <link href="apidocs.css" type="text/css" rel="stylesheet" />
+    
+    
+  </head>
+  <body>
+    <h1 class="class">e.d.GitDataService(<a href="elita.dataservice.GenericChildDataService.html">GenericChildDataService</a>) : class documentation</h1>
+    <p>
+      <span id="part">Part of <a href="elita.html">elita</a>.<a href="elita.dataservice.html">dataservice</a></span>
+      
+      <a href="classIndex.html#elita.dataservice.GitDataService">View In Hierarchy</a>
+    </p>
+    <div>
+      
+    </div>
+    <div class="docstring">
+      <div class="undocumented">No class docstring</div>
+    </div>
+
+    
+    <div id="splitTables">
+      <table class="children sortable" id="id37">
+  
+  
+  <tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GitDataService.html#NewGitDeploy">NewGitDeploy</a></td>
+    <td><span>Create new gitdeploy object. One of a few New* methods that returns 
+status of success/failure to the view layer @rtype dict</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GitDataService.html#GetGitDeploys">GetGitDeploys</a></td>
+    <td><span>Get all gitdeploys associated with application</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GitDataService.html#GetGitDeploy">GetGitDeploy</a></td>
+    <td><span>Get gitdeploy document. Dereference embedded DBrefs for convenience.</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GitDataService.html#UpdateGitDeploy">UpdateGitDeploy</a></td>
+    <td><span>Update gitdeploy object with the data in doc</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GitDataService.html#DeleteGitDeploy">DeleteGitDeploy</a></td>
+    <td><span>Delete a gitdeploy object and the root_tree reference</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GitDataService.html#GetGitProviders">GetGitProviders</a></td>
+    <td><span>Get all gitproviders</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GitDataService.html#GetGitProvider">GetGitProvider</a></td>
+    <td><span>Get gitprovider document</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GitDataService.html#NewGitProvider">NewGitProvider</a></td>
+    <td><span>Create new gitprovider object</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GitDataService.html#UpdateGitProvider">UpdateGitProvider</a></td>
+    <td><span>Modify gitprovider with the data in doc</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GitDataService.html#DeleteGitProvider">DeleteGitProvider</a></td>
+    <td><span>Delete gitprovider object and root_tree reference</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GitDataService.html#GetGitRepos">GetGitRepos</a></td>
+    <td><span>Get a list of all gitrepos associated with application</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GitDataService.html#GetGitRepo">GetGitRepo</a></td>
+    <td><span>Get gitrepo document</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GitDataService.html#NewGitRepo">NewGitRepo</a></td>
+    <td><span>Create new gitrepo object</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GitDataService.html#UpdateGitRepo">UpdateGitRepo</a></td>
+    <td><span>Update gitrepo with the data in doc</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GitDataService.html#DeleteGitRepo">DeleteGitRepo</a></td>
+    <td><span>Delete gitrepo object and root_tree reference</span></td>
+  </tr>
+</table>
+      <invisible>
+        <p>
+          Inherited from <a href="elita.dataservice.GenericChildDataService.html">GenericChildDataService</a>:
+        </p>
+        <table class="children sortable" id="id38">
+  
+  
+  <tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#__init__">__init__</a></td>
+    <td><span class="undocumented">No summary</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#populate_dependencies">populate_dependencies</a></td>
+    <td><span>Child dataservice classes may need to access methods of siblings. This 
+allows parent dataservice to inject cross dependencies as needed without 
+generating a big reference cycle.</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#NewContainer">NewContainer</a></td>
+    <td><span>Create new container object suitable for a root_tree reference</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#UpdateObjectFromPatch">UpdateObjectFromPatch</a></td>
+    <td><span>Generic method to update an object (document) with a JSON Patch 
+document</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#UpdateObject">UpdateObject</a></td>
+    <td><span>Generic method to update a particular object (document) with the data in
+doc</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#AddThreadLocalRootTree">AddThreadLocalRootTree</a></td>
+    <td><span>Add new node to thread-local root_tree (copy from mongo's root_tree)</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#RmThreadLocalRootTree">RmThreadLocalRootTree</a></td>
+    <td><span>Remove deleted node from thread-local root_tree</span></td>
+  </tr>
+</table>
+      </invisible>
+    </div>
+    
+    
+
+    <div class="function">
+  <a name="elita.dataservice.GitDataService.NewGitDeploy">
+    
+  </a>
+  <a name="NewGitDeploy">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    NewGitDeploy(self, name, app_name, package, options, actions, location, attributes):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <pre>Create new gitdeploy object. One of a few New* methods that returns status of success/failure to the view layer
+@rtype dict</pre>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GitDataService.GetGitDeploys">
+    
+  </a>
+  <a name="GetGitDeploys">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetGitDeploys(self, app):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get all gitdeploys associated with application</p><table class="fieldTable"><tr class="fieldStart"><td class="fieldName">Returns</td><td colspan="2"> (type: list)</td></tr></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GitDataService.GetGitDeploy">
+    
+  </a>
+  <a name="GetGitDeploy">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetGitDeploy(self, app, name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get gitdeploy document. Dereference embedded DBrefs for convenience.</p><table class="fieldTable"><tr class="fieldStart"><td class="fieldName">Returns</td><td colspan="2"> (type: dict)</td></tr></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GitDataService.UpdateGitDeploy">
+    
+  </a>
+  <a name="UpdateGitDeploy">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    UpdateGitDeploy(self, app, name, doc):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Update gitdeploy object with the data in doc</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GitDataService.DeleteGitDeploy">
+    
+  </a>
+  <a name="DeleteGitDeploy">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    DeleteGitDeploy(self, app, name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Delete a gitdeploy object and the root_tree reference</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GitDataService.GetGitProviders">
+    
+  </a>
+  <a name="GetGitProviders">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetGitProviders(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get all gitproviders</p><table class="fieldTable"><tr class="fieldStart"><td class="fieldName">Returns</td><td colspan="2"> (type: list(str) | None)</td></tr></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GitDataService.GetGitProvider">
+    
+  </a>
+  <a name="GetGitProvider">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetGitProvider(self, name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get gitprovider document</p><table class="fieldTable"><tr class="fieldStart"><td class="fieldName">Returns</td><td colspan="2"> (type: dict | None)</td></tr></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GitDataService.NewGitProvider">
+    
+  </a>
+  <a name="NewGitProvider">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    NewGitProvider(self, name, provider_type, auth):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Create new gitprovider object</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GitDataService.UpdateGitProvider">
+    
+  </a>
+  <a name="UpdateGitProvider">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    UpdateGitProvider(self, name, doc):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Modify gitprovider with the data in doc</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GitDataService.DeleteGitProvider">
+    
+  </a>
+  <a name="DeleteGitProvider">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    DeleteGitProvider(self, name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Delete gitprovider object and root_tree reference</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GitDataService.GetGitRepos">
+    
+  </a>
+  <a name="GetGitRepos">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetGitRepos(self, app):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get a list of all gitrepos associated with application</p><table class="fieldTable"><tr class="fieldStart"><td class="fieldName">Returns</td><td colspan="2"> (type: list(dict))</td></tr></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GitDataService.GetGitRepo">
+    
+  </a>
+  <a name="GetGitRepo">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetGitRepo(self, app, name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get gitrepo document</p><table class="fieldTable"><tr class="fieldStart"><td class="fieldName">Returns</td><td colspan="2"> (type: dict)</td></tr></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GitDataService.NewGitRepo">
+    
+  </a>
+  <a name="NewGitRepo">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    NewGitRepo(self, app, name, keypair, gitprovider, uri):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Create new gitrepo object</p><table class="fieldTable"><tr class="fieldStart"><td class="fieldName">Returns</td><td colspan="2"> (type: dict)</td></tr></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GitDataService.UpdateGitRepo">
+    
+  </a>
+  <a name="UpdateGitRepo">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    UpdateGitRepo(self, app, name, doc):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Update gitrepo with the data in doc</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GitDataService.DeleteGitRepo">
+    
+  </a>
+  <a name="DeleteGitRepo">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    DeleteGitRepo(self, app, name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Delete gitrepo object and root_tree reference</p><table class="fieldTable"></table></div>
+  </div>
+</div>
+    <address>
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-10-29 15:25:55.
+    </address>
+  </body>
+</html>

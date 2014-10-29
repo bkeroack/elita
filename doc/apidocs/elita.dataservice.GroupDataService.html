@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+          "DTD/xhtml1-strict.dtd">
+<html>
+  <head>
+    <title>elita.dataservice.GroupDataService : API documentation</title>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+    <link href="apidocs.css" type="text/css" rel="stylesheet" />
+    
+    
+  </head>
+  <body>
+    <h1 class="class">e.d.GroupDataService(<a href="elita.dataservice.GenericChildDataService.html">GenericChildDataService</a>) : class documentation</h1>
+    <p>
+      <span id="part">Part of <a href="elita.html">elita</a>.<a href="elita.dataservice.html">dataservice</a></span>
+      
+      <a href="classIndex.html#elita.dataservice.GroupDataService">View In Hierarchy</a>
+    </p>
+    <div>
+      
+    </div>
+    <div class="docstring">
+      <div class="undocumented">No class docstring</div>
+    </div>
+
+    
+    <div id="splitTables">
+      <table class="children sortable" id="id31">
+  
+  
+  <tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GroupDataService.html#GetGroups">GetGroups</a></td>
+    <td><span>Get all groups for application.</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GroupDataService.html#GetGroup">GetGroup</a></td>
+    <td><span>Get document for application group</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GroupDataService.html#NewGroup">NewGroup</a></td>
+    <td><span>Create new application group.</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GroupDataService.html#DeleteGroup">DeleteGroup</a></td>
+    <td><span>Delete a group object and root_tree reference</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GroupDataService.html#GetGroupServers">GetGroupServers</a></td>
+    <td><span>Build sets from initialized servers in each gitdeploy in the group, then
+take intersection of all the sets If environments specified, take 
+intersection with that set as well</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GroupDataService.html#UpdateGroup">UpdateGroup</a></td>
+    <td><span>Update group with keys in doc</span></td>
+  </tr>
+</table>
+      <invisible>
+        <p>
+          Inherited from <a href="elita.dataservice.GenericChildDataService.html">GenericChildDataService</a>:
+        </p>
+        <table class="children sortable" id="id32">
+  
+  
+  <tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#__init__">__init__</a></td>
+    <td><span class="undocumented">No summary</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#populate_dependencies">populate_dependencies</a></td>
+    <td><span>Child dataservice classes may need to access methods of siblings. This 
+allows parent dataservice to inject cross dependencies as needed without 
+generating a big reference cycle.</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#NewContainer">NewContainer</a></td>
+    <td><span>Create new container object suitable for a root_tree reference</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#UpdateObjectFromPatch">UpdateObjectFromPatch</a></td>
+    <td><span>Generic method to update an object (document) with a JSON Patch 
+document</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#UpdateObject">UpdateObject</a></td>
+    <td><span>Generic method to update a particular object (document) with the data in
+doc</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#AddThreadLocalRootTree">AddThreadLocalRootTree</a></td>
+    <td><span>Add new node to thread-local root_tree (copy from mongo's root_tree)</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#RmThreadLocalRootTree">RmThreadLocalRootTree</a></td>
+    <td><span>Remove deleted node from thread-local root_tree</span></td>
+  </tr>
+</table>
+      </invisible>
+    </div>
+    
+    
+
+    <div class="function">
+  <a name="elita.dataservice.GroupDataService.GetGroups">
+    
+  </a>
+  <a name="GetGroups">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetGroups(self, app):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get all groups for application.</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GroupDataService.GetGroup">
+    
+  </a>
+  <a name="GetGroup">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetGroup(self, app, name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get document for application group</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GroupDataService.NewGroup">
+    
+  </a>
+  <a name="NewGroup">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    NewGroup(self, app, name, gitdeploys, rolling_deploy=False, description='', attributes=None):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Create new application group.</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GroupDataService.DeleteGroup">
+    
+  </a>
+  <a name="DeleteGroup">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    DeleteGroup(self, app, name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Delete a group object and root_tree reference</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GroupDataService.GetGroupServers">
+    
+  </a>
+  <a name="GetGroupServers">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetGroupServers(self, app, name, environments=None, group_doc=None):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Build sets from initialized servers in each gitdeploy in the group, then
+take intersection of all the sets If environments specified, take 
+intersection with that set as well</p>
+<p>Allow caller to provide group_doc to prevent infinite recursion from 
+GetGroup calling GetGroupServers</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.GroupDataService.UpdateGroup">
+    
+  </a>
+  <a name="UpdateGroup">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    UpdateGroup(self, app, name, doc):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Update group with keys in doc</p><table class="fieldTable"></table></div>
+  </div>
+</div>
+    <address>
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-10-29 15:25:55.
+    </address>
+  </body>
+</html>

@@ -1,0 +1,334 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+          "DTD/xhtml1-strict.dtd">
+<html>
+  <head>
+    <title>elita.dataservice.UserDataService : API documentation</title>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+    <link href="apidocs.css" type="text/css" rel="stylesheet" />
+    
+    
+  </head>
+  <body>
+    <h1 class="class">e.d.UserDataService(<a href="elita.dataservice.GenericChildDataService.html">GenericChildDataService</a>) : class documentation</h1>
+    <p>
+      <span id="part">Part of <a href="elita.html">elita</a>.<a href="elita.dataservice.html">dataservice</a></span>
+      
+      <a href="classIndex.html#elita.dataservice.UserDataService">View In Hierarchy</a>
+    </p>
+    <div>
+      
+    </div>
+    <div class="docstring">
+      <div class="undocumented">No class docstring</div>
+    </div>
+
+    
+    <div id="splitTables">
+      <table class="children sortable" id="id25">
+  
+  
+  <tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.UserDataService.html#NewUser">NewUser</a></td>
+    <td><span>Create a new user object and insert root_tree references for both the 
+user and the computed permissions endpoint. Pipe parameters into User 
+object to get the pw hashed, etc.</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.UserDataService.html#GetUserTokens">GetUserTokens</a></td>
+    <td><span>Get all auth tokens associated with user</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.UserDataService.html#GetUserFromToken">GetUserFromToken</a></td>
+    <td><span>Get username associated with token</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.UserDataService.html#GetAllTokens">GetAllTokens</a></td>
+    <td><span>Get all valid tokens</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.UserDataService.html#NewToken">NewToken</a></td>
+    <td><span>Create new auth token associated with username and insert reference into
+root_tree</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.UserDataService.html#GetUsers">GetUsers</a></td>
+    <td><span>Get all valid users</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.UserDataService.html#GetUser">GetUser</a></td>
+    <td><span>Get user document</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.UserDataService.html#DeleteUser">DeleteUser</a></td>
+    <td><span>Delete a single user and root_tree reference</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.UserDataService.html#DeleteToken">DeleteToken</a></td>
+    <td><span>Delete a token and root_tree reference</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.UserDataService.html#UpdateUser">UpdateUser</a></td>
+    <td><span>Update user with keys in doc</span></td>
+  </tr>
+</table>
+      <invisible>
+        <p>
+          Inherited from <a href="elita.dataservice.GenericChildDataService.html">GenericChildDataService</a>:
+        </p>
+        <table class="children sortable" id="id26">
+  
+  
+  <tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#__init__">__init__</a></td>
+    <td><span class="undocumented">No summary</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#populate_dependencies">populate_dependencies</a></td>
+    <td><span>Child dataservice classes may need to access methods of siblings. This 
+allows parent dataservice to inject cross dependencies as needed without 
+generating a big reference cycle.</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#NewContainer">NewContainer</a></td>
+    <td><span>Create new container object suitable for a root_tree reference</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#UpdateObjectFromPatch">UpdateObjectFromPatch</a></td>
+    <td><span>Generic method to update an object (document) with a JSON Patch 
+document</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#UpdateObject">UpdateObject</a></td>
+    <td><span>Generic method to update a particular object (document) with the data in
+doc</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#AddThreadLocalRootTree">AddThreadLocalRootTree</a></td>
+    <td><span>Add new node to thread-local root_tree (copy from mongo's root_tree)</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#RmThreadLocalRootTree">RmThreadLocalRootTree</a></td>
+    <td><span>Remove deleted node from thread-local root_tree</span></td>
+  </tr>
+</table>
+      </invisible>
+    </div>
+    
+    
+
+    <div class="function">
+  <a name="elita.dataservice.UserDataService.NewUser">
+    
+  </a>
+  <a name="NewUser">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    NewUser(self, name, pw, perms, attribs):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Create a new user object and insert root_tree references for both the 
+user and the computed permissions endpoint. Pipe parameters into User 
+object to get the pw hashed, etc.</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.UserDataService.GetUserTokens">
+    
+  </a>
+  <a name="GetUserTokens">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetUserTokens(self, username):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get all auth tokens associated with user</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.UserDataService.GetUserFromToken">
+    
+  </a>
+  <a name="GetUserFromToken">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetUserFromToken(self, token):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get username associated with token</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.UserDataService.GetAllTokens">
+    
+  </a>
+  <a name="GetAllTokens">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetAllTokens(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get all valid tokens</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.UserDataService.NewToken">
+    
+  </a>
+  <a name="NewToken">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    NewToken(self, username):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Create new auth token associated with username and insert reference into
+root_tree</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.UserDataService.GetUsers">
+    
+  </a>
+  <a name="GetUsers">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetUsers(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get all valid users</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.UserDataService.GetUser">
+    
+  </a>
+  <a name="GetUser">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetUser(self, username):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get user document</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.UserDataService.DeleteUser">
+    
+  </a>
+  <a name="DeleteUser">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    DeleteUser(self, name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Delete a single user and root_tree reference</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.UserDataService.DeleteToken">
+    
+  </a>
+  <a name="DeleteToken">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    DeleteToken(self, token):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Delete a token and root_tree reference</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.UserDataService.UpdateUser">
+    
+  </a>
+  <a name="UpdateUser">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    UpdateUser(self, name, doc):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Update user with keys in doc</p><table class="fieldTable"></table></div>
+  </div>
+</div>
+    <address>
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-10-29 15:25:55.
+    </address>
+  </body>
+</html>

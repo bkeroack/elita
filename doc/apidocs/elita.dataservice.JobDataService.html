@@ -1,0 +1,333 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+          "DTD/xhtml1-strict.dtd">
+<html>
+  <head>
+    <title>elita.dataservice.JobDataService : API documentation</title>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+    <link href="apidocs.css" type="text/css" rel="stylesheet" />
+    
+    
+  </head>
+  <body>
+    <h1 class="class">e.d.JobDataService(<a href="elita.dataservice.GenericChildDataService.html">GenericChildDataService</a>) : class documentation</h1>
+    <p>
+      <span id="part">Part of <a href="elita.html">elita</a>.<a href="elita.dataservice.html">dataservice</a></span>
+      
+      <a href="classIndex.html#elita.dataservice.JobDataService">View In Hierarchy</a>
+    </p>
+    <div>
+      
+    </div>
+    <div class="docstring">
+      <div class="undocumented">No class docstring</div>
+    </div>
+
+    
+    <div id="splitTables">
+      <table class="children sortable" id="id33">
+  
+  
+  <tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.JobDataService.html#GetAllActions">GetAllActions</a></td>
+    <td><span>Get all actions associated with application. Get it from root_tree 
+because the actions are dynamically populated at the start of each 
+request.</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.JobDataService.html#GetAction">GetAction</a></td>
+    <td><span>Get details (name, description, parameters) about all actions associated
+with application</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.JobDataService.html#NewJob">NewJob</a></td>
+    <td><span>Create new job object.</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.JobDataService.html#NewJobData">NewJobData</a></td>
+    <td><span>Insert new job_data record. Called by async jobs to log progress. Data 
+inserted here can be viewed by user by polling the respective job object 
+endpoint.</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.JobDataService.html#GetJobs">GetJobs</a></td>
+    <td><span>Get all actively running jobs. Pulling from mongo could possibly be more
+efficient (maybe) than using in-memory root_tree because we're querying on 
+the status field</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.JobDataService.html#GetJobData">GetJobData</a></td>
+    <td><span>Get job data for a specific job sorted by created_datetime 
+(ascending)</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.JobDataService.html#SaveJobResults">SaveJobResults</a></td>
+    <td><span>Called at the end of async jobs. Changes state of job object to reflect 
+job completion.</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.JobDataService.html#NewAction">NewAction</a></td>
+    <td><span class="undocumented">No summary</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.JobDataService.html#ExecuteAction">ExecuteAction</a></td>
+    <td><span>Spawn async job for an action</span></td>
+  </tr>
+</table>
+      <invisible>
+        <p>
+          Inherited from <a href="elita.dataservice.GenericChildDataService.html">GenericChildDataService</a>:
+        </p>
+        <table class="children sortable" id="id34">
+  
+  
+  <tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#__init__">__init__</a></td>
+    <td><span class="undocumented">No summary</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#populate_dependencies">populate_dependencies</a></td>
+    <td><span>Child dataservice classes may need to access methods of siblings. This 
+allows parent dataservice to inject cross dependencies as needed without 
+generating a big reference cycle.</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#NewContainer">NewContainer</a></td>
+    <td><span>Create new container object suitable for a root_tree reference</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#UpdateObjectFromPatch">UpdateObjectFromPatch</a></td>
+    <td><span>Generic method to update an object (document) with a JSON Patch 
+document</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#UpdateObject">UpdateObject</a></td>
+    <td><span>Generic method to update a particular object (document) with the data in
+doc</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#AddThreadLocalRootTree">AddThreadLocalRootTree</a></td>
+    <td><span>Add new node to thread-local root_tree (copy from mongo's root_tree)</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#RmThreadLocalRootTree">RmThreadLocalRootTree</a></td>
+    <td><span>Remove deleted node from thread-local root_tree</span></td>
+  </tr>
+</table>
+      </invisible>
+    </div>
+    
+    
+
+    <div class="function">
+  <a name="elita.dataservice.JobDataService.GetAllActions">
+    
+  </a>
+  <a name="GetAllActions">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetAllActions(self, app_name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get all actions associated with application. Get it from root_tree 
+because the actions are dynamically populated at the start of each 
+request.</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.JobDataService.GetAction">
+    
+  </a>
+  <a name="GetAction">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetAction(self, app_name, action_name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get details (name, description, parameters) about all actions associated
+with application</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.JobDataService.NewJob">
+    
+  </a>
+  <a name="NewJob">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    NewJob(self, name, job_type, data):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Create new job object.</p>
+<p>data parameter can be anything serializable (including None) so that's 
+all we will check for</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.JobDataService.NewJobData">
+    
+  </a>
+  <a name="NewJobData">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    NewJobData(self, data):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Insert new job_data record. Called by async jobs to log progress. Data 
+inserted here can be viewed by user by polling the respective job object 
+endpoint.</p>
+<p>Only valid to be called in an asynch context, so assert we have a valid 
+job_id</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.JobDataService.GetJobs">
+    
+  </a>
+  <a name="GetJobs">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetJobs(self, active):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get all actively running jobs. Pulling from mongo could possibly be more
+efficient (maybe) than using in-memory root_tree because we're querying on 
+the status field</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.JobDataService.GetJobData">
+    
+  </a>
+  <a name="GetJobData">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetJobData(self, job_id):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get job data for a specific job sorted by created_datetime 
+(ascending)</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.JobDataService.SaveJobResults">
+    
+  </a>
+  <a name="SaveJobResults">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    SaveJobResults(self, results):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Called at the end of async jobs. Changes state of job object to reflect 
+job completion.</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.JobDataService.NewAction">
+    
+  </a>
+  <a name="NewAction">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    NewAction(self, app_name, action_name, params):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Register new dynamically-loaded action in root_tree. These are loaded 
+from plugins at the start of each request Note that action is added to 
+in-memory root_tree object (not the root_tree record in mongo) because it 
+is not persistent. Note further that this is *our* (meaning this thread's) 
+root_tree and will only be in effect for the duration of this request, so 
+we don't care about any root_tree updates by other threads running 
+concurrently</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.JobDataService.ExecuteAction">
+    
+  </a>
+  <a name="ExecuteAction">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    ExecuteAction(self, app_name, action_name, params):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Spawn async job for an action</p><table class="fieldTable"></table></div>
+  </div>
+</div>
+    <address>
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-10-29 15:25:55.
+    </address>
+  </body>
+</html>

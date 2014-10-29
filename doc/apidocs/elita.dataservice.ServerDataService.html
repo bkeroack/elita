@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+          "DTD/xhtml1-strict.dtd">
+<html>
+  <head>
+    <title>elita.dataservice.ServerDataService : API documentation</title>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+    <link href="apidocs.css" type="text/css" rel="stylesheet" />
+    
+    
+  </head>
+  <body>
+    <h1 class="class">e.d.ServerDataService(<a href="elita.dataservice.GenericChildDataService.html">GenericChildDataService</a>) : class documentation</h1>
+    <p>
+      <span id="part">Part of <a href="elita.html">elita</a>.<a href="elita.dataservice.html">dataservice</a></span>
+      
+      <a href="classIndex.html#elita.dataservice.ServerDataService">View In Hierarchy</a>
+    </p>
+    <div>
+      
+    </div>
+    <div class="docstring">
+      <div class="undocumented">No class docstring</div>
+    </div>
+
+    
+    <div id="splitTables">
+      <table class="children sortable" id="id35">
+  
+  
+  <tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.ServerDataService.html#GetServers">GetServers</a></td>
+    <td><span>Return a list of all extant server objects</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.ServerDataService.html#NewServer">NewServer</a></td>
+    <td><span>Create a new server object</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.ServerDataService.html#UpdateServer">UpdateServer</a></td>
+    <td><span>Change existing server object with data in doc</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.ServerDataService.html#DeleteServer">DeleteServer</a></td>
+    <td><span>Delete a server object</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.ServerDataService.html#GetGitDeploys">GetGitDeploys</a></td>
+    <td><span>Get all gitdeploys initialized on a server. The canonical data source is
+the gitdeploy object (which contains a list of servers it's been 
+initialized on)</span></td>
+  </tr><tr class="method">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.ServerDataService.html#GetEnvironments">GetEnvironments</a></td>
+    <td><span>Get a census of all environments. "environment" is just a tag 
+associated with a server upon creation, so get all tags and dedupe.</span></td>
+  </tr>
+</table>
+      <invisible>
+        <p>
+          Inherited from <a href="elita.dataservice.GenericChildDataService.html">GenericChildDataService</a>:
+        </p>
+        <table class="children sortable" id="id36">
+  
+  
+  <tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#__init__">__init__</a></td>
+    <td><span class="undocumented">No summary</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#populate_dependencies">populate_dependencies</a></td>
+    <td><span>Child dataservice classes may need to access methods of siblings. This 
+allows parent dataservice to inject cross dependencies as needed without 
+generating a big reference cycle.</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#NewContainer">NewContainer</a></td>
+    <td><span>Create new container object suitable for a root_tree reference</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#UpdateObjectFromPatch">UpdateObjectFromPatch</a></td>
+    <td><span>Generic method to update an object (document) with a JSON Patch 
+document</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#UpdateObject">UpdateObject</a></td>
+    <td><span>Generic method to update a particular object (document) with the data in
+doc</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#AddThreadLocalRootTree">AddThreadLocalRootTree</a></td>
+    <td><span>Add new node to thread-local root_tree (copy from mongo's root_tree)</span></td>
+  </tr><tr class="basemethod">
+    
+    
+    <td>Method</td>
+    <td><a href="elita.dataservice.GenericChildDataService.html#RmThreadLocalRootTree">RmThreadLocalRootTree</a></td>
+    <td><span>Remove deleted node from thread-local root_tree</span></td>
+  </tr>
+</table>
+      </invisible>
+    </div>
+    
+    
+
+    <div class="function">
+  <a name="elita.dataservice.ServerDataService.GetServers">
+    
+  </a>
+  <a name="GetServers">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetServers(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Return a list of all extant server objects</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.ServerDataService.NewServer">
+    
+  </a>
+  <a name="NewServer">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    NewServer(self, name, attribs, environment, existing=False):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Create a new server object</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.ServerDataService.UpdateServer">
+    
+  </a>
+  <a name="UpdateServer">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    UpdateServer(self, name, doc):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Change existing server object with data in doc</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.ServerDataService.DeleteServer">
+    
+  </a>
+  <a name="DeleteServer">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    DeleteServer(self, name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Delete a server object</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.ServerDataService.GetGitDeploys">
+    
+  </a>
+  <a name="GetGitDeploys">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetGitDeploys(self, name):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get all gitdeploys initialized on a server. The canonical data source is
+the gitdeploy object (which contains a list of servers it's been 
+initialized on)</p><table class="fieldTable"></table></div>
+  </div>
+</div><div class="function">
+  <a name="elita.dataservice.ServerDataService.GetEnvironments">
+    
+  </a>
+  <a name="GetEnvironments">
+    
+  </a>
+  <div class="functionHeader">
+    
+    def
+    GetEnvironments(self):
+    
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>Get a census of all environments. "environment" is just a tag 
+associated with a server upon creation, so get all tags and dedupe.</p><table class="fieldTable"></table></div>
+  </div>
+</div>
+    <address>
+      <a href="index.html">API Documentation</a> for elita, generated by <a href="https://launchpad.net/pydoctor/">pydoctor</a> at 2014-10-29 15:25:55.
+    </address>
+  </body>
+</html>
