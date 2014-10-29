@@ -4,7 +4,8 @@ import traceback
 import logging
 
 import elita.util
-import elita.models
+import elita.dataservice
+import elita.dataservice.root_tree
 import elita.celeryinit
 
 __author__ = 'bkeroack'
@@ -13,9 +14,9 @@ def regen_datasvc(settings, job_id):
     client = pymongo.MongoClient(settings['elita.mongo.host'], int(settings['elita.mongo.port']))
     db = client[settings['elita.mongo.db']]
     tree = db['root_tree'].find_one()
-    updater = elita.models.RootTreeUpdater(tree, db)
-    root = elita.models.RootTree(db, updater, tree, None)
-    return client, elita.models.DataService(settings, db, root, job_id=job_id)
+    updater = elita.dataservice.root_tree.RootTreeUpdater(tree, db)
+    root = elita.dataservice.root_tree.RootTree(db, updater, tree, None)
+    return client, elita.dataservice.DataService(settings, db, root, job_id=job_id)
 
 @elita.celeryinit.celery.task(bind=True, name="elita_task_run_job")
 def run_job(self, settings, callable, args):

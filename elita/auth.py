@@ -4,7 +4,7 @@ import fnmatch
 import logging
 
 import elita.util
-from elita.models import User
+from elita.dataservice.models import User
 
 class ValidatePermissionsObject:
     __metaclass__ = elita.util.LoggingMetaClass

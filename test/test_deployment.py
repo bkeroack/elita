@@ -3,7 +3,7 @@ import mock
 import elita.deployment.deploy
 import elita.deployment.salt_control
 from elita.deployment import gitservice
-from elita.models import DataService, BuildDataService, GitDataService, JobDataService, GroupDataService, \
+from elita.dataservice import DataService, BuildDataService, GitDataService, JobDataService, GroupDataService, \
     DeploymentDataService, ActionService
 from elita.actions.action import RegisterHooks
 #import logging

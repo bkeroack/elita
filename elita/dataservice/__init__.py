@@ -1,183 +1,22 @@
-import collections
-import hashlib
-import uuid
-import base64
-import os.path
-import sys
+__author__ = 'bkeroack'
+
+import logging
+import os
 import shutil
 import bson
-import pprint
 import datetime
 import pytz
-import logging
 import copy
+import sys
 
-import elita
-from elita.crypto import keypair
-from elita.deployment import deploy, salt_control
-import util
-import util.type_check
-from deployment.gitservice import EMBEDDED_YAML_DOT_REPLACEMENT, GitDeployManager
-import elita_exceptions
+import elita.util
+import elita.elita_exceptions
+import models
+from root_tree import RootTree
+from mongo_service import MongoService
+from elita.deployment.gitservice import EMBEDDED_YAML_DOT_REPLACEMENT
 from elita.actions.action import ActionService
-
-# URL model:
-# root/app/
-# root/app/{app_name}/builds/
-# root/app/{app_name}/builds/{build_name}
-# root/app/{app_name}/environments/
-# root/app/{app_name}/environments/{env_name}/deployments
-# root/app/{app_name}/environments/{env_name}/deployments/{deployment_id}
-# root/app/{app_name}/environments/{env_name}/servers
-# root/app/{app_name}/environemnt/{env_name}/servers/{server_name}
-
-#dummy class to pass to RootService
-class Request:
-    db = None
-
-class MongoService:
-    # logspam
-    #__metaclass__ = elita.util.LoggingMetaClass
-
-    def __init__(self, db):
-        '''
-        @type db = pymongo.database.Database
-        '''
-        assert db
-        self.db = db
-
-    def create_new(self, collection, keys, classname, doc, remove_existing=True):
-        '''
-        Creates new document in collection. Optionally, remove any existing according to keys (which specify how the
-        new document is unique)
-
-        Returns id of new document
-        '''
-        assert elita.util.type_check.is_string(collection)
-        assert elita.util.type_check.is_dictlike(keys)
-        assert elita.util.type_check.is_optional_str(classname)
-        assert elita.util.type_check.is_dictlike(doc)
-        assert collection
-        # keys/classname are only mandatory if remove_existing=True
-        assert (keys and classname and remove_existing) or not remove_existing
-        if classname:
-            doc['_class'] = classname
-        existing = None
-        if remove_existing:
-            existing = [d for d in self.db[collection].find(keys)]
-            for k in keys:
-                doc[k] = keys[k]
-            if '_id' in doc:
-                del doc['_id']
-        id = self.db[collection].save(doc, fsync=True)
-        logging.debug("new id: {}".format(id))
-        if existing and remove_existing:
-            logging.warning("create_new found existing docs! deleting...(collection: {}, keys: {})".format(collection, keys))
-            keys['_id'] = {'$ne': id}
-            self.db[collection].remove(keys)
-        return id
-
-    def modify(self, collection, keys, path, doc_or_obj):
-        '''
-        Modifies document with the keys in doc. Does so atomically but remember that any key will overwrite the existing
-        key.
-
-        doc_or_obj could be None, zero, etc.
-
-        Returns boolean indicating success
-        '''
-        assert hasattr(path, '__iter__')
-        assert path
-        assert elita.util.type_check.is_string(collection)
-        assert isinstance(keys, dict)
-        assert collection and keys
-        dlist = [d for d in self.db[collection].find(keys)]
-        assert dlist
-        canonical_id = dlist[0]['_id']
-        if len(dlist) > 1:
-            logging.warning("Found duplicate entries for query {} in collection {}; using the first and removing others"
-                            .format(keys, collection))
-            keys['_id'] = {'$ne': canonical_id}
-            self.db[collection].remove(keys)
-        path_dot_notation = '.'.join(path)
-        result = self.db[collection].update({'_id': canonical_id}, {'$set': {path_dot_notation: doc_or_obj}}, fsync=True)
-        return result['n'] == 1 and result['updatedExisting'] and not result['err']
-
-    def delete(self, collection, keys):
-        '''
-        Drop a document from the collection
-
-        Return whatever pymongo returns for deletion
-        '''
-        assert elita.util.type_check.is_string(collection)
-        assert isinstance(keys, dict)
-        assert collection and keys
-        dlist = [d for d in self.db[collection].find(keys)]
-        assert dlist
-        if len(dlist) > 1:
-            logging.warning("Found duplicate entries for query {} in collection {}; removing all".format(keys,
-                                                                                                        collection))
-        return self.db[collection].remove(keys, fsync=True)
-
-    def update_roottree(self, path, collection, id, doc=None):
-        '''
-        Update the root tree at path [must be a tuple of indices: ('app', 'myapp', 'builds', '123-foo')] with DBRef
-        Optional doc can be passed in which will be inserted into the tree after adding DBRef field
-
-        Return boolean indicating success
-        '''
-        assert hasattr(path, '__iter__')
-        assert elita.util.type_check.is_string(collection)
-        assert id.__class__.__name__ == 'ObjectId'
-        assert util.type_check.is_optional_dict(doc)
-        path_dot_notation = '.'.join(path)
-        root_tree_doc = doc if doc else {}
-        root_tree_doc['_doc'] = bson.DBRef(collection, id)
-        result = self.db['root_tree'].update({}, {'$set': {path_dot_notation: root_tree_doc}}, fsync=True)
-        return result['n'] == 1 and result['updatedExisting'] and not result['err']
-
-    def rm_roottree(self, path):
-        '''
-        Delete/remove the root_tree reference at path
-        '''
-        assert hasattr(path, '__iter__')
-        assert path
-        path_dot_notation = '.'.join(path)
-        result = self.db['root_tree'].update({}, {'$unset': {path_dot_notation: ''}}, fsync=True)
-        return result['n'] == 1 and result['updatedExisting'] and not result['err']
-
-    def get(self, collection, keys, multi=False, empty=False):
-        '''
-        Thin wrapper around find()
-        Retrieve a document from Mongo, keyed by name. Optionally, if duplicates are found, delete all but the first.
-        If empty, it's ok to return None if nothing matches
-
-        Returns document
-        @rtype: dict | list(dict) | None
-        '''
-        assert elita.util.type_check.is_string(collection)
-        assert isinstance(keys, dict)
-        assert collection
-        dlist = [d for d in self.db[collection].find(keys)]
-        assert dlist or empty
-        if len(dlist) > 1 and not multi:
-            logging.warning("Found duplicate entries ({}) for query {} in collection {}; dropping all but the first"
-                            .format(len(dlist), keys, collection))
-            keys['_id'] = {'$ne': dlist[0]['_id']}
-            self.db[collection].remove(keys)
-        return dlist if multi else (dlist[0] if dlist else dlist)
-
-    def dereference(self, dbref):
-        '''
-        Simple wrapper around db.dereference()
-        Returns document pointed to by DBRef
-
-        @type id: bson.DBRef
-        '''
-        assert dbref
-        assert dbref.__class__.__name__ == 'DBRef'
-        return self.db.dereference(dbref)
-
+from elita.deployment import deploy, salt_control
 
 class GenericChildDataService:
     __metaclass__ = elita.util.LoggingMetaClass
@@ -206,7 +45,7 @@ class GenericChildDataService:
 
         @type dependency_objs: dict
         '''
-        assert util.type_check.is_dictlike(dependency_objs)
+        assert elita.util.type_check.is_dictlike(dependency_objs)
         self.deps = dependency_objs
 
     def NewContainer(self, class_name, name, parent):
@@ -280,7 +119,7 @@ class BuildDataService(GenericChildDataService):
         app_doc = self.mongo_service.get('applications', {'app_name': app_name})
         assert app_doc
 
-        buildobj = Build({
+        buildobj = models.Build({
             'app_name': app_name,
             'build_name': build_name,
             'attributes': attribs
@@ -388,7 +227,7 @@ class UserDataService(GenericChildDataService):
         assert isinstance(perms, dict)
         assert name and pw and perms
 
-        userobj = User({
+        userobj = models.User({
             'username': name,
             'permissions': perms,
             'password': pw,
@@ -436,7 +275,7 @@ class UserDataService(GenericChildDataService):
         assert elita.util.type_check.is_string(username)
         assert username
 
-        token = Token({
+        token = models.Token({
             'username': username
         })
         tid = self.mongo_service.create_new('tokens', {'username': username, 'token': token.token}, 'Token',
@@ -491,7 +330,7 @@ class UserDataService(GenericChildDataService):
         assert name in self.root['global']['users']
 
         if "password" in doc:
-            user = User(doc)
+            user = models.User(doc)
             doc['hashed_pw'] = user.hashed_pw
             doc['salt'] = user.salt
             doc['password'] = None
@@ -642,7 +481,7 @@ class PackageMapDataService(GenericChildDataService):
         assert elita.util.type_check.is_dictlike(packages)
         assert elita.util.type_check.is_optional_dict(attributes)
         attributes = attributes if attributes else {}
-        pm = PackageMap({
+        pm = models.PackageMap({
             'application': app,
             'name': name,
             'packages': packages,
@@ -716,7 +555,7 @@ class GroupDataService(GenericChildDataService):
         assert elita.util.type_check.is_string(description)
         assert elita.util.type_check.is_optional_dict(attributes)
         attributes = attributes if attributes else {}
-        gp = Group({
+        gp = models.Group({
             "application": app,
             "name": name,
             "description": description,
@@ -810,7 +649,7 @@ class JobDataService(GenericChildDataService):
         '''
         assert name and job_type
         assert elita.util.type_check.is_serializable(data)
-        job = Job({
+        job = models.Job({
             'status': "running",
             'name': name,
             'job_type': job_type,
@@ -891,7 +730,7 @@ class JobDataService(GenericChildDataService):
             assert app_name in self.root['app']
             assert 'actions' in self.root['app'][app_name]
             assert elita.util.type_check.is_dictlike(self.root['app'][app_name]['actions'])
-            self.root['app'][app_name]['actions'][action_name] = Action(app_name, action_name, params, self)
+            self.root['app'][app_name]['actions'][action_name] = models.Action(app_name, action_name, params, self)
         else:
             logging.debug("NewAction: application '{}' not found".format(app_name))
 
@@ -916,7 +755,7 @@ class ServerDataService(GenericChildDataService):
         '''
         Create a new server object
         '''
-        server = Server({
+        server = models.Server({
             'name': name,
             'status': 'new',
             'server_type': 'unknown',
@@ -945,7 +784,7 @@ class ServerDataService(GenericChildDataService):
         assert elita.util.type_check.is_string(name)
         assert elita.util.type_check.is_dictlike(doc)
         assert name in self.root['server']
-        prototype = Server({})  # get all valid default top-level properties
+        prototype = models.Server({})  # get all valid default top-level properties
         assert all([key in prototype.get_doc() for key in doc])
 
         self.UpdateObject('servers', {'name': name}, doc)
@@ -1016,7 +855,7 @@ class GitDataService(GenericChildDataService):
         location['gitrepo'] = bson.DBRef("gitrepos", gitrepo_doc['_id'])
 
         #construct gitdeploy document
-        gd_obj = GitDeploy({})
+        gd_obj = models.GitDeploy({})
         gd_doc = gd_obj.get_doc()
         gd_doc['name'] = name
         gd_doc['application'] = app_name
@@ -1030,7 +869,7 @@ class GitDataService(GenericChildDataService):
                 if k in gd_doc['options']:
                     gd_doc['options'][k] = options[k]
         if actions:
-            util.change_dict_keys(actions, '.', EMBEDDED_YAML_DOT_REPLACEMENT)
+            elita.util.change_dict_keys(actions, '.', EMBEDDED_YAML_DOT_REPLACEMENT)
             for k in actions:
                 if k in gd_doc['actions']:
                     gd_doc['actions'][k] = actions[k]
@@ -1090,7 +929,7 @@ class GitDataService(GenericChildDataService):
 
         #clean up any actions
         if 'actions' in doc:
-            util.change_dict_keys(doc['actions'], '.', EMBEDDED_YAML_DOT_REPLACEMENT)
+            elita.util.change_dict_keys(doc['actions'], '.', EMBEDDED_YAML_DOT_REPLACEMENT)
 
         #replace gitrepo with DBRef if necessary
         if 'location' in doc and 'gitrepo' in doc['location']:
@@ -1149,7 +988,7 @@ class GitDataService(GenericChildDataService):
         assert elita.util.type_check.is_string(auth['username'])
         assert elita.util.type_check.is_string(auth['password'])
 
-        gpo = GitProvider({
+        gpo = models.GitProvider({
             'name': name,
             'type': provider_type,
             'auth': auth
@@ -1236,7 +1075,7 @@ class GitDataService(GenericChildDataService):
         if not kp_doc:
             return {'NewGitRepo': "keypair '{}' is unknown".format(keypair)}
 
-        gro = GitRepo({
+        gro = models.GitRepo({
             'name': name,
             'application': app,
             'keypair': bson.DBRef("keypairs", kp_doc['_id']),
@@ -1297,7 +1136,7 @@ class DeploymentDataService(GenericChildDataService):
         assert not gitdeploys or all([gd in self.root['app'][app]['gitdeploys'] for gd in gitdeploys])
 
 
-        dpo = Deployment({
+        dpo = models.Deployment({
             'name': "",
             'application': app,
             'build_name': build_name,
@@ -1368,7 +1207,7 @@ class DeploymentDataService(GenericChildDataService):
         assert elita.util.type_check.is_dictlike(doc)
         assert app in self.root['app']
         assert name in self.root['app'][app]['deployments']
-        
+
         self.UpdateObject('deployments', {'application': app, 'name': name}, doc)
 
     def InitializeDeploymentPlan(self, app, name, batches, gitrepos):
@@ -1551,7 +1390,7 @@ class KeyDataService(GenericChildDataService):
         assert elita.util.type_check.is_optional_dict(attribs)
 
         try:
-            kp_obj = KeyPair({
+            kp_obj = models.KeyPair({
                 "name": name,
                 "attributes": attribs,
                 "key_type": key_type,
@@ -1561,11 +1400,11 @@ class KeyDataService(GenericChildDataService):
         except:
             exc_type, exc_obj, tb = sys.exc_info()
             logging.debug("exception: {}, {}".format(exc_type, exc_obj))
-            if exc_type == elita_exceptions.InvalidPrivateKey:
+            if exc_type == elita.elita_exceptions.InvalidPrivateKey:
                 err = "Invalid private key"
-            if exc_type == elita_exceptions.InvalidPublicKey:
+            if exc_type == elita.elita_exceptions.InvalidPublicKey:
                 err = "Invalid public key"
-            if exc_type == elita_exceptions.InvalidKeyPairType:
+            if exc_type == elita.elita_exceptions.InvalidKeyPairType:
                 err = "Invalid key type"
             else:
                 err = "unknown key error"
@@ -1674,989 +1513,4 @@ class DataService:
 
     def GetGlobalKeys(self):
         return [k for k in self.root['global'] if k[0] != '_']
-
-class SupportedFileType:
-    TarGz = 'tar.gz'
-    TarBz2 = 'tar.bz2'
-    Zip = 'zip'
-    types = [TarBz2, TarGz, Zip]
-
-
-class GenericDataModel:
-    __metaclass__ = elita.util.LoggingMetaClass
-
-    default_values = {}
-
-    def __init__(self, doc):
-        self.set_defaults()
-        if doc is not None:
-            for k in doc:
-                if k == '_id':
-                    self.created_datetime = doc['_id'].generation_time
-                elif k[0] != '_':
-                    self.set_data(k, doc[k])
-        self.init_hook()
-
-    def init_hook(self):
-        pass
-
-    def set_defaults(self):
-        for k in self.default_values:
-            if not hasattr(self, k):
-                setattr(self, k, self.default_values[k])
-
-    def set_data(self, key, value):
-        self._set_data(key, value)
-
-    def _set_data(self, key, value):
-        setattr(self, key, value)
-
-    def update_values(self, doc):
-        for k in doc:
-            if hasattr(self, k):
-                setattr(self, k, doc[k])
-
-    def get_doc(self):
-        return {k: getattr(self, k) for k in self.default_values}
-
-
-class KeyPair(GenericDataModel):
-    default_values = {
-        "name": None,
-        "attributes": dict(),
-        "key_type": None,  # git | salt
-        "private_key": None,
-        "public_key": None
-    }
-
-    def init_hook(self):
-        if self.key_type not in ("git", "salt"):
-            raise elita_exceptions.InvalidKeyPairType
-        kp = keypair.KeyPair(self.private_key, self.public_key)
-        try:
-            kp.verify_public()
-        except:
-            raise elita_exceptions.InvalidPublicKey
-        try:
-            kp.verify_private()
-        except:
-            raise elita_exceptions.InvalidPrivateKey
-
-class Server(GenericDataModel):
-    default_values = {
-        "name": None,
-        "server_type": None,
-        "status": None,
-        "environment": None,
-        "attributes": dict(),
-        "gitdeploys": [bson.DBRef("", None)],
-        "salt_key": bson.DBRef("", None)
-    }
-
-class Environment(GenericDataModel):
-    default_values = {
-        "environments": None
-    }
-
-class GitProvider(GenericDataModel):
-    default_values = {
-        'name': None,
-        'type': None,
-        'auth': {
-            'username': None,
-            'password': None
-        }
-    }
-
-class GitRepo(GenericDataModel):
-    default_values = {
-        'name': None,
-        'application': None,
-        'last_build': None,
-        'uri': None,
-        'keypair': bson.DBRef("", None),
-        'gitprovider': bson.DBRef("", None)
-    }
-
-class GitDeploy(GenericDataModel):
-    default_values = {
-        'name': None,
-        'application': None,
-        'package': 'master',
-        'servers': list(),
-        'attributes': dict(),
-        'deployed_build': None,
-        'options': {
-            'favor': 'ours',
-            'ignore-whitespace': 'true',
-            'gitignore': list()
-        },
-        'actions': {
-            'prepull': [],
-            'postpull': []
-        },
-        'location': {
-            'path': None,
-            'git_repo': bson.DBRef("", None),
-            'default_branch': None,
-            'current_branch': None,
-            'current_rev': None
-        }
-    }
-
-class Deployment(GenericDataModel):
-    '''
-    There are two "phases" to a deployment:
-        - Phase 1: processing of gitdeploys (applying packages, adding/committing/pushing to gitprovider, determining
-            changes)
-        - Phase 2: Performing salt states/git pull on target machines. Can be broken up into an arbitrary number of
-            batches
-    '''
-    default_values = {
-        'name': None,  # "name" for consistency w/ other models, even though it's really id
-        'application': None,
-        'build_name': None,
-        'environments': None,
-        'groups': None,
-        'servers': None,
-        'gitdeploys': None,
-        'options': dict(),  # pauses, divisor
-        'status': None,
-        'commits': dict(),    # { gitrepo_name: commit_hash }
-        'progress': {
-            'currently_on': None,
-            'phase1': {
-                'gitrepos': dict()
-            },
-            'phase2': dict()
-        },
-        'job_id': None
-    }
-
-class Build(GenericDataModel):
-    default_values = {
-        'build_name': None,
-        'app_name': None,
-        'files': list(),
-        'stored': False,
-        'master_file': None,
-        'packages': dict(),
-        'attributes': dict()
-    }
-
-
-class Action:
-    def __init__(self, app_name, action_name, params, job_datasvc):
-        self.app_name = app_name
-        self.action_name = action_name
-        self.params = params
-        self.job_datasvc = job_datasvc
-
-    def execute(self, params):
-        return self.job_datasvc.ExecuteAction(self.app_name, self.action_name, params)
-
-    def details(self):
-        return self.job_datasvc.GetAction(self.app_name, self.action_name)
-
-class Application(GenericDataModel):
-    default_values = {
-        'app_name': None
-    }
-
-DEFAULT_ADMIN_USERNAME = 'admin'
-DEFAULT_ADMIN_PASSWORD = 'elita'
-DEFAULT_ADMIN_PERMISSIONS = {
-    'apps': {
-        '*': 'read/write',
-        '_global': 'read/write'
-    },
-    'actions': {
-        '*': {
-            '*': 'execute'
-        }
-    },
-    'servers': ['*']
-}
-
-class User(GenericDataModel):
-    default_values = {
-        'username': None,
-        'password': None,
-        'hashed_pw': None,
-        'salt': None,
-        'attributes': dict(),
-        'permissions': {
-            'apps': {},
-            'actions': {},
-            'servers': []
-        }
-    }
-
-    def init_hook(self):
-        assert self.hashed_pw or self.password
-        if self.password:   # new or changed password
-            self.salt = base64.urlsafe_b64encode(uuid.uuid4().bytes)
-            self.hashed_pw = self.hash_pw(self.password)
-            self.password = None
-
-    def hash_pw(self, pw):
-        assert pw is not None
-        return base64.urlsafe_b64encode(hashlib.sha512(pw + self.salt).hexdigest())
-
-    def validate_password(self, pw):
-        return self.hashed_pw == self.hash_pw(pw)
-
-
-#dummy model. Values are computed for each request
-class UserPermissions(GenericDataModel):
-    default_values = {
-        'username': None,
-        'applications': None,
-        'actions': None,
-        'servers': None
-    }
-
-class Token(GenericDataModel):
-    default_values = {
-        'username': None,
-        'token': None
-    }
-
-    def init_hook(self):
-        self.token = base64.urlsafe_b64encode(hashlib.sha256(uuid.uuid4().bytes).hexdigest())[:-2] \
-            if self.token is None else self.token
-
-class Job(GenericDataModel):
-    default_values = {
-        'status': 'running',
-        'name': None,
-        'job_type': None,
-        'data': None,
-        'completed_datetime': None,
-        'duration_in_seconds': None,
-        'attributes': None,
-        'job_id': None
-    }
-
-    def init_hook(self):
-        self.job_id = uuid.uuid4() if self.job_id is None else self.job_id
-
-class Group(GenericDataModel):
-    default_values = {
-        'application': None,
-        'name': None,
-        'description': None,
-        'gitdeploys': list(),
-        'attributes': dict(),
-        'rolling_deploy': False
-    }
-
-class PackageMap(GenericDataModel):
-    default_values = {
-        'application': None,
-        'name': None,
-        'attributes': dict(),
-        'packages': dict()
-    }
-    # Example packages field:
-    # packages = {
-    #     'package_name': [{
-    #             'patterns': ["foo/bar/*"],
-    #             'prefix': "foobar/",
-    #             'remove_prefix': "bar/"
-    #     }]
-    # }
-
-class GenericContainer:
-    __metaclass__ = elita.util.LoggingMetaClass
-
-    def __init__(self, doc):
-        self.name = doc['name']
-        self.parent = doc['parent']
-        self.created_datetime = doc['_id'].generation_time if '_id' in doc else None
-
-
-class BuildContainer(GenericContainer):
-    pass
-
-class ActionContainer(GenericContainer):
-    pass
-
-class UserContainer(GenericContainer):
-    pass
-
-class TokenContainer(GenericContainer):
-    pass
-
-class ApplicationContainer(GenericContainer):
-    pass
-
-class GlobalContainer(GenericContainer):
-    pass
-
-class JobContainer(GenericContainer):
-    pass
-
-class ServerContainer(GenericContainer):
-    pass
-
-class GitProviderContainer(GenericContainer):
-    pass
-
-class GitRepoContainer(GenericContainer):
-    pass
-
-class GitDeployContainer(GenericContainer):
-    pass
-
-class DeploymentContainer(GenericContainer):
-    pass
-
-class KeyPairContainer(GenericContainer):
-    pass
-
-class GroupContainer(GenericContainer):
-    pass
-
-class PackageMapContainer(GenericContainer):
-    pass
-
-class Root(GenericContainer):
-    pass
-
-class RootTree(collections.MutableMapping):
-
-    def __init__(self, db, updater, tree, doc, *args, **kwargs):
-        self.pp = pprint.PrettyPrinter(indent=4)
-        self.db = db
-        self.tree = tree
-        self.doc = doc
-        self.updater = updater
-
-    def is_action(self):
-        return self.doc and self.doc['_class'] == 'ActionContainer'
-
-    def __getitem__(self, key):
-        key = self.__keytransform__(key)
-        if self.is_action():
-            return self.tree[key]
-        if key in self.tree:
-            if key == '_doc':
-                return self.tree[key]
-            doc = self.db.dereference(self.tree[key]['_doc'])
-            if doc is None:
-                logging.debug("RootTree: __getitem__: {}: doc is None: KeyError".format(key))
-                raise KeyError
-            return RootTree(self.db, self.updater, self.tree[key], doc)
-        else:
-            logging.debug("RootTree: __getitem__: {}: key not in self.tree: KeyError".format(key))
-            raise KeyError
-
-    def __setitem__(self, key, value):
-        self.tree[key] = value
-        if not self.is_action():     # dynamically populated each request
-            pass
-            #self.updater.update()
-
-    def __delitem__(self, key):
-        del self.tree[key]
-        #self.updater.update()
-        return
-
-    def __iter__(self):
-        return iter(self.tree)
-
-    def __len__(self):
-        return len(self.tree)
-
-    def __keytransform__(self, key):
-        return key
-
-class RootTreeUpdater:
-
-    def __init__(self, tree, db):
-        self.tree = tree
-        self.db = db
-
-    def clean_actions(self):
-        #actions can't be serialized into mongo
-        for a in self.tree['app']:
-            actions = list()
-            if a[0] != '_':
-                if "actions" in self.tree['app'][a]:
-                    for ac in self.tree['app'][a]['actions']:
-                        if ac[0] != '_':
-                            actions.append(ac)
-                    for action in actions:
-                        del self.tree['app'][a]['actions'][action]
-
-    def update(self):
-        self.clean_actions()
-        root_tree = self.db['root_tree'].find_one()
-        self.db['root_tree'].update({"_id": root_tree['_id']}, self.tree)
-
-class DataValidator:
-    '''
-    Responsible for:
-        - Creating proper data model/root_tree on first run
-        - Validating that data isn't broken/inconsistent
-        - Running migrations between versions
-    '''
-    __metaclass__ = util.LoggingMetaClass
-
-    def __init__(self, settings, root, db):
-        '''
-        @type settings: pyramid.registry.Registry
-        @type root: dict
-        @type db: pymongo.database.Database
-        '''
-        # root is optional if this is the first time elita runs
-        assert settings and db
-        self.settings = settings
-        self.root = root
-        self.db = db
-
-    def run(self):
-        # order is very significant
-        logging.debug("running")
-        self.check_root()
-        self.check_toplevel()
-        self.check_global()
-        self.check_root_references()
-        self.check_users()
-        self.check_user_permissions()
-        self.check_doc_consistency()
-        self.check_containers()
-        self.check_apps()
-        self.check_jobs()
-        self.check_deployments()
-        self.check_servers()
-        self.check_gitdeploys()
-        self.check_gitrepos()
-        self.check_groups()
-        self.SaveRoot()
-
-    def SaveRoot(self):
-        logging.debug('saving root_tree')
-        self.db['root_tree'].save(self.root)
-
-    def NewContainer(self, class_name, name, parent):
-        cdoc = self.db['containers'].insert({'_class': class_name,
-                                         'name': name,
-                                         'parent': parent})
-        return bson.DBRef('containers', cdoc)
-
-    def check_doc_consistency(self):
-        #enforce collection rules and verify connectivity b/w objects and root tree
-        collects = [
-            'applications',
-            'builds',
-            'gitproviders',
-            'gitrepos',
-            'gitdeploys',
-            'jobs',
-            'tokens',
-            'users',
-            'servers',
-            'groups',
-            'packagemaps'
-        ]
-        for c in collects:
-            rm_docs = list()
-            for d in self.db[c].find():
-                if '_class' not in d:
-                    logging.warning("class specification not found in object {} from collection {}"
-                    .format(d['_id'], c))
-                    logging.debug("...deleting malformed object")
-                    self.db[c].remove({'_id': d['_id']})
-                if c == 'applications':
-                    if d['app_name'] not in self.root['app']:
-                        logging.warning("orphan application object: '{}', adding to root tree".format(d['app_name']))
-                        self.root['app'][d['app_name']] = {'_doc': bson.DBRef('applications', d['_id'])}
-                    if self.root['app'][d['app_name']]['_doc'].id != d['_id']:
-                        logging.warning("unlinked application document found, deleting")
-                        rm_docs.append(d['_id'])
-                if c == 'builds':
-                    if d['build_name'] not in self.root['app'][d['app_name']]['builds']:
-                        logging.warning("orphan build object: '{}/{}', adding to root tree".format(d['app_name'], d['build_name']))
-                        self.root['app'][d['app_name']]['builds'][d['build_name']] = {'_doc': bson.DBRef('builds', d['_id'])}
-                    if self.root['app'][d['app_name']]['builds'][d['build_name']]['_doc'].id != d['_id']:
-                        logging.warning("unlinked build document found, deleting")
-                        rm_docs.append(d['_id'])
-                if c == 'gitproviders':
-                    if d['name'] not in self.root['global']['gitproviders']:
-                        logging.warning("orphan gitprovider object: '{}', adding to root tree".format(d['name']))
-                        self.root['global']['gitproviders'][d['name']] = {'_doc': bson.DBRef('gitproviders', d['_id'])}
-                    if self.root['global']['gitproviders'][d['name']]['_doc'].id != d['_id']:
-                        logging.warning("unlinked gitprovider document found, deleting")
-                        rm_docs.append(d['_id'])
-                if c == 'gitrepos':
-                    if d['name'] not in self.root['app'][d['application']]['gitrepos']:
-                        logging.warning("orphan gitrepo object: '{}/{}', adding to root tree".format(d['application'], d['name']))
-                        self.root['app'][d['application']]['gitrepos'][d['name']] = {'_doc': bson.DBRef('gitrepos', d['_id'])}
-                    if self.root['app'][d['application']]['gitrepos'][d['name']]['_doc'].id != d['_id']:
-                        logging.warning("unlinked gitrepo document found, deleting")
-                        rm_docs.append(d['_id'])
-                if c == 'gitdeploys':
-                    if d['name'] not in self.root['app'][d['application']]['gitdeploys']:
-                        logging.warning("orphan gitdeploy object: '{}/{}', adding to root tree".format(d['application'], d['name']))
-                        self.root['app'][d['application']]['gitdeploys'][d['name']] = {'_doc': bson.DBRef('gitdeploys', d['_id'])}
-                    if self.root['app'][d['application']]['gitdeploys'][d['name']]['_doc'].id != d['_id']:
-                        logging.warning("unlinked gitdeploy document found, deleting")
-                        rm_docs.append(d['_id'])
-                if c == 'jobs':
-                    if d['job_id'] not in self.root['job']:
-                        logging.warning("orphan job object: '{}', adding to root tree".format(d['job_id']))
-                        self.root['job'][d['job_id']] = {'_doc': bson.DBRef('jobs', d['_id'])}
-                    #we don't really care about unlinked jobs
-                if c == 'tokens':
-                    if d['token'] not in self.root['global']['tokens']:
-                        logging.warning("orphan token object: '{}', adding to root tree".format(d['token']))
-                        self.root['global']['tokens'][d['token']] = {'_doc': bson.DBRef('tokens', d['_id'])}
-                    if self.root['global']['tokens'][d['token']]['_doc'].id != d['_id']:
-                        logging.warning("unlinked token document found, deleting")
-                        rm_docs.append(d['_id'])
-                if c == 'users':
-                    if d['username'] not in self.root['global']['users']:
-                        logging.warning("orphan user object: '{}', adding to root tree".format(d['username']))
-                        self.root['global']['users'][d['username']] = {'_doc': bson.DBRef('users', d['_id'])}
-                    if self.root['global']['users'][d['username']]['_doc'].id != d['_id']:
-                        logging.warning("unlinked user document found ({}), deleting".format(d['username']))
-                        rm_docs.append(d['_id'])
-                if c == 'servers':
-                    if d['name'] not in self.root['server']:
-                        logging.warning("orphan server object: '{}', adding to root tree".format(d['name']))
-                        self.root['server'][d['name']] = {'_doc': bson.DBRef('servers', d['_id'])}
-                    if self.root['server'][d['name']]['_doc'].id != d['_id']:
-                        logging.warning("unlinked server document found, deleting")
-                        rm_docs.append(d['_id'])
-                if c == 'groups':
-                    if d['name'] not in self.root['app'][d['application']]['groups']:
-                        logging.warning("orphan group object: '{}', adding to root tree".format(d['name']))
-                        self.root['app'][d['application']]['groups'][d['name']] = {'_doc': bson.DBRef('groups', d['_id'])}
-                    if self.root['app'][d['application']]['groups'][d['name']]['_doc'].id != d['_id']:
-                        logging.warning("unlinked group document found ({}), deleting".format(d['name']))
-                        rm_docs.append(d['_id'])
-                if c == 'packagemaps':
-                    if d['name'] not in self.root['app'][d['application']]['packagemaps']:
-                        logging.warning("orphan packagemap object: '{}', adding to root tree".format(d['name']))
-                        self.root['app'][d['application']]['packagemaps'][d['name']] = {'_doc': bson.DBRef('packagemaps', d['_id'])}
-                    if self.root['app'][d['application']]['packagemaps'][d['name']]['_doc'].id != d['_id']:
-                        logging.warning("unlinked packagemap document found ({}), deleting".format(d['name']))
-                        rm_docs.append(d['_id'])
-            for id in rm_docs:
-                self.db[c].remove({'_id': id})
-
-    @staticmethod
-    def check_root_refs(db, obj):
-        '''
-        Recurse into obj, find DBRefs, check if they are valid
-        '''
-        for k in obj:
-            if k == '_doc':
-                if not db.dereference(obj[k]):
-                    logging.warning("Invalid dbref found! {}".format(obj[k].collection))
-            elif k[0] != '_' and not isinstance(obj[k], bson.ObjectId):
-                DataValidator.check_root_refs(db, obj[k])
-
-    def check_root_references(self):
-        '''
-        Check that every DBRef in the root tree points to a valid document
-        '''
-        DataValidator.check_root_refs(self.db, self.root)
-
-    def check_global(self):
-        global_levels = {
-            'users': {
-                'class': "UserContainer"
-            },
-            'tokens': {
-                'class': "TokenContainer"
-            },
-            'gitproviders': {
-                'class': "GitProviderContainer"
-            },
-            'keypairs': {
-                'class': "KeyPairContainer"
-            }
-        }
-        for l in global_levels:
-            if l not in self.root['global']:
-                logging.warning("'{}' not found under global".format(l))
-                self.root['global'][l] = dict()
-                self.root['global'][l]['_doc'] = self.NewContainer(global_levels[l]['class'], l, "")
-        if DEFAULT_ADMIN_USERNAME not in self.root['global']['users']:
-            logging.warning("admin user not found")
-            users = [u for u in self.db['users'].find()]
-            if DEFAULT_ADMIN_USERNAME in [u['username'] for u in users]:
-                admin = self.db['users'].find_one({'username': DEFAULT_ADMIN_USERNAME})
-                assert admin
-                self.root['global']['users'][DEFAULT_ADMIN_USERNAME] = {
-                    '_doc': bson.DBRef('users', admin['_id'])
-                }
-
-    def check_users(self):
-        for u in self.root['global']['users']:
-            if u != '_doc':
-                if "permissions" not in self.root['global']['users'][u]:
-                    logging.warning("permissions container object not found under user {} in root tree; "
-                                        "fixing".format(u))
-                    pid = self.db['userpermissions'].insert({
-                            "_class": "UserPermissions",
-                            "username": u,
-                            "applications": list(),
-                            "actions": dict(),
-                            "servers": list()
-                    })
-                    self.root['global']['users'][u]['permissions'] = {
-                        '_doc': bson.DBRef('userpermissions', pid)
-                    }
-        users = [u for u in self.db['users'].find()]
-        for u in users:
-            if 'username' not in u:
-                logging.warning("user found without username property; fixing {}".format(u['_id']))
-                if 'name' in u:
-                    u['username'] = u['name']
-                    self.db['users'].save(u)
-                else:
-                    logging.warning("...couldn't fix user because name field not found!")
-        if DEFAULT_ADMIN_USERNAME not in [u['username'] for u in users]:
-            logging.warning("admin user document not found; creating")
-            userobj = User({
-                'username': DEFAULT_ADMIN_USERNAME,
-                'permissions': DEFAULT_ADMIN_PERMISSIONS,
-                'password': DEFAULT_ADMIN_PASSWORD
-            })
-            doc = userobj.get_doc()
-            doc['_class'] = 'User'
-            uid = self.db['users'].insert(doc)
-            pid = self.db['userpermissions'].insert({
-                "_class": "UserPermissions",
-                "username": DEFAULT_ADMIN_USERNAME,
-                "applications": list(),
-                "actions": dict(),
-                "servers": list()
-            })
-            self.root['global']['users'][DEFAULT_ADMIN_USERNAME] = {
-                '_doc': bson.DBRef('users', uid),
-                'permissions': {
-                    '_doc': bson.DBRef('userpermissions', pid)
-                }
-            }
-
-    def check_user_permissions(self):
-        for u in self.db['users'].find():
-            if 'permissions' not in u:
-                logging.warning("permissions object not found for user {}; fixing with empty obj"
-                              .format(u['username']))
-                u['permissions'] = {
-                    'apps': {},
-                    'actions': {},
-                    'servers': []
-                }
-            for o in ('apps', 'actions', 'servers'):
-                if o not in u['permissions']:
-                    logging.warning("{} not found in permissions object for user {}; fixing with empty "
-                                        "obj".format(o, u['username']))
-                    u['permissions'][o] = list() if o == 'servers' else dict()
-            if not isinstance(u['permissions']['servers'], list):
-                logging.warning("servers key under permissions object for user {} is not a list; fixing"
-                              .format(u['username']))
-                u['permissions']['servers'] = list(u['permissions']['servers'])
-            for o in ('apps', 'actions'):
-                if not isinstance(u['permissions'][o], dict):
-                    logging.warning("{} key under permissions object for user {} is not a dict; invalid "
-                                        "so replacing with empty dict".format(o, u['username']))
-                    u['permissions'][o] = dict()
-            self.db['users'].save(u)
-
-    def check_jobs(self):
-        djs = list()
-        for j in self.root['job']:
-            if j[0] != '_':
-                if self.db.dereference(self.root['job'][j]['_doc']) is None:
-                    logging.warning("found dangling job ref in root tree: {}; deleting".format(j))
-                    djs.append(j)
-        for j in djs:
-            del self.root['job'][j]
-        job_fixlist = list()
-        for doc in self.db['jobs'].find():
-            if doc['job_id'] not in self.root['job']:
-                job_id = doc['job_id']
-                logging.warning("found orphan job: {}; adding to root tree".format(doc['job_id']))
-                self.root['job'][job_id] = {'_doc': bson.DBRef('jobs', doc['_id'])}
-            for k in ('job_type', 'data', 'name'):
-                if k not in doc:
-                    logging.warning("found job without {}: {}; adding blank".format(k, doc['job_id']))
-                    doc[k] = ""
-                    job_fixlist.append(doc)
-        for d in job_fixlist:
-            self.db['jobs'].save(d)
-
-    def check_apps(self):
-        app_sublevels = {
-            'builds': {
-                'class': "BuildContainer"
-            },
-            'actions': {
-                'class': "ActionContainer"
-            },
-            'gitrepos': {
-                'class': "GitRepoContainer"
-            },
-            'gitdeploys': {
-                'class': "GitDeployContainer"
-            },
-            'deployments': {
-                'class': "DeploymentContainer"
-            },
-            'groups': {
-                'class': "GroupContainer"
-            },
-            'packagemaps': {
-                'class': "PackageMapContainer"
-            }
-        }
-        for a in self.root['app']:
-            if a[0] != '_':
-                if 'action' in self.root['app'][a]:
-                    logging.warning("found old 'action' container under app {}; deleting".format(a))
-                    del self.root['app'][a]['action']
-                for sl in app_sublevels:
-                    if sl not in self.root['app'][a]:
-                        logging.warning("'{}' not found under {}".format(sl, a))
-                        self.root['app'][a][sl] = dict()
-                        self.root['app'][a][sl]['_doc'] = self.NewContainer(app_sublevels[sl]['class'], sl, a)
-                    d_o = list()
-                    for o in self.root['app'][a][sl]:
-                        if o[0] != '_' and '_doc' in self.root['app'][a][sl][o]:
-                            if self.db.dereference(self.root['app'][a][sl][o]['_doc']) is None:
-                                logging.warning("dangling {} reference '{}' in app {}; deleting".format(sl, o, a))
-                                d_o.append(o)
-                    for d in d_o:
-                        del self.root['app'][a][sl][d]
-
-    def check_servers(self):
-        ds = list()
-        for s in self.root['server']:
-            if s[0] != '_':
-                if self.db.dereference(self.root['server'][s]['_doc']) is None:
-                    logging.warning("found dangling server ref in root tree: {}; deleting".format(s))
-                    ds.append(s)
-        for s in ds:
-            del self.root['server'][s]
-        update_list = list()
-        for d in self.db['servers'].find():
-            update = False
-            if 'environment' not in d:
-                logging.warning("environment field not found for server {}; fixing".format(d['_id']))
-                d['environment'] = ""
-                update = True
-            if 'status' not in d:
-                logging.warning("status field not found for server {}; fixing".format(d['_id']))
-                d['status'] = "ok"
-                update = True
-            if update:
-                update_list.append(d)
-        for d in update_list:
-            self.db['servers'].save(d)
-
-    def check_deployments(self):
-        update_list = list()
-        for d in self.db['deployments'].find():
-            if 'server_specs' in d:
-                logging.warning("found deployment with old-style server_specs object: {}; fixing".format(
-                    d['_id']))
-                d['deployment'] = {
-                    'servers': d['server_specs']['spec'],
-                    'gitdeploys': d['server_specs']['gitdeploys']
-                }
-                update_list.append(d)
-            if 'job_id' not in d:
-                logging.warning("found deployment without job_id: {}; fixing with blank job".format(d[
-                    '_id']))
-                d['job_id'] = ""
-                update_list.append(d)
-            if 'results' in d:
-                logging.warning("found deployment with old-style results field: {}; removing"
-                              .format(d['_id']))
-                update_list.append(d)
-            if 'status' not in d:
-                logging.warning("found deployment without status: {}; fixing with blank".format(d['_id']))
-                d['status'] = ""
-                update_list.append(d)
-            if 'progress' not in d:
-                logging.warning("found deployment without progress: {}; fixing with empty dict".format(d['_id']))
-                d['progress'] = dict()
-                update_list.append(d)
-        for d in update_list:
-            if 'server_specs' in d:
-                del d['server_specs']
-            if 'results' in d:
-                del d['results']
-            self.db['deployments'].save(d)
-
-        update_list = list()
-        for a in self.root['app']:
-            if a[0] != '_':
-                for d in self.root['app'][a]['deployments']:
-                    if d[0] != '_':
-                        doc = self.db.dereference(self.root['app'][a]['deployments'][d]['_doc'])
-                        assert doc is not None
-                        if 'name' not in doc:
-                            logging.warning("name not found under deployment {}; fixing".format(d))
-                            doc['name'] = d
-                            update_list.append(doc)
-        if len(update_list) > 0:
-            for d in update_list:
-                self.db['deployments'].save(d)
-
-    def check_gitdeploys(self):
-        dlist = list()
-        fixlist = list()
-        for d in self.db['gitdeploys'].find():
-            delete = False
-            for k in ('application', 'name', 'package', 'location'):
-                if k not in d:
-                    logging.warning("mandatory key '{}' not found under gitdeploy {}; removing".
-                                  format(k, d['_id']))
-                    dlist.append(d['_id'])
-                    delete = True
-            fix = False
-            if 'attributes' not in d and not delete:
-                logging.warning("attributes not found under gitdeploy {}; fixing".format(d['_id']))
-                d['attributes'] = dict()
-                fix = True
-            if 'actions' not in d and not delete:
-                logging.warning("actions not found under gitdeploy {}; fixing".format(d['_id']))
-                d['actions'] = {
-                    'prepull': dict(),
-                    'postpull': dict()
-                }
-                fix = True
-            if 'servers' not in d and not delete:
-                logging.warning("servers not found under gitdeploy {}; fixing".format(d['_id']))
-                d['servers'] = list()
-                fix = True
-            if 'server' in d:
-                logging.warning("gitdeploy found with obsolete server field {}; removing".format(d['_id']))
-                del d['server']
-                fix = True
-            if len([x for x, y in collections.Counter(d['servers']).items() if y > 1]) > 0 and not delete:
-                logging.warning("duplicate server entries found in gitdeploy {}; fixing".format(d['_id']))
-                d['servers'] = list(set(tuple(d['servers'])))
-                fix = True
-            if 'deployed_build' not in d:
-                logging.warning("deployed_build not found in gitdeploy {}".format(d['_id']))
-                gr_doc = self.db.dereference(d['location']['gitrepo'])
-                if not gr_doc or 'last_build' not in gr_doc:
-                    logging.debug("...ERROR: referenced gitrepo not found! Aborting fix...")
-                else:
-                    d['deployed_build'] = gr_doc['last_build']
-                    fix = True
-            if fix:
-                fixlist.append(d)
-        for f in fixlist:
-            self.db['gitdeploys'].find_and_modify(query={'_id': f['_id']}, update=f, upsert=True,
-                                                  new=True)
-        for dl in dlist:
-            self.db['gitdeploys'].remove({'_id': dl})
-
-    def check_gitrepos(self):
-        fixlist = list()
-        for d in self.db['gitrepos'].find():
-            if 'uri' in d:
-                if d['uri'] is not None and ':' in d['uri']:
-                    logging.warning("found gitrepo URI with ':'; replacing with '/' ({})".format(d['name']))
-                    d['uri'] = d['uri'].replace(':', '/')
-                    fixlist.append(d)
-            else:
-                logging.warning("found gitrepo without URI ({}); adding empty field".format(d['name']))
-                d['uri'] = ""
-                fixlist.append(d)
-            if 'last_build' not in d:
-                logging.warning("found gitrepo without last_build: {}; adding empty field".format(d['name']))
-                d['last_build'] = None
-                fixlist.append(d)
-        for d in fixlist:
-            self.db['gitrepos'].save(d)
-
-    def check_groups(self):
-        fixlist = list()
-        for d in self.db['groups'].find():
-            fix = False
-            if 'description' not in d:
-                logging.warning("found group without description: {}; fixing".format(d['name']))
-                d['description'] = None
-                fix = True
-            if 'servers' in d:
-                logging.warning("found group with explicit server list: {}; removing".format(d['name']))
-                del d['servers']
-                fix = True
-            if 'rolling_deploy' not in d:
-                logging.warning("found group without rolling_deploy flag: {}; fixing".format(d['name']))
-                d['rolling_deploy'] = False
-                fix = True
-            if fix:
-                fixlist.append(d)
-        for d in fixlist:
-            self.db['groups'].save(d)
-
-    def check_toplevel(self):
-        top_levels = {
-            'app': {
-                'class': "ApplicationContainer"
-            },
-            'global': {
-                'class': "GlobalContainer"
-            },
-            'job': {
-                'class': 'JobContainer'
-            },
-            'server': {
-                'class': 'ServerContainer'
-            }
-        }
-        for tl in top_levels:
-            if tl not in self.root:
-                logging.warning("'{}' not found under root".format(tl))
-                self.root[tl] = dict()
-                self.root[tl]['_doc'] = self.NewContainer(top_levels[tl]['class'], tl, "")
-            if tl == 'server':
-                if "environments" not in self.root[tl] or isinstance(self.root[tl]['environments'], bson.DBRef):
-                    logging.warning("environments endpoint not found under servers container; fixing")
-                    eid = self.db['environments'].insert({
-                        '_class': "Environment",
-                        'environments': ""
-                    })
-                    self.root[tl]['environments'] = {
-                        "_doc": bson.DBRef("environments", eid)
-                    }
-
-    def check_containers(self):
-        update_list = list()
-        for c in self.db['containers'].find():
-            if c['_class'] == 'AppContainer':
-                logging.warning("found Application container with incorrect 'AppContainer' class; fixing")
-                c['_class'] = 'ApplicationContainer'
-                update_list.append(c)
-        for c in update_list:
-            self.db['containers'].save(c)
-
-    def check_root(self):
-        if not self.root:
-            logging.warning("no root_tree found!")
-        self.root = dict() if not self.root else self.root
-        if '_class' in self.root:
-            logging.warning("'_class' found in base of root; deleting")
-            del self.root['_class']
-        if '_doc' not in self.root:
-            logging.warning("'_doc' not found in base of root")
-            self.root['_doc'] = self.NewContainer('Root', 'Root', '')
-        rt_list = [d for d in self.db['root_tree'].find()]
-        if len(rt_list) > 1:
-            logging.warning("duplicate root_tree docs found! Removing all but the first")
-            for d in rt_list[1:]:
-                self.db['root_tree'].remove({'_id': d['_id']})
-
 

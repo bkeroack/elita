@@ -12,7 +12,7 @@ import socket
 import os
 
 from elita.actions import action
-import models
+import dataservice.models
 import builds
 import auth
 import servers
@@ -563,7 +563,7 @@ class BuildView(GenericView):
     @validate_parameters(required_params=['file_type'], optional_params=['indirect_url', 'package_map'])
     def POST(self):
         self.build_name = self.context.build_name
-        if self.req.params["file_type"] not in models.SupportedFileType.types:
+        if self.req.params["file_type"] not in dataservice.models.SupportedFileType.types:
             return self.Error(400, "file type not supported")
         self.file_type = self.req.params["file_type"]
         self.package_map = self.req.params['package_map'] if 'package_map' in self.req.params else None
@@ -721,7 +721,7 @@ class DeploymentContainerView(GenericView):
         if build_name not in self.datasvc.buildsvc.GetBuilds(app):
             return self.Error(400, "unknown build '{}'".format(build_name))
         build_doc = self.datasvc.buildsvc.GetBuild(app, build_name)
-        build_obj = models.Build(build_doc)
+        build_obj = dataservice.models.Build(build_doc)
         if not build_obj.stored:
             return self.Error(400, "no stored data for build: {} (stored == false)".format(build_name))
         try:
@@ -1773,7 +1773,7 @@ def Action(context, request):
         logging.debug("REQUEST: context.doc: {}".format(pp.pformat(context.doc)))
         cname = context.doc['_class']
         try:
-            mobj = models.__dict__[cname](context.doc)
+            mobj = dataservice.models.__dict__[cname](context.doc)
         except elita_exceptions.SaltServerNotAccessible:
             return {
                 'server': context.doc['name'],

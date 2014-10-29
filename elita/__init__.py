@@ -3,7 +3,9 @@ from pyramid.renderers import JSON
 
 import pymongo
 
-import models
+import dataservice
+import dataservice.root_tree
+import dataservice.datavalidator
 
 def GetMongoClient(settings):
     assert settings
@@ -22,8 +24,8 @@ def generate_root_tree(db):
     assert db
     tree = db['root_tree'].find_one()
     assert tree
-    updater = models.RootTreeUpdater(tree, db)
-    return models.RootTree(db, updater, tree, db.dereference(tree['_doc']))
+    updater = dataservice.root_tree.RootTreeUpdater(tree, db)
+    return dataservice.root_tree.RootTree(db, updater, tree, db.dereference(tree['_doc']))
 
 def RootService(request):
     '''
@@ -32,7 +34,7 @@ def RootService(request):
     return generate_root_tree(request.db)
 
 def DataService(request):
-    return models.DataService(request.registry.settings, request.db, request.root)
+    return dataservice.DataService(request.registry.settings, request.db, request.root)
 
 def root_factory(request):
     #initialize request objects
@@ -46,7 +48,7 @@ def main(global_config, **settings):
 
     #data validator / migrations
     db, root, client = GetMongoClient(settings)
-    dv = models.DataValidator(settings, root, db)
+    dv = dataservice.datavalidator.DataValidator(settings, root, db)
     dv.run()
     client.close()
 
