@@ -12,7 +12,7 @@ import socket
 import os
 
 from elita.actions import action
-import models
+import dataservice.models
 import builds
 import auth
 import servers
@@ -152,6 +152,8 @@ class GenericView:
                 return False, self.Error(403, "incorrect authentication")
             token = self.req.params.getall('auth_token')[0] if 'auth_token' in self.req.params else self.req.headers['Auth-Token']
             authsvc = auth.UserPermissions(self.datasvc.usersvc, token, datasvc=self.datasvc)
+            if not authsvc.validate_token():
+                return False, self.Error(403, "invalid auth token")
             allowed_apps = authsvc.get_allowed_apps()
             self.global_read = False
             self.global_write = False
@@ -169,23 +171,49 @@ class GenericView:
         logging.debug("allowed_apps: {}".format(authsvc.get_allowed_apps()))
         return False, self.Error(403, "bad token")
 
-    def check_patch_keys(self):
+    def check_patch_body(self, forbidden_keys=None):
         '''
-        Verify that the keys in the provided JSON body are a strict subset of the keys in the context object.
+        Verify that the keys in the provided JSON body are either:
+         a) a strict subset of the keys in the context object;
+         b) a valid JSON Patch document only affecting valid paths
+
         For PATCH calls, we want to make sure that the user is only trying to modify keys that actually exist in the
         data model. PATCH should only ever be called on object endpoints (not containers) so the context object will be
         the corresponding data model object.
         '''
         assert hasattr(self.context, 'get_doc')
-        assert self.body
-        assert elita.util.type_check.is_dictlike(self.body)
+        assert elita.util.type_check.is_dictlike(self.body) or elita.util.type_check.is_seq(self.body)
         context_doc = self.context.get_doc()
+        forbidden_keys = [] if not forbidden_keys else forbidden_keys
+
         #don't let user change any part of composite key for the object
-        for n in ('name', 'app_name', 'build_name', 'application', 'username'):
-            if n in context_doc and n in self.body:
-                return False, self.Error(400, "cannot change key value: {}".format(n))
-        if not set(context_doc.keys()).issuperset(set(self.body.keys())):
-            return False, self.Error(400, "unknown keys: {}".format(list(set(self.body.keys()) - set(context_doc.keys()))))
+        composite_keys = ['name', 'app_name', 'build_name', 'application', 'username']
+        bad_keys = composite_keys + forbidden_keys
+
+        if not self.body:
+            return False, self.Error(400, "empty object: {}".format(self.body))
+
+        if elita.util.type_check.is_dictlike(self.body):
+            for n in bad_keys:
+                if n in context_doc and n in self.body:
+                    return False, self.Error(400, "cannot change key value: {}".format(n))
+            if not set(context_doc.keys()).issuperset(set(self.body.keys())):
+                return False, self.Error(400, "unknown keys: {}".format(list(set(self.body.keys()) - set(context_doc.keys()))))
+        else:
+            patch = self.body
+            for op in patch:
+                if not all([k in op for k in ("op", "path")]):
+                    return False, self.Error(400, "JSON patch: missing one or more required keys: op, path")
+                path_split = str(op["path"]).split('/')
+                if len(path_split) < 2:
+                    return False, self.Error(400, "JSON patch: malformed operation object: {}".format(op))
+                if path_split[1] not in context_doc:
+                    return False, self.Error(400, "JSON patch: unknown top-level key: {}".format(path_split[1]))
+                if path_split[1][0] == '_':
+                    return False, self.Error(400, "JSON patch: cannot modify internal field: {}".format(path_split[1]))
+                for k in bad_keys:
+                    if path_split[1] == k and op["op"] != "test":
+                        return False, self.Error(400, "JSON patch: cannot modify key: {}".format(k))
         return True, None
 
     def call_action(self):
@@ -420,10 +448,11 @@ class ApplicationView(GenericView):
 
     @validate_parameters(json_body={})
     def PATCH(self):
-        ok, err = self.check_patch_keys()
+        ok, err = self.check_patch_body()
         if not ok:
             return err
-        self.datasvc.appsvc.UpdateApplication(self.context.app_name, self.body)
+        if not self.datasvc.appsvc.UpdateApplication(self.context.app_name, self.body):
+            return self.Error(400, "patch did not complete - bad JSON patch or test operation failure within patch")
         return {
             'modified_application': self.sanitize_doc_created_datetime(self.datasvc.appsvc.GetApplication(self.context.app_name))
         }
@@ -563,7 +592,7 @@ class BuildView(GenericView):
     @validate_parameters(required_params=['file_type'], optional_params=['indirect_url', 'package_map'])
     def POST(self):
         self.build_name = self.context.build_name
-        if self.req.params["file_type"] not in models.SupportedFileType.types:
+        if self.req.params["file_type"] not in dataservice.models.SupportedFileType.types:
             return self.Error(400, "file type not supported")
         self.file_type = self.req.params["file_type"]
         self.package_map = self.req.params['package_map'] if 'package_map' in self.req.params else None
@@ -593,10 +622,11 @@ class BuildView(GenericView):
 
     @validate_parameters(json_body={})
     def PATCH(self):
-        ok, err = self.check_patch_keys()
+        ok, err = self.check_patch_body()
         if not ok:
             return err
-        self.datasvc.buildsvc.UpdateBuild(self.context.app_name, self.context.build_name, self.body)
+        if not self.datasvc.buildsvc.UpdateBuild(self.context.app_name, self.context.build_name, self.body):
+            return self.Error(400, "patch did not complete - bad JSON patch or test operation failure within patch")
         return {
             'modifed_build': self.sanitize_doc_created_datetime(self.datasvc.buildsvc.GetBuild(self.context.app_name, self.context.build_name))
         }
@@ -675,10 +705,11 @@ class ServerView(GenericView):
 
     @validate_parameters(json_body={})
     def PATCH(self):
-        ok, err = self.check_patch_keys()
+        ok, err = self.check_patch_body()
         if not ok:
             return err
-        self.datasvc.serversvc.UpdateServer(self.context.name, self.body)
+        if not self.datasvc.serversvc.UpdateServer(self.context.name, self.body):
+            return self.Error(400, "patch did not complete - bad JSON patch or test operation failure within patch")
         return {
             'modified_server': self.sanitize_doc_created_datetime(self.datasvc.serversvc.GetServer(self.context.name))
         }
@@ -721,7 +752,7 @@ class DeploymentContainerView(GenericView):
         if build_name not in self.datasvc.buildsvc.GetBuilds(app):
             return self.Error(400, "unknown build '{}'".format(build_name))
         build_doc = self.datasvc.buildsvc.GetBuild(app, build_name)
-        build_obj = models.Build(build_doc)
+        build_obj = dataservice.models.Build(build_doc)
         if not build_obj.stored:
             return self.Error(400, "no stored data for build: {} (stored == false)".format(build_name))
         try:
@@ -965,10 +996,11 @@ class KeyPairView(GenericView):
 
     @validate_parameters(json_body={})
     def PATCH(self):
-        ok, err = self.check_patch_keys()
+        ok, err = self.check_patch_body()
         if not ok:
             return err
-        self.datasvc.keysvc.UpdateKeyPair(self.context.name, self.body)
+        if not self.datasvc.keysvc.UpdateKeyPair(self.context.name, self.body):
+            return self.Error(400, "patch did not complete - bad JSON patch or test operation failure within patch")
         return {
             'modifed_keypair': self.sanitize_doc_created_datetime(self.datasvc.keysvc.GetKeyPair(self.context.name))
         }
@@ -1038,10 +1070,11 @@ class GitProviderView(GenericView):
 
     @validate_parameters(json_body={})
     def PATCH(self):
-        ok, err = self.check_patch_keys()
+        ok, err = self.check_patch_body()
         if not ok:
             return err
-        self.datasvc.gitsvc.UpdateGitProvider(self.context.name)
+        if not self.datasvc.gitsvc.UpdateGitProvider(self.context.name):
+            return self.Error(400, "patch did not complete - bad JSON patch or test operation failure within patch")
         return {
             'modifed_gitprovider': self.sanitize_doc_created_datetime(self.datasvc.gitsvc.GetGitProvider(self.context.name))
         }
@@ -1142,10 +1175,11 @@ class GitRepoView(GenericView):
 
     @validate_parameters(json_body={})
     def PATCH(self):
-        ok, err = self.check_patch_keys()
+        ok, err = self.check_patch_body()
         if not ok:
             return err
-        self.datasvc.gitsvc.UpdateGitRepo(self.context.application, self.context.name, self.body)
+        if not self.datasvc.gitsvc.UpdateGitRepo(self.context.application, self.context.name, self.body):
+            return self.Error(400, "patch did not complete - bad JSON patch or test operation failure within patch")
         return {
             'modified_gitrepo': self.sanitize_doc_created_datetime(self.datasvc.gitsvc.GetGitRepo(self.context.application, self.context.name))
         }
@@ -1310,10 +1344,11 @@ class GitDeployView(GenericView):
 
     @validate_parameters(json_body={})
     def PATCH(self):
-        ok, err = self.check_patch_keys()
+        ok, err = self.check_patch_body()
         if not ok:
             return err
-        self.datasvc.gitsvc.UpdateGitDeploy(self.context.application, self.context.name, self.body)
+        if not self.datasvc.gitsvc.UpdateGitDeploy(self.context.application, self.context.name, self.body):
+            return self.Error(400, "patch did not complete - bad JSON patch or test operation failure within patch")
         gd = self.datasvc.gitsvc.GetGitDeploy(self.context.application, self.context.name)
         return {
             'modified_gitdeploy': self.sanitize_doc_created_datetime(gd),
@@ -1443,10 +1478,11 @@ class GroupView(GenericView):
 
     @validate_parameters(json_body={})
     def PATCH(self):
-        ok, err = self.check_patch_keys()
+        ok, err = self.check_patch_body()
         if not ok:
             return err
-        self.datasvc.groupsvc.UpdateGroup(self.context.application, self.context.name, self.body)
+        if not self.datasvc.groupsvc.UpdateGroup(self.context.application, self.context.name, self.body):
+            return self.Error(400, "patch did not complete - bad JSON patch or test operation failure within patch")
         return {
             'modified_group': self.sanitize_doc_created_datetime(self.datasvc.groupsvc.GetGroup(self.context.application, self.context.name))
         }
@@ -1546,10 +1582,11 @@ class PackageMapView(GenericView):
 
     @validate_parameters(json_body={})
     def PATCH(self):
-        ok, err = self.check_patch_keys()
+        ok, err = self.check_patch_body()
         if not ok:
             return err
-        self.datasvc.pmsvc.UpdatePackageMap(self.context.application, self.context.name, self.body)
+        if not self.datasvc.pmsvc.UpdatePackageMap(self.context.application, self.context.name, self.body):
+            return self.Error(400, "patch did not complete - bad JSON patch or test operation failure within patch")
         return {
             'modified_packagemap': self.sanitize_doc_created_datetime(self.datasvc.pmsvc.GetPackageMap(self.context.application, self.context.name))
         }
@@ -1668,15 +1705,16 @@ class UserView(GenericView):
         ok, err = self.user_check_password()
         if not ok:
             return err
-        ok, err = self.check_patch_keys()
+        ok, err = self.check_patch_body(forbidden_keys=["hashed_pw", "salt"])
         if not ok:
             return err
-        if 'permissions' in self.body:
+        if elita.util.type_check.is_dictlike(self.body) and 'permissions' in self.body:
             if not self.global_write:
                 return self.Error(403, "only admins can change user permissions")
             if not auth.ValidatePermissionsObject(self.body["permissions"]).run():
                 return self.Error(400, "invalid permissions object (valid JSON but semantically incorrect)")
-        self.datasvc.usersvc.UpdateUser(self.context.username, self.body)
+        if not self.datasvc.usersvc.UpdateUser(self.context.username, self.body):
+            return self.Error(400, "patch did not complete - bad JSON patch or test operation failure within patch")
         return {
             'modified_user': self.sanitize_doc_created_datetime(self.datasvc.usersvc.GetUser(self.context.username))
         }
@@ -1773,7 +1811,7 @@ def Action(context, request):
         logging.debug("REQUEST: context.doc: {}".format(pp.pformat(context.doc)))
         cname = context.doc['_class']
         try:
-            mobj = models.__dict__[cname](context.doc)
+            mobj = dataservice.models.__dict__[cname](context.doc)
         except elita_exceptions.SaltServerNotAccessible:
             return {
                 'server': context.doc['name'],

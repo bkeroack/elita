@@ -7,7 +7,7 @@ import copy
 import time
 import random
 
-import elita.models
+import elita.dataservice.mongo_service
 
 def setup_db():
     mc = pymongo.MongoClient(host='localhost', port=27017)
@@ -72,7 +72,7 @@ def test_get_document():
     db['mock_objs'].insert(insert_doc)
     del insert_doc['_id']
 
-    ms = elita.models.MongoService(db)
+    ms = elita.dataservice.mongo_service.MongoService(db)
     doc = ms.get('mock_objs', {'name': 'tuna'})
 
     assert doc
@@ -89,7 +89,7 @@ def test_roottree_update():
     id = db['mock_objs'].insert(test_obj)
     del test_obj['_id']
 
-    ms = elita.models.MongoService(db)
+    ms = elita.dataservice.mongo_service.MongoService(db)
     ms.update_roottree(('app', 'foo', 'mocks', 'foobar'), 'mock_objs', id)
 
     rt_list = [d for d in db['root_tree'].find()]
@@ -181,7 +181,7 @@ def test_roottree_delete_reference():
     _create_roottree()
     insert_doc = copy.deepcopy(test_obj)
     insert_doc['name'] = 'salamander'
-    ms = elita.models.MongoService(db)
+    ms = elita.dataservice.mongo_service.MongoService(db)
 
     q = multiprocessing.Queue()
 
@@ -213,7 +213,7 @@ def test_create_new_document():
     Test that creating a new document works
     '''
     insert_doc = copy.deepcopy(test_obj)
-    ms = elita.models.MongoService(db)
+    ms = elita.dataservice.mongo_service.MongoService(db)
     res = ms.create_new('mock_objs', {'name': 'swimming'}, 'Mock', insert_doc)
 
     assert res
@@ -226,7 +226,7 @@ def test_modify_existing_document():
     Test that modifying an existing document works
     '''
     insert_doc = copy.deepcopy(test_obj)
-    ms = elita.models.MongoService(db)
+    ms = elita.dataservice.mongo_service.MongoService(db)
     res = ms.create_new('mock_objs', {'name': 'soccer'}, 'Mock', insert_doc)
     assert res
 

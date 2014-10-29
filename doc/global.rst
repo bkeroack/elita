@@ -211,13 +211,16 @@ Modify User
 
 .. http:patch::   /global/users/(string:username)
 
-   Modify a user. On the fields specified in the JSON body will be altered.
+   Modify a user. On the fields specified in the JSON body (or JSON Patch) will be altered.
 
    :param password: Password (URL-encoded if necessary)
    :param auth_token: Auth token (only if password is not provided)
    :jsonparam string body: JSON object containing user fields to modify
    :type password: string
    :type auth_token: string
+
+   Password may be changed via either JSON body or JSON Patch methods. Note that for JSON Patch password changes,
+   only the "replace" operation is supported.
 
    **Example request**
 
