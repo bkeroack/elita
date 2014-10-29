@@ -416,6 +416,10 @@ class DataValidator:
                 logging.warning("found deployment without progress: {}; fixing with empty dict".format(d['_id']))
                 d['progress'] = dict()
                 update_list.append(d)
+            if 'username' not in d:
+                logging.warning("found deployment without username: {}; fixing with empty string".format(d['_id']))
+                d['username'] = ""
+                update_list.append(d)
         for d in update_list:
             if 'server_specs' in d:
                 del d['server_specs']

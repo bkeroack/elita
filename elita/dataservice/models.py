@@ -167,6 +167,7 @@ class Deployment(GenericDataModel):
         'groups': None,
         'servers': None,
         'gitdeploys': None,
+        'username': None,
         'options': dict(),  # pauses, divisor
         'status': None,
         'commits': dict(),    # { gitrepo_name: commit_hash }

@@ -137,6 +137,18 @@ class GenericView:
     def get_unknown(self, existing, submitted):
         return list(set(submitted) - set(existing))
 
+    def get_username(self):
+        '''
+        Get username of requester
+        '''
+        if not self.allow_pw_auth:
+            token = self.req.params.getall('auth_token')[0] if 'auth_token' in self.req.params else self.req.headers['Auth-Token']
+            authsvc = auth.UserPermissions(self.datasvc.usersvc, token, datasvc=self.datasvc)
+            assert authsvc.validate_token()
+            return authsvc.username
+        else:
+            return ""
+
     def user_check_password(self):
         ''' Used by UserView/UserPermissionsView to verify password or auth_token (but only token from the context user)
         '''
@@ -863,7 +875,7 @@ class DeploymentContainerView(GenericView):
         environments = body['environments'] if 'environments' in body else None
         groups = body['groups'] if 'groups' in body else None
         dpo = self.datasvc.deploysvc.NewDeployment(app, build_name, environments, groups, target['servers'],
-                                                   target['gitdeploys'], integer_params)
+                                                   target['gitdeploys'], self.get_username(), integer_params)
         d_id = dpo['NewDeployment']['id']
         target['environments'] = environments if isinstance(environments, list) else None
         target['groups'] = groups if isinstance(groups, list) else None
@@ -914,6 +926,7 @@ class DeploymentView(GenericView):
                 'commits': self.context.commits if hasattr(self.context, 'commits') else None,
                 'gitdeploys': self.context.gitdeploys if hasattr(self.context, 'gitdeploys') else None,
                 'status': self.context.status,
+                'username': self.context.username,
                 'progress': self.context.progress
             }
         }

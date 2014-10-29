@@ -1226,18 +1226,20 @@ class GitDataService(GenericChildDataService):
         self.mongo_service.delete('gitrepos', {'name': name, 'application': app})
 
 class DeploymentDataService(GenericChildDataService):
-    def NewDeployment(self, app, build_name, environments, groups, servers, gitdeploys, options):
+    def NewDeployment(self, app, build_name, environments, groups, servers, gitdeploys, username, options):
         '''
         Create new deployment object
 
         @rtype: dict
         '''
-        assert app and build_name and options and ((environments and groups) or (servers and gitdeploys))
+        assert app and build_name and username and options and ((environments and groups) or (servers and gitdeploys))
         assert elita.util.type_check.is_string(app)
         assert elita.util.type_check.is_string(build_name)
+        assert elita.util.type_check.is_string(username)
         assert elita.util.type_check.is_dictlike(options)
         assert app in self.root['app']
         assert build_name in self.root['app'][app]['builds']
+        assert username in self.root['global']['users']
         assert all([not p for p in (environments, groups)]) or all([elita.util.type_check.is_seq(p) for p in (environments, groups)])
         assert all([not p for p in (servers, gitdeploys)]) or all([elita.util.type_check.is_seq(p) for p in (servers, gitdeploys)])
         assert not environments or set(environments).issubset(set(self.deps['ServerDataService'].GetEnvironments()))
@@ -1254,6 +1256,7 @@ class DeploymentDataService(GenericChildDataService):
             'groups': groups,
             'servers': servers,
             'gitdeploys': gitdeploys,
+            'username': username,
             'options': options,
             'status': 'created',
             'job_id': ''
