@@ -8,6 +8,7 @@ import datetime
 import pytz
 import copy
 import sys
+import jsonpatch
 
 import elita.util
 import elita.elita_exceptions
@@ -58,6 +59,23 @@ class GenericChildDataService:
         assert elita.util.type_check.is_string(parent)
         return self.mongo_service.create_new('containers', {'name': name, 'parent': parent}, class_name,
                                              {'name': name, 'parent': parent}, remove_existing=False)
+
+    def UpdateObjectFromPatch(self, collection, keys, patch):
+        '''
+        Generic method to update an object (document) with a JSON Patch document
+        '''
+        assert collection and keys and patch
+        assert elita.util.type_check.is_string(collection)
+        assert elita.util.type_check.is_dictlike(keys)
+        assert elita.util.type_check.is_seq(patch)
+
+        assert all([len(str(op["path"]).split('/')) > 1 for op in patch])  # well-formed path for every op
+        assert not any([str(op["path"]).split('/')[1][0] == '_' for op in patch])  # not trying to operate on internal fields
+
+        original_doc = self.mongo_service.get(collection, keys)
+        assert original_doc
+        result = jsonpatch.apply_patch(original_doc, patch)
+        self.mongo_service.save(collection, result)
 
     def UpdateObject(self, collection, keys, doc):
         '''
@@ -157,16 +175,23 @@ class BuildDataService(GenericChildDataService):
 
     def UpdateBuild(self, app, name, doc):
         '''
-        Update build with keys in doc.
+        Update build with doc (JSON Patch or keys to update).
         '''
         assert elita.util.type_check.is_string(app)
         assert elita.util.type_check.is_string(name)
-        assert isinstance(doc, dict)
+        assert elita.util.type_check.is_dictlike(doc) or elita.util.type_check.is_seq(doc)
         assert app and name
         assert app in self.root['app']
         assert name in self.root['app'][app]['builds']
 
-        self.UpdateObject('builds', {'app_name': app, 'build_name': name}, doc)
+        if elita.util.type_check.is_dictlike(doc):
+            self.UpdateObject('builds', {'app_name': app, 'build_name': name}, doc)
+        else:
+            try:
+                self.UpdateObjectFromPatch('builds', {'app_name': app, 'build_name': name}, doc)
+            except:
+                return False
+        return True
 
     def DeleteBuildStorage(self, app_name, build_name):
         '''
@@ -326,16 +351,53 @@ class UserDataService(GenericChildDataService):
         '''
         assert name and doc
         assert elita.util.type_check.is_string(name)
-        assert elita.util.type_check.is_dictlike(doc)
+        assert elita.util.type_check.is_dictlike(doc) or elita.util.type_check.is_seq(doc)
         assert name in self.root['global']['users']
 
-        if "password" in doc:
+        if elita.util.type_check.is_dictlike(doc) and "password" in doc:
             user = models.User(doc)
             doc['hashed_pw'] = user.hashed_pw
             doc['salt'] = user.salt
             doc['password'] = None
+        elif elita.util.type_check.is_seq(doc):
+            # If this is a JSON Patch, we need to do magic if user is trying to change password
+            # we replace JSON Patch operation to replace password field with operations to replace
+            # hashed_pw and salt instead. We have to do it in-place by splicing because the JSON Patch
+            # could be arbitrarily complex.
+            splice_index = None
+            splices = []
+            for i, op in enumerate(doc):
+                if not ("op" in op and "path" in op and "value" in op):
+                    return False
+                for k in ("salt", "hashed_pw"):
+                    if k in op["path"]:
+                        return False
+                path_split = str(op["path"]).split('/')
+                if len(path_split) < 2:
+                    return False
+                if path_split[1] == "password":
+                    if elita.util.type_check.is_string(op["value"]) and op["op"] == "replace":
+                        user = models.User({"password": op["value"]})
+                        splice_index = i
+                        splices.append({"op": "replace", "path": "/password", "value": None})
+                        splices.append({"op": "replace", "path": "/hashed_pw", "value": user.hashed_pw})
+                        splices.append({"op": "replace", "path": "/salt", "value": user.salt})
+                    else:
+                        return False
 
-        self.UpdateObject('users', {'username': name}, doc)
+            if splice_index is not None:  # don't use truthiness because 0 is valid
+                doc[splice_index] = splices[0]
+                doc.insert(splice_index+1, splices[1])
+                doc.insert(splice_index+2, splices[2])
+
+        if elita.util.type_check.is_dictlike(doc):
+            self.UpdateObject('users', {'username': name}, doc)
+        else:
+            try:
+                self.UpdateObjectFromPatch('users', {'username': name}, doc)
+            except:
+                return False
+        return True
 
 
 class ApplicationDataService(GenericChildDataService):
@@ -440,10 +502,17 @@ class ApplicationDataService(GenericChildDataService):
         '''
         assert app and doc
         assert elita.util.type_check.is_string(app)
-        assert elita.util.type_check.is_dictlike(doc)
+        assert elita.util.type_check.is_dictlike(doc) or elita.util.type_check.is_seq(doc)
         assert app in self.root['app']
 
-        self.UpdateObject('applications', {'app_name': app}, doc)
+        if elita.util.type_check.is_dictlike(doc):
+            self.UpdateObject('applications', {'app_name': app}, doc)
+        else:
+            try:
+                self.UpdateObjectFromPatch('applications', {'app_name': app}, doc)
+            except:
+                return False
+        return True
 
 class PackageMapDataService(GenericChildDataService):
     def GetPackageMaps(self, app):
@@ -509,11 +578,18 @@ class PackageMapDataService(GenericChildDataService):
         assert app and name and doc
         assert elita.util.type_check.is_string(app)
         assert elita.util.type_check.is_string(name)
-        assert elita.util.type_check.is_dictlike(doc)
+        assert elita.util.type_check.is_dictlike(doc) or elita.util.type_check.is_seq(doc)
         assert app in self.root['app']
         assert name in self.root['app'][app]['packagemaps']
 
-        self.UpdateObject('packagemaps', {'application': app, 'name': name}, doc)
+        if elita.util.type_check.is_dictlike(doc):
+            self.UpdateObject('packagemaps', {'application': app, 'name': name}, doc)
+        else:
+            try:
+                self.UpdateObjectFromPatch('packagemaps', {'application': app, 'name': name}, doc)
+            except:
+                return False
+        return True
 
 class GroupDataService(GenericChildDataService):
     def GetGroups(self, app):
@@ -614,11 +690,18 @@ class GroupDataService(GenericChildDataService):
         assert app and name and doc
         assert elita.util.type_check.is_string(app)
         assert elita.util.type_check.is_string(name)
-        assert elita.util.type_check.is_dictlike(doc)
+        assert elita.util.type_check.is_dictlike(doc) or elita.util.type_check.is_seq(doc)
         assert app in self.root['app']
         assert name in self.root['app'][app]['groups']
 
-        self.UpdateObject('groups', {'application': app, 'name': name}, doc)
+        if elita.util.type_check.is_dictlike(doc):
+            self.UpdateObject('groups', {'application': app, 'name': name}, doc)
+        else:
+            try:
+                self.UpdateObjectFromPatch('groups', {'application': app, 'name': name}, doc)
+            except:
+                return False
+        return True
 
 class JobDataService(GenericChildDataService):
     def GetAllActions(self, app_name):
@@ -782,12 +865,17 @@ class ServerDataService(GenericChildDataService):
         '''
         assert name and doc
         assert elita.util.type_check.is_string(name)
-        assert elita.util.type_check.is_dictlike(doc)
+        assert elita.util.type_check.is_dictlike(doc) or elita.util.type_check.is_seq(doc)
         assert name in self.root['server']
-        prototype = models.Server({})  # get all valid default top-level properties
-        assert all([key in prototype.get_doc() for key in doc])
 
-        self.UpdateObject('servers', {'name': name}, doc)
+        if elita.util.type_check.is_dictlike(doc):
+            self.UpdateObject('servers', {'name': name}, doc)
+        else:
+            try:
+                self.UpdateObjectFromPatch('servers', {'name': name}, doc)
+            except:
+                return False
+        return True
 
     def DeleteServer(self, name):
         '''
@@ -923,21 +1011,29 @@ class GitDataService(GenericChildDataService):
         assert app and name and doc
         assert elita.util.type_check.is_string(app)
         assert elita.util.type_check.is_string(name)
-        assert elita.util.type_check.is_dictlike(doc)
+        assert elita.util.type_check.is_dictlike(doc) or elita.util.type_check.is_seq(doc)
         assert app in self.root['app']
         assert name in self.root['app'][app]['gitdeploys']
 
-        #clean up any actions
-        if 'actions' in doc:
-            elita.util.change_dict_keys(doc['actions'], '.', EMBEDDED_YAML_DOT_REPLACEMENT)
+        if elita.util.type_check.is_dictlike(doc):
+            #clean up any actions
+            if 'actions' in doc:
+                elita.util.change_dict_keys(doc['actions'], '.', EMBEDDED_YAML_DOT_REPLACEMENT)
 
-        #replace gitrepo with DBRef if necessary
-        if 'location' in doc and 'gitrepo' in doc['location']:
-            grd = self.mongo_service.get('gitrepos', {'name': doc['location']['gitrepo'], 'application': app})
-            assert grd
-            doc['location']['gitrepo'] = bson.DBRef('gitrepos', grd['_id'])
+            #replace gitrepo with DBRef if necessary
+            if 'location' in doc and 'gitrepo' in doc['location']:
+                grd = self.mongo_service.get('gitrepos', {'name': doc['location']['gitrepo'], 'application': app})
+                assert grd
+                doc['location']['gitrepo'] = bson.DBRef('gitrepos', grd['_id'])
 
-        self.UpdateObject('gitdeploys', {'name': name, 'application': app}, doc)
+            self.UpdateObject('gitdeploys', {'name': name, 'application': app}, doc)
+        else:
+            try:
+                self.UpdateObjectFromPatch('gitdeploys', {'name': name, 'application': app}, doc)
+            except:
+                return False
+        return True
+
 
     def DeleteGitDeploy(self, app, name):
         '''
@@ -1004,10 +1100,17 @@ class GitDataService(GenericChildDataService):
         '''
         assert name and doc
         assert elita.util.type_check.is_string(name)
-        assert elita.util.type_check.is_dictlike(doc)
+        assert elita.util.type_check.is_dictlike(doc) or elita.util.type_check.is_seq(doc)
         assert name in self.root['global']['gitproviders']
 
-        self.UpdateObject('gitproviders', {'name': name}, doc)
+        if elita.util.type_check.is_dictlike(doc):
+            self.UpdateObject('gitproviders', {'name': name}, doc)
+        else:
+            try:
+                self.UpdateObjectFromPatch('gitproviders', {'name': name}, doc)
+            except:
+                return False
+        return True
 
     def DeleteGitProvider(self, name):
         '''
@@ -1096,10 +1199,17 @@ class GitDataService(GenericChildDataService):
         assert app and name and doc
         assert elita.util.type_check.is_string(app)
         assert elita.util.type_check.is_string(name)
-        assert elita.util.type_check.is_dictlike(doc)
+        assert elita.util.type_check.is_dictlike(doc) or elita.util.type_check.is_seq(doc)
         assert app in self.root['app']
 
-        self.UpdateObject('gitrepos', {'name': name, 'application': app}, doc)
+        if elita.util.type_check.is_dictlike(doc):
+            self.UpdateObject('gitrepos', {'name': name, 'application': app}, doc)
+        else:
+            try:
+                self.UpdateObjectFromPatch('gitrepos', {'name': name, 'application': app}, doc)
+            except:
+                return False
+        return True
 
     def DeleteGitRepo(self, app, name):
         '''
@@ -1204,11 +1314,18 @@ class DeploymentDataService(GenericChildDataService):
         assert app and name and doc
         assert elita.util.type_check.is_string(app)
         assert elita.util.type_check.is_string(name)
-        assert elita.util.type_check.is_dictlike(doc)
+        assert elita.util.type_check.is_dictlike(doc) or elita.util.type_check.is_seq(doc)
         assert app in self.root['app']
         assert name in self.root['app'][app]['deployments']
 
-        self.UpdateObject('deployments', {'application': app, 'name': name}, doc)
+        if elita.util.type_check.is_dictlike(doc):
+            self.UpdateObject('deployments', {'application': app, 'name': name}, doc)
+        else:
+            try:
+                self.UpdateObjectFromPatch('deployments', {'application': app, 'name': name}, doc)
+            except:
+                return False
+        return True
 
     def InitializeDeploymentPlan(self, app, name, batches, gitrepos):
         '''
@@ -1429,10 +1546,17 @@ class KeyDataService(GenericChildDataService):
         '''
         assert name and doc
         assert elita.util.type_check.is_string(name)
-        assert elita.util.type_check.is_dictlike(doc)
+        assert elita.util.type_check.is_dictlike(doc) or elita.util.type_check.is_seq(doc)
         assert name in self.root['global']['keypairs']
 
-        self.UpdateObject('keypairs', {'name': name}, doc)
+        if elita.util.type_check.is_dictlike(doc):
+            self.UpdateObject('keypairs', {'name': name}, doc)
+        else:
+            try:
+                self.UpdateObjectFromPatch('keypairs', {'name': name}, doc)
+            except:
+                return False
+        return True
 
     def DeleteKeyPair(self, name):
         '''

@@ -55,18 +55,24 @@ Using PATCH
 The PATCH verb is supported on any object endpoint with modificable data (application, build, gitdeploy, gitrepo,
 gitprovider, user, keypair, group, packagemap, server) but not container endpoints.
 
-To use PATCH, include a JSON body in your request consisting of the data to be changed. For example, to change the
-"attributes" field on a build object, you would include this JSON body in your PATCH request:
+You use PATCH in one of two ways:
 
-.. sourcecode:: json
+* include a JSON body in your request consisting of the data to be changed. For example, to change the
+  "attributes" field on a build object, you would include this JSON body in your PATCH request:
 
-   {
+  .. sourcecode:: json
+
+     {
         "attributes": {
             "foo": "bar
         }
-   }
+     }
 
-If any keys in the JSON body do not exist in the object, the request will return an error. You cannot change any fields
+* include a valid `JSON Patch <https://tools.ietf.org/html/rfc6902>`_ document in the body of the request. JSON Patch is the only way to (for
+  example) delete a nested object key. You may include "test" operations in the document; if any fail, the endpoint will
+  return a 400 Bad Request response.
+
+If any keys in the JSON body (or JSON Patch paths) do not exist in the object, the request will return an error. You cannot change any fields
 that are considered part of the composite key that identifies the object. For example, you cannot change application name
 or build name of build objects. Similarly, you cannot change username of a user object with a PATCH request.
 

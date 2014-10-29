@@ -37,6 +37,9 @@ requires = [
     'sh',
     'clint',
 
+    # for JSON Patch documents
+    'jsonpatch',
+
     #testing
     'nose',
     'mock'

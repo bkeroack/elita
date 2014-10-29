@@ -63,6 +63,8 @@ class UserPermissions:
             logging.debug("valid token")
             self.username = self.usersvc.GetUserFromToken(token)
             logging.debug("username: {}".format(self.username))
+        else:
+            logging.debug("INVALID token")
 
     def validate_token(self):
         return self.token in self.usersvc.GetAllTokens()

@@ -72,6 +72,17 @@ class MongoService:
         result = self.db[collection].update({'_id': canonical_id}, {'$set': {path_dot_notation: doc_or_obj}}, fsync=True)
         return result['n'] == 1 and result['updatedExisting'] and not result['err']
 
+    def save(self, collection, doc):
+        '''
+        Replace a document completely with a new one. Must have an '_id' field
+        '''
+        assert collection
+        assert elita.util.type_check.is_string(collection)
+        assert elita.util.type_check.is_dictlike(doc)
+        assert '_id' in doc
+
+        return self.db[collection].save(doc)
+
     def delete(self, collection, keys):
         '''
         Drop a document from the collection
