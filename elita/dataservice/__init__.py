@@ -9,6 +9,7 @@ import pytz
 import copy
 import sys
 import jsonpatch
+import traceback
 
 import elita.util
 import elita.elita_exceptions
@@ -367,13 +368,16 @@ class UserDataService(GenericChildDataService):
             splice_index = None
             splices = []
             for i, op in enumerate(doc):
-                if not ("op" in op and "path" in op and "value" in op):
+                if not ("op" in op and "path" in op):
+                    logging.debug("Bad JSON patch: missing required key")
                     return False
                 for k in ("salt", "hashed_pw"):
                     if k in op["path"]:
+                        logging.debug("Bad JSON patch: trying to modify hashed_pw or salt")
                         return False
                 path_split = str(op["path"]).split('/')
                 if len(path_split) < 2:
+                    logging.debug("Bad JSON patch: bad path")
                     return False
                 if path_split[1] == "password":
                     if elita.util.type_check.is_string(op["value"]) and op["op"] == "replace":
@@ -383,6 +387,7 @@ class UserDataService(GenericChildDataService):
                         splices.append({"op": "replace", "path": "/hashed_pw", "value": user.hashed_pw})
                         splices.append({"op": "replace", "path": "/salt", "value": user.salt})
                     else:
+                        logging.debug("Bad JSON patch: password op not replace")
                         return False
 
             if splice_index is not None:  # don't use truthiness because 0 is valid
@@ -396,6 +401,9 @@ class UserDataService(GenericChildDataService):
             try:
                 self.UpdateObjectFromPatch('users', {'username': name}, doc)
             except:
+                exc_type, exc_obj, tb = sys.exc_info()
+                tbf = traceback.format_exception(exc_type, exc_obj, tb)
+                logging.debug("Error applying JSON patch: {}".format(tbf[-1]))
                 return False
         return True
 
@@ -1292,9 +1300,9 @@ class DeploymentDataService(GenericChildDataService):
         if sort:
             deployments = sorted(deployments, key=lambda d: d['_id'].generation_time, reverse=(sort == "desc"))
         if with_details:
-            return [{"name": doc['name'],
-                     "created": doc['_id'].generation_time.isoformat(' '),
-                     "status": doc['status']} for doc in deployments]
+            for d in deployments:
+                d['created'] = d['_id'].generation_time.isoformat(' ')
+            return [{k: doc[k] for k in doc if k[0] != '_'} for doc in deployments]
         else:
             return [doc['name'] for doc in deployments]
 

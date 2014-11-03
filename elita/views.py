@@ -321,7 +321,6 @@ class GenericView:
 
 
     def status_ok(self, msg):
-
         return {'status': 'ok', 'message': msg}
 
     def Success(self):
@@ -747,11 +746,13 @@ class DeploymentContainerView(GenericView):
     def __init__(self, context, request):
         GenericView.__init__(self, context, request, app_name=context.parent)
 
+    @validate_parameters(optional_params=['details'])
     def GET(self):
+        details = 'details' in self.req.params and self.req.params['details'] in AFFIRMATIVE_SYNONYMS
         return {
             'application': self.context.parent,
             'deployments': self.datasvc.deploysvc.GetDeployments(self.context.parent, sort="desc",
-                                                                 with_details=True)
+                                                                 with_details=details)
         }
 
     @validate_parameters(required_params=['build_name'])

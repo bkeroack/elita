@@ -364,6 +364,7 @@ class GitDeployManager:
 
     def delete_remote_dir(self, server_list):
         logging.debug("delete_remote_dir")
+        self.datasvc.jobsvc.NewJobData({"GitDeployManager": "deleting remote directory"})
         path = self.gitdeploy['location']['path']
         res = self.rc.delete_directory(server_list, path)
         logging.debug("delete_remote_dir on servers: {}: resp: {}".format(server_list, res))
@@ -371,18 +372,21 @@ class GitDeployManager:
 
     def create_remote_dir(self, server_list):
         logging.debug("create_remote_dir")
+        self.datasvc.jobsvc.NewJobData({"GitDeployManager": "creating remote directory"})
         path = self.gitdeploy['location']['path']
         res = self.rc.create_directory(server_list, path)
         logging.debug('create_remote_dir on servers: {}: resp: {}'.format(server_list, res))
         return res
 
     def delete_remote_keypair(self, server_list):
+        self.datasvc.jobsvc.NewJobData({"GitDeployManager": "deleting remote kepair (noop)"})
         return {'status': 'noop'}
 
     def push_keypair(self, server_list):
         '''
         Push the keypair to the target servers and set up SSH alias
         '''
+        self.datasvc.jobsvc.NewJobData({"GitDeployManager": "pushing keypair"})
         sshc = sshconfig.SSHController()
         return sshc.push_remote_keys(self.rc, server_list, self.gitdeploy['application'],
                                      self.gitdeploy['location']['gitrepo']['name'],
@@ -392,6 +396,7 @@ class GitDeployManager:
 
     def clone_repo(self, server_list):
         logging.debug("clone_repo: cloning")
+        self.datasvc.jobsvc.NewJobData({"GitDeployManager": "cloning repository"})
         sshc = sshconfig.SSHController()
         uri = sshc.get_full_alias_uri(self.gitdeploy['location']['gitrepo'])
         uri = "ssh://{}".format(uri)
@@ -401,6 +406,7 @@ class GitDeployManager:
         return res
 
     def create_ignore(self, server_list):
+        self.datasvc.jobsvc.NewJobData({"GitDeployManager": "creating .gitignore"})
         repo_path = self.gitdeploy['location']['path']
         fd, temp_name = tempfile.mkstemp()
         logging.debug("create_ignore: writing file")

@@ -742,7 +742,11 @@ View Deployments
 
 .. http:get::   /app/(string: app_name)/deployments
 
-   View all deployments (by id).
+   :param details: include all details
+   :type details: "true"/"false"
+
+   View all deployments (by id). If details=true is passed, all detail for each deployment will be included in output
+   (potentially a large amount of data).
 
 
    **Example request**:
